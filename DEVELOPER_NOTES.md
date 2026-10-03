@@ -159,19 +159,38 @@ Before any text is analyzed or transmitted to an external LLM, `engine/taglish_n
 * **Philippine Mobile Numbers:** `/(?:(?:\+63)|0)[9]\d{2}[-\s]?\d{3}[-\s]?\d{4}\b/` $\to$ `[PHONE_REDACTED]`
 * **Emails:** `/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b/` $\to$ `[EMAIL_REDACTED]`
 
-### 4.2 Morphosyntax & Polysemy Resolution
-* **Affix Normalization:** Strips Tagalog verb affixes (*nag-*, *mag-*, *um-*, *-in-*, *i-*, *naka-*) to isolate the semantic English root word (*nag-order* $\to$ *order*).
-* **Polysemy Disambiguation for "Mahal":**
-  * If `"mahal"` co-occurs with tokens in `{"presyo", "bayad", "shipping", "sf", "fee", "cost", "gastos", "bili"}`: Assign theme **"Expensive / High Pricing Friction"**.
-  * If `"mahal"` co-occurs with tokens in `{"ko", "namin", "talaga", "customer", "serbisyo", "ganda", "loyal"}`: Assign theme **"Strong Brand Affinity / Loyalty"**.
+### 4.2 Orthographic & Dialect Normalization
+* **Deterministic Text-Speak Normalization:** Automatically maps SMS abbreviations and contractions before tokenization (`diko` $\to$ `hindi ko`, `kc`/`kase` $\to$ `kasi`, `lng` $\to$ `lang`, `hnd` $\to$ `hindi`, `brgy` $\to$ `barangay`).
+* **Regional Dialect Enclitics:** Preserves intensity and sentiment across regional samples (e.g., Cebuano/Visayan `ra gyod` / `ra gyud` $\to$ `lang talaga`, `man gud` $\to$ `kasi nga`) to ensure provincial respondents are parsed accurately without noise artifacts.
+* **Fuzzy Brand Correction:** Normalizes frequent brand and packaging phonetics (`calgate` $\to$ `colgate`, `soff` $\to$ `sof & mmmm`).
 
-### 4.3 Human Lock-Step Protocol
-1. AI proposes a 6-to-10 theme codeframe in standard English.
+### 4.3 Morphosyntax, Loanwords & Semantic Clause Chunking
+* **Loanword Affix Decomposition:** Strips hybrid prefixes and circumfixes on English roots (`na-expose` $\to$ `expose`, `nag t-trigger` $\to$ `trigger`, `napafabconan` $\to$ `fabcon`, `plinancha` $\to$ `plantsa`).
+* **Syntactic Clause Disentanglement:** Splits compound verbatims along grammatical conjunctions (`at`, `tapos`, `pero`, `kaso`, `kaya`, `habang`) to allow multiple independent code assignments (e.g., Fragrance + Softness + Affordability) without label collisions.
+
+### 4.4 Cultural Collocations & Polarity Inversion
+* **Philippine Cultural Primitives:** Specialized handling for local market concepts:
+  * `kulob` / `amoy kulob`: Musty/damp mildew odor from non-sun drying.
+  * `hiyang`: Biological/dermal suitability and compatibility.
+  * `tingi` / `tingi-tingi`: Sachet and micro-retail purchasing units.
+  * `ayuda`: Social emergency cash/relief subsidies.
+  * `tambay`: Street loitering / peace & order concerns.
+* **Polarity Inverters:**
+  * `iwas [negative]` (e.g., `iwas kulob`, `iwas amoy araw`) $\to$ Favorable Odor Protection benefit.
+  * `kahit [adverse condition]` (e.g., `kahit hindi naarawan`) $\to$ Durability / Robust Performance claim.
+
+### 4.5 4-Tier Hierarchical Taxonomy & Dynamic Lumping
+* **Taxonomy Tree:** $\text{Net} \to \text{Subnet} \to \text{Sub-subnet} \to \text{Code / Description}$, calibrated against Philippine FMCG (Harmony W3) and Civic Opinion (Frontier 2022) codeframes.
+* **Dynamic Lumping Matrix:** Supports automatic consolidation of low-incidence granular codes into designated parent rollups (e.g., *sachet/tingi* $\to$ *affordability*, *road defects* $\to$ *infrastructure*), while preserving the raw classification audit trail.
+* **Category Guardrails & Reask Filter:** Flags non-substantive responses (`"wala lang"`, `"basta"`) as `Non-Substantive / Needs Reask`, and filters domain-invalid claims (e.g., whitening claims in fabric conditioners).
+
+### 4.6 Multi-Label Human Lock-Step Protocol & Reliability
+1. AI proposes a standardized 4-tier codeframe with verbatim citations.
 2. The UI extracts a stratified 10% calibration sample.
 3. The analyst audits the batch, accepting or adjusting codes.
-4. The system calculates **Observed Agreement**:
-   $$\text{Agreement} = \frac{\text{Agreed Rows}}{\text{Audited Rows}} \times 100\%$$
-5. When the user clicks **"Lock Codeframe"**, the classification mapping is committed to local SQLite, preventing background regeneration.
+4. The system calculates **Observed Agreement**, **Multi-Label Jaccard Similarity**, and **Cohen's Kappa**:
+   $$\text{Jaccard} = \frac{|H \cap A|}{|H \cup A|}, \quad \kappa = \frac{P_o - P_e}{1 - P_e}$$
+5. When the user clicks **"Lock Codeframe"**, the classification mapping is committed, preventing drift across runs.
 
 ---
 

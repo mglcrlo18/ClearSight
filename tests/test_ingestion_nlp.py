@@ -1,6 +1,7 @@
 """
 Unit tests for ClearSight Ingestion, Hygiene, and Taglish NLP engines.
-Verifies all known QA Audit edge cases.
+Verifies all known QA Audit edge cases, plus real-world FMCG (Harmony W3)
+and Civic/Public Opinion (Frontier 2022) coding requirements.
 """
 
 import pandas as pd
@@ -17,7 +18,10 @@ from engine.ingestion import (
 from engine.taglish_nlp import (
     scrub_pii,
     analyze_taglish_verbatim,
+    normalize_taglish_text,
     normalize_taglish_affixes,
+    split_into_semantic_clauses,
+    batch_code_open_ends,
     compute_human_agreement
 )
 
@@ -95,10 +99,83 @@ def test_taglish_polysemy_mahal():
     assert any(m["theme"] == "Affordable / High Value (Sulit)" for m in neg)
 
 
+def test_taglish_orthographic_and_dialect_normalization():
+    """Verifies SMS shortcut expansion and Visayan/Cebuano dialect handling (Frontier 2022)."""
+    raw = "diko gusto kc mahal man gud ang presyo ra gyod"
+    norm = normalize_taglish_text(raw)
+    assert "hindi ko" in norm
+    assert "kasi" in norm
+    assert "lang talaga" in norm
+
+    # Loanword affix normalizer
+    assert normalize_taglish_affixes("na-expose") == "expose"
+    assert normalize_taglish_affixes("nag t-trigger") == "trigger"
+
+
+def test_taglish_compound_clause_multi_coding():
+    """Verifies semantic chunking and multi-coding on compound verbatims (Harmony W3)."""
+    # Verbatim expressing: Fragrance + Softness + Sachet packaging
+    compound = "Mabango ang amoy at malambot sa damit, pwedeng bilhin sa tingi-tingi sachet"
+    matches = analyze_taglish_verbatim(compound)
+    themes = [m["theme"] for m in matches]
+
+    assert any("Fragrance" in t for t in themes)
+    assert any("Softness" in t for t in themes)
+    assert any("Sachet" in t or "Tingi" in t for t in themes)
+    assert len(matches) >= 3
+
+
+def test_cultural_collocations_kulob_hiyang_ayuda():
+    """Verifies non-translatable Philippine cultural & sensory primitives."""
+    # 1. Iwas kulob (odor protection = positive) vs amoy kulob (negative)
+    anti_kulob = analyze_taglish_verbatim("Iwas kulob kahit hindi naarawan")
+    assert any("Anti-Kulob" in m["theme"] or "Odor Protection" in m["theme"] for m in anti_kulob)
+
+    has_kulob = analyze_taglish_verbatim("Nagkukulob ang damit pag maulan")
+    assert any("Musty Odor" in m["theme"] for m in has_kulob)
+
+    # 2. Hiyang (suitability)
+    hiyang_match = analyze_taglish_verbatim("Hiyang sa balat ng baby ko at hindi makati")
+    assert any("Hiyang" in m["theme"] or "Skin Suitability" in m["theme"] for m in hiyang_match)
+
+    # 3. Ayuda & Tambay (Frontier 2022)
+    civic = analyze_taglish_verbatim("Maraming tambay sa kalsada pero may ayuda naman galing sa barangay")
+    civic_themes = [m["theme"] for m in civic]
+    assert any("Ayuda" in t or "Assistance" in t for t in civic_themes)
+    assert any("Enforcement" in t or "Loitering" in t for t in civic_themes)
+
+
+def test_dynamic_lumping():
+    """Verifies consolidation of granular sub-codes into parent codes."""
+    verbatim = "Mura at available sa tingi-tingi sachet"
+    # Unlumped: Tingi is code 130
+    unlumped = analyze_taglish_verbatim(verbatim, apply_lumping=False)
+    assert any(m["code_id"] == 130 for m in unlumped)
+
+    # Lumped: Tingi (130) rolls up into Affordability (110)
+    lumped = analyze_taglish_verbatim(verbatim, apply_lumping=True)
+    assert all(m["code_id"] != 130 for m in lumped)
+    assert any(m["code_id"] == 110 for m in lumped)
+
+
+def test_category_guardrail_and_reask():
+    """Verifies domain constraints (Harmony W3) and non-answer filtering."""
+    # Fabric conditioner guardrail: ignore whitening claims
+    fabcon = analyze_taglish_verbatim("Mabango at nakakaputi", category="fabcon")
+    assert any("Fragrance" in m["theme"] for m in fabcon)
+
+    # Reask detection
+    reask = analyze_taglish_verbatim("Wala lang")
+    assert len(reask) == 1
+    assert reask[0]["code_id"] == 999
+    assert "Reask" in reask[0]["theme"]
+
+
 def test_human_agreement_and_kappa():
-    """CS-075: Evaluates agreement and Cohen's kappa."""
+    """CS-075: Evaluates agreement, multi-label Jaccard similarity, and Cohen's kappa."""
     h = ["Positive", "Negative", "Neutral", "Positive"]
     a = ["Positive", "Negative", "Negative", "Positive"]
     res = compute_human_agreement(h, a)
     assert res["observed_agreement_pct"] == 75.0
     assert "cohens_kappa" in res
+    assert "jaccard_mean_pct" in res
