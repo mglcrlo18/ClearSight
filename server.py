@@ -6,6 +6,7 @@ Threaded, hardened against path traversal, DNS rebinding, and CSRF.
 
 import os
 import sys
+import re
 import json
 import logging
 import mimetypes
@@ -397,6 +398,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
             result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric)
             SESSION["last_tabulation"] = result
+            SESSION["fdr_enabled"] = fdr_enabled
             self.send_json_response({"status": "success", "table": result})
 
         elif path == "/api/code-open-ends":
@@ -409,40 +411,44 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 req_data = {}
 
-            req_col = req_data.get("column")
-            open_cols = [c for c, v in SESSION.get("schema", {}).items() if v.get("type") == "open_ended"]
+            try:
+                req_col = req_data.get("column")
+                open_cols = [c for c, v in SESSION.get("schema", {}).items() if v.get("type") == "open_ended"]
 
-            open_col = None
-            if req_col and req_col in df.columns:
-                open_col = req_col
-            elif open_cols:
-                open_col = open_cols[0]
-            else:
-                for col in df.columns:
-                    c_low = col.lower()
-                    if re.search(r'\b(?:open|feedback|comment|verbatim)\b', c_low) or (df[col].dtype == object and df[col].dropna().astype(str).str.len().mean() > 20):
-                        open_col = col
-                        break
+                open_col = None
+                if req_col and req_col in df.columns:
+                    open_col = req_col
+                elif open_cols:
+                    open_col = open_cols[0]
+                else:
+                    for col in df.columns:
+                        c_low = col.lower()
+                        if re.search(r'\b(?:open|feedback|comment|verbatim)\b', c_low) or (df[col].dtype == object and df[col].dropna().astype(str).str.len().mean() > 20):
+                            open_col = col
+                            break
 
-            if not open_col:
-                self.send_json_response({"status": "error", "message": "No open-ended feedback column found in dataset."}, 400)
-                return
+                if not open_col:
+                    self.send_json_response({"status": "error", "message": "No open-ended feedback column found in dataset."}, 400)
+                    return
 
-            verbatims = df[open_col].dropna().astype(str).tolist()
-            coding_results = batch_code_open_ends(
-                verbatims,
-                category=req_data.get("category"),
-                apply_lumping=bool(req_data.get("apply_lumping", req_data.get("lump", False)))
-            )
-            SESSION["open_feedback_analysis"] = coding_results
+                verbatims = df[open_col].dropna().astype(str).tolist()
+                coding_results = batch_code_open_ends(
+                    verbatims,
+                    category=req_data.get("category"),
+                    apply_lumping=bool(req_data.get("apply_lumping", req_data.get("lump", False)))
+                )
+                SESSION["open_feedback_analysis"] = coding_results
 
-            self.send_json_response({
-                "status": "success",
-                "column": open_col,
-                "total_analyzed": coding_results.get("total_analyzed", len(verbatims)),
-                "codeframe": coding_results.get("codeframe", []),
-                "records": coding_results.get("records", [])[:50]
-            })
+                self.send_json_response({
+                    "status": "success",
+                    "column": open_col,
+                    "total_analyzed": coding_results.get("total_analyzed", len(verbatims)),
+                    "codeframe": coding_results.get("codeframe", []),
+                    "records": coding_results.get("records", [])[:50]
+                })
+            except Exception as e:
+                logging.exception(f"Error coding open ends: {e}")
+                self.send_json_response({"status": "error", "message": str(e)}, 500)
 
         elif path in ["/api/export/save-to-downloads", "/api/export/save-snapshot-to-downloads", "/api/export/save-thesis-to-downloads"]:
             self.handle_save_to_downloads(path)
@@ -491,7 +497,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         n = len(SESSION["df"]) if SESSION["df"] is not None else 0
         neff = diag.get("kish_n_eff", float(n))
         eff = diag.get("weighting_efficiency_pct", 100.0)
-        weighted_n = float(SESSION["weights"].sum()) if SESSION.get("weights") is not None else float(n)
+        weighted_n = round(float(SESSION["weights"].sum()), 1) if SESSION.get("weights") is not None else float(n)
 
         if "Banner_Book" in filename:
             tables = SESSION.get("last_tabulation") or self.build_default_tables()
@@ -584,7 +590,13 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
         weights = SESSION.get("weights")
         banner_var = "Region" if "Region" in df.columns else (df.columns[1] if len(df.columns) > 1 else df.columns[0])
-        stub_var = "Brand_Preference" if "Brand_Preference" in df.columns else df.columns[0]
+        candidate_stubs = [
+            c for c in df.columns 
+            if not str(c).startswith("__") 
+            and not re.search(r'(?i)(?:id|_id|timestamp|submitted|date|duration)$', str(c))
+            and SESSION.get("schema", {}).get(c, {}).get("type") in ("single_select", "rating_scale", "multi_select")
+        ]
+        stub_var = "Brand_Preference" if "Brand_Preference" in df.columns else (candidate_stubs[0] if candidate_stubs else df.columns[0])
 
         return [
             build_crosstab_table(df, stub_var, ["Total", banner_var], weights=weights)

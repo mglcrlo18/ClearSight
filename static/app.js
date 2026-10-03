@@ -25,6 +25,12 @@ function switchStep(stepNum) {
     if (stepNum === 3) {
         loadTaglishCoding();
     }
+    if (stepNum === 4) {
+        const snapshotFrame = document.getElementById('snapshot-frame');
+        if (snapshotFrame) {
+            snapshotFrame.src = '/preview-snapshot?t=' + Date.now();
+        }
+    }
 }
 
 // 2. Real File Ingestion (Drag-and-Drop & File Picker)
@@ -907,6 +913,13 @@ function renderTableFromData(tables) {
     if (!table || !tables || tables.length === 0) return;
 
     const t = tables[0];
+    if (t.error) {
+        const tbody = document.getElementById('table-body');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="99" style="text-align:center; padding: 2rem; color: #dc2626; font-weight: 500;">⚠ ${t.error}</td></tr>`;
+        }
+        return;
+    }
     const bannerCols = t.banner_cols || ['Total'];
     const colLetters = t.col_letters || ['Total'];
     const unweightedBases = t.unweighted_bases || [0];
@@ -925,9 +938,14 @@ function renderTableFromData(tables) {
         thStub.textContent = t.stub_label || 'Category / Survey Variables';
         trHeader.appendChild(thStub);
 
-        bannerCols.forEach(col => {
+        bannerCols.forEach((col, idx) => {
             const th = document.createElement('th');
             th.textContent = col;
+            if (t.small_base && t.small_base[idx]) {
+                th.classList.add('small-base');
+                th.title = 'Small base (Neff < 30)';
+                th.textContent += ' *';
+            }
             trHeader.appendChild(th);
         });
         thead.appendChild(trHeader);
@@ -1055,7 +1073,23 @@ function renderTableFromData(tables) {
                 tbody.appendChild(trBench);
             }
         });
+        });
     });
+
+    let anovaFootnote = document.getElementById('table-anova-note');
+    if (!anovaFootnote) {
+        anovaFootnote = document.createElement('div');
+        anovaFootnote.id = 'table-anova-note';
+        anovaFootnote.className = 'table-footnote';
+        anovaFootnote.style.cssText = 'padding: 8px 12px; font-size: 0.85rem; color: #64748B; font-style: italic;';
+        table.parentNode.insertBefore(anovaFootnote, table.nextSibling);
+    }
+    if (t.anova) {
+        anovaFootnote.textContent = `One-way ANOVA F(${t.anova.df1}, ${t.anova.df2}) = ${t.anova.f_stat}, p = ${t.anova.p_val}`;
+        anovaFootnote.style.display = 'block';
+    } else {
+        anovaFootnote.style.display = 'none';
+    }
 }
 
 async function loadTaglishCoding() {
@@ -1067,13 +1101,19 @@ async function loadTaglishCoding() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+            grid.innerHTML = '<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: #dc2626; background: #FEF2F2; border-radius: 8px;"><b>Coding Notice:</b> Qualitative analysis failed or no open-ended column detected.</div>';
+            return;
+        }
         const data = await res.json();
         if (data.status === 'success' && data.codeframe) {
             renderTaglishCodeframe(data);
+        } else {
+            grid.innerHTML = '<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: #64748B;">No open-ended responses found to code.</div>';
         }
     } catch (err) {
         console.error("Taglish coding error:", err);
+        grid.innerHTML = `<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: #dc2626;">Error loading qualitative analysis: ${err.message}</div>`;
     }
 }
 
@@ -1087,8 +1127,9 @@ function renderTaglishCodeframe(data) {
 
     const agreementElem = document.getElementById('agreement-score');
     if (agreementElem) {
-        const auditN = Math.max(10, Math.round(total * 0.10));
-        agreementElem.innerHTML = `Observed Agreement: <b>88.5%</b> (on ${auditN} audited answers, κ = 0.81)`;
+        agreementElem.textContent = data.agreement
+            ? `Observed agreement ${data.agreement.observed_agreement_pct}% on ${data.agreement.audited_count} reviewed answers (κ = ${data.agreement.cohens_kappa})`
+            : 'Heuristic Qualitative Coder (Preview)';
     }
 
     codeframe.forEach(item => {

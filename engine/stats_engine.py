@@ -163,7 +163,9 @@ def calculate_rim_weights(
             continue
         
         raw_sum = sum(targets.values())
-        if 99.0 <= raw_sum <= 101.0:
+        if raw_sum > 101.0 and all(v >= 1.0 for v in targets.values()):
+            norm_factor = raw_sum
+        elif 99.0 <= raw_sum <= 101.0:
             norm_factor = 100.0
         elif 0.99 <= raw_sum <= 1.01:
             norm_factor = 1.0

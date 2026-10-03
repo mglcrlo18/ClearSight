@@ -86,8 +86,13 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
                         hi = rng.get("hi", float("inf"))
                         df.loc[df[col].between(lo, hi), col] = np.nan
 
+            var_val_labels = getattr(meta, "variable_value_labels", {}) or {}
+            for col, labels in var_val_labels.items():
+                if col in df.columns and not re.search(r'_(\d+)to(\d+)$', col, re.IGNORECASE):
+                    df[col] = df[col].map(lambda v: labels.get(v, v) if pd.notna(v) else v)
+
             metadata["variable_labels"] = getattr(meta, "column_names_to_labels", {}) or getattr(meta, "variable_to_label", {}) or {}
-            metadata["value_labels"] = getattr(meta, "variable_value_labels", {}) or {}
+            metadata["value_labels"] = var_val_labels
         else:
             raise ImportError(
                 "SPSS (.sav) file reading requires the 'pyreadstat' package. "
@@ -244,15 +249,17 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
                     "mean": float(round(numeric_series.mean(), 2)),
                     "sample": sample_vals
                 }
-            elif any(k in str(col).lower() for k in ["sat_", "_sat", "satisfaction", "rating", "nps", "likert"]) and min_val in [0.0, 1.0] and max_val in [5.0, 7.0, 10.0]:
+            elif any(k in str(col).lower() for k in ["sat_", "_sat", "satisfaction", "rating", "nps", "likert"]) and 0.0 <= min_val <= 3.0 and max_val in [4.0, 5.0, 6.0, 7.0, 10.0]:
+                s_max = 5 if max_val <= 5.0 else (7 if max_val <= 7.0 else 10)
+                s_min = 0 if (min_val == 0.0 or "nps" in str(col).lower()) else 1
                 schema[col] = {
                     "type": "rating_scale",
-                    "scale_min": int(min_val),
-                    "scale_max": int(max_val),
+                    "scale_min": s_min,
+                    "scale_max": s_max,
                     "mean": float(round(numeric_series.mean(), 2)),
                     "sample": sample_vals
                 }
-            elif uniques <= 20 and str(col).lower().startswith("qa_stub"):
+            elif (series.astype(str).str.match(r'^0\d+$').mean() > 0.3 or re.search(r'(?i)_(?:code|stub|no)$', str(col))) and uniques <= 500:
                 schema[col] = {
                     "type": "single_select",
                     "categories": [str(x) for x in series.unique()[:20]],
@@ -267,22 +274,30 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
                 }
             continue
 
-        # 4. Multi-select vs Open-ended vs Single-select (P3-23)
+        # 4. Multi-select vs Open-ended vs Single-select (P4-02, P3-23)
         # Check comma not followed by 3 digits to ignore money formats like '10,000'
         has_comma_delim = str_series.str.contains(r',\s*(?!\d{3}\b)', regex=True).mean() > 0.20
         avg_len = float(str_series.str.len().mean())
         unique_ratio = float(str_series.nunique() / max(1, len(str_series)))
+        parts = str_series.str.split(r',\s*').explode().str.strip()
+        token_reuse = float(parts.value_counts().head(30).sum() / max(1, len(parts)))
 
-        if has_comma_delim:
-            schema[col] = {
-                "type": "multi_select",
-                "delimiter_detected": ",",
-                "sample": sample_vals
-            }
-        elif avg_len > 45 or (avg_len > 20 and unique_ratio > 0.70) or any(k in str(col).lower() for k in ["open", "feedback", "comment", "verbatim", "_other"]):
+        # P4-02: Open-ended free text detection BEFORE multi-select
+        is_open_text = (
+            (avg_len > 45 and (unique_ratio > 0.50 or token_reuse < 0.60)) or
+            (avg_len > 20 and unique_ratio > 0.70 and token_reuse < 0.50) or
+            any(k in str(col).lower() for k in ["open", "feedback", "comment", "verbatim", "_other"])
+        )
+        if is_open_text:
             schema[col] = {
                 "type": "open_ended",
                 "avg_char_length": round(avg_len, 1),
+                "sample": sample_vals
+            }
+        elif has_comma_delim and token_reuse >= 0.50:
+            schema[col] = {
+                "type": "multi_select",
+                "delimiter_detected": ",",
                 "sample": sample_vals
             }
         else:
@@ -337,11 +352,18 @@ def run_hygiene_audit(
 
     # 2. Straight-Liner Detection across Likert Rating Battery (CS-064)
     if not rating_cols:
-        rating_cols = [
-            c for c in df.columns 
-            if not str(c).startswith("__")
-            and (re.search(r'_(?:[01]to[57]|sat|rating)', str(c), re.IGNORECASE) or (pd.to_numeric(df[c], errors='coerce').notna().mean() > 0.85 and 2 <= df[c].nunique() <= 7 and pd.to_numeric(df[c], errors='coerce').max() <= 7 and pd.to_numeric(df[c], errors='coerce').min() >= 0 and not re.search(r'(?i)(?:age|region|lgu|income|gender|sec|id|time|duration)', str(c))))
-        ]
+        from collections import Counter
+        temp_schema = autodetect_schema(df)
+        scales = [(v.get('scale_min'), v.get('scale_max')) for c, v in temp_schema.items() if v.get('type') == 'rating_scale']
+        if scales:
+            most_common = Counter(scales).most_common(1)[0][0]
+            rating_cols = [c for c, v in temp_schema.items() if v.get('type') == 'rating_scale' and (v.get('scale_min'), v.get('scale_max')) == most_common]
+        else:
+            rating_cols = [
+                c for c in df.columns 
+                if not str(c).startswith("__")
+                and re.search(r'_(?:[01]to[57]|sat|rating)', str(c), re.IGNORECASE)
+            ]
 
     if len(rating_cols) >= 3:
         sub_df = df[rating_cols].apply(pd.to_numeric, errors='coerce')
@@ -395,20 +417,24 @@ def run_hygiene_audit(
                     "details": f"Duration {durations.loc[idx]:.1f}s is below 1/3 median threshold ({speeder_threshold:.1f}s)."
                 })
 
-    # 4. Demographic Duplicate Check (CS-065)
-    demo_cols = [c for c in ('Respondent_ID', 'Gender', 'Age', 'Region', 'Socioeconomic_Class', 'QA_City_LGU') if c in df.columns and c not in id_cols]
-    if len(demo_cols) < 2:
-        demo_cols = [c for c in df.columns if 2 <= df[c].nunique() < 15 and not str(c).startswith("__") and c not in id_cols][:4]
-    if len(demo_cols) >= 2:
-        dup_mask = df.duplicated(subset=demo_cols, keep=False)
+    # 4. Duplicate Record Check across substantive columns (CS-065)
+    temp_schema = autodetect_schema(df)
+    sub_cols = [
+        c for c, v in temp_schema.items() 
+        if v.get('type') not in ('id', 'datetime', 'empty') 
+        and not str(c).startswith('__') 
+        and not any(k in str(c).lower() for k in ['duration', 'elapsed', 'time_taken', 'survey_time'])
+    ]
+    if len(sub_cols) >= 4:
+        dup_mask = df.duplicated(subset=sub_cols, keep=False)
         for idx in df[dup_mask].index:
             df.loc[idx, "__is_flagged"] = True
-            df.loc[idx, "__flag_reasons"] += "Duplicate demographic profile; "
+            df.loc[idx, "__flag_reasons"] += "Duplicate response record; "
             audit_log.append({
                 "timestamp": datetime.datetime.now().isoformat(),
                 "row_index": int(idx),
-                "type": "DEMOGRAPHIC_DUPLICATE",
-                "details": f"Identical demographic responses across {', '.join(demo_cols)}."
+                "type": "DUPLICATE_RECORD",
+                "details": f"Identical substantive responses across {len(sub_cols)} columns."
             })
 
     # 5. Write Immutable Audit Trail Log (CS-066, CS-087)

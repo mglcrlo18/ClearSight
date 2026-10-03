@@ -247,6 +247,7 @@ def build_crosstab_table(
             row_definitions.append({
                 "label": f"{int(mc)} - Don't know / Refused",
                 "is_net": False,
+                "is_missing_row": True,
                 "evaluator": lambda s, mc=mc: s.astype(float) == mc
             })
 
@@ -304,6 +305,8 @@ def build_crosstab_table(
         # Calculate values per column
         for c_idx, mask in enumerate(all_col_masks):
             valid = mask & df[stub_col].notna()
+            if is_rating_scale and not r_def.get("is_missing_row"):
+                valid = valid & ~pd.to_numeric(df[stub_col], errors='coerce').isin(missing_codes)
             w_sub = w_all[valid.to_numpy()]
             w_sum = w_sub.sum()
 

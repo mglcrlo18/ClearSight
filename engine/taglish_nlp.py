@@ -46,7 +46,7 @@ PHONE_REGEX = re.compile(
 LANDLINE_REGEX = re.compile(r'(?<![\d#])(?:\(0\d{1,2}\)|0\d{1,2})[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)')
 
 EMAIL_REGEX = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
-PHILSYS_REGEX = re.compile(r'(?<![\d#])(?:\d{4}-\d{4}-\d{4}|\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4})(?!\d)')
+PHILSYS_REGEX = re.compile(r'(?<![\d#])(?:\d{4}[\s-]\d{4}[\s-]\d{4}(?:[\s-]\d{4})?)(?!\d)')
 TIN_REGEX = re.compile(r'\b\d{3}[-\s]\d{3}[-\s]\d{3}(?:[-\s]\d{3})?\b')
 SSS_REGEX = re.compile(r'\b\d{2}[-\s]\d{7}[-\s]\d{1}\b')
 PHILHEALTH_REGEX = re.compile(r'\b\d{2}[-\s]\d{9}[-\s]\d{1}\b')
@@ -57,6 +57,8 @@ NAME_HONORIFICS = re.compile(
     r'\b(?i:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|si|kay|ni|ate|kuya|tita|tito|mang|aling|manang|manong)\s+'
     r'((?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,})){0,2})\b'
 )
+
+BRAND_ALLOWLIST = {'mang inasal', 'gcash', 'paymaya', 'shopee', 'lazada', 'grab', 'angkas'}
 
 
 def scrub_pii(text: Optional[str]) -> str:
@@ -73,7 +75,16 @@ def scrub_pii(text: Optional[str]) -> str:
     scrubbed = SSS_REGEX.sub("[SSS_REDACTED]", scrubbed)
     scrubbed = PHILHEALTH_REGEX.sub("[PHILHEALTH_REDACTED]", scrubbed)
     scrubbed = UMID_REGEX.sub("[UMID_REDACTED]", scrubbed)
-    scrubbed = NAME_HONORIFICS.sub("[NAME_REDACTED]", scrubbed)
+
+    def replace_name(match):
+        full_match = match.group(0)
+        name_part = match.group(1).lower()
+        if any(b in full_match.lower() for b in BRAND_ALLOWLIST) or any(b in name_part for b in BRAND_ALLOWLIST):
+            return full_match
+        prefix = full_match[:match.start(1) - match.start(0)]
+        return prefix + "[NAME_REDACTED]"
+
+    scrubbed = NAME_HONORIFICS.sub(replace_name, scrubbed)
 
     return scrubbed
 
@@ -194,7 +205,7 @@ NONE_PATTERNS = [
     r'^(?:wala(?:\s+naman|\s+lang)?|none|n/?a|wla(?:\s+lng)?|no\s+comment)$'
 ]
 NEUTRAL_PATTERNS = [
-    r'^(?:ok(?:ay)?(?:\s+(?:lang|naman)){1,2}|ayos\s+lang)$'
+    r'^(?:ok(?:ay)?(?:\s+(?:lang|naman)){0,2}|ayos(?:\s+lang)?)$'
 ]
 REASK_PATTERNS = [
     r'^\W*$',
@@ -486,10 +497,13 @@ def analyze_taglish_verbatim(
         return []
 
     clean_strip = scrubbed.strip().lower()
+    clean_norm = re.sub(r'[.!?,]+$', '', clean_strip)
+    clean_norm = re.sub(r'\b(?:po|opo|naman|lang)\b', ' ', clean_norm, flags=re.IGNORECASE).strip()
+    clean_norm = re.sub(r'\s+', ' ', clean_norm)
 
     # P3-16: Non-answer and neutral mapping
     for pat in NONE_PATTERNS:
-        if re.search(pat, clean_strip):
+        if re.search(pat, clean_strip) or re.search(pat, clean_norm):
             return [{
                 "code_id": 999,
                 "net": "Neutral / No Comment",
@@ -500,7 +514,7 @@ def analyze_taglish_verbatim(
             }]
 
     for pat in NEUTRAL_PATTERNS:
-        if re.search(pat, clean_strip):
+        if re.search(pat, clean_strip) or re.search(pat, clean_norm):
             return [{
                 "code_id": 900,
                 "net": "Neutral / General Feedback",
@@ -616,6 +630,12 @@ def analyze_taglish_verbatim(
                     # Check for preceding negator in the last 3 tokens
                     toks_before = re.findall(r'\w+', clause_lower[:mm.start()])[-3:]
                     is_negated = any(t in EXTENDED_NEGATORS for t in toks_before)
+
+                    if is_negated:
+                        # P3-08: Compound negation exceptions like "hindi lang", "walang kapantay", "di ba"
+                        window = clause_lower[max(0, mm.start() - 25):mm.end()]
+                        if re.search(r'\b(?:hindi lang|di lang|walang kapantay|walang katulad|di ba)\b', window, re.IGNORECASE):
+                            is_negated = False
 
                     if is_negated:
                         opp = OPPOSITE_CODES.get(entry["code_id"])
