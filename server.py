@@ -7,9 +7,11 @@ Threaded, hardened against path traversal, DNS rebinding, and CSRF.
 import os
 import sys
 import json
+import logging
 import mimetypes
 import tempfile
 import subprocess
+import pandas as pd
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -99,8 +101,59 @@ def load_bundled_sample():
         SESSION["weights"] = weights
         SESSION["weight_diagnostics"] = diag
         SESSION["hygiene_audit"] = audit_log
+        SESSION["last_tabulation"] = None
+        SESSION["open_feedback_analysis"] = None
         return True
     return False
+
+
+
+def compute_csat(df):
+    """Extracts true Top-2-Box satisfaction percentage from dataset if available."""
+    if df is None:
+        return None
+    for c in df.columns:
+        if any(k in c.lower() for k in ["csat", "satisfaction"]):
+            s_vals = pd.to_numeric(df[c], errors="coerce").dropna()
+            if len(s_vals) > 0 and s_vals.max() <= 5:
+                return f"{(s_vals >= 4).mean() * 100:.1f}%"
+    return None
+
+
+def build_snapshot_data():
+    """Unifies snapshot data building for both preview and export from active session."""
+    df = SESSION.get("df")
+    n = len(df) if df is not None else 0
+    diag = SESSION.get("weight_diagnostics") or {}
+    neff = diag.get("kish_n_eff", float(n))
+    eff = diag.get("weighting_efficiency_pct", 100.0)
+    csat_val = compute_csat(df) or "n/a"
+
+    delights = []
+    frictions = []
+    if SESSION.get("open_feedback_analysis"):
+        cframe = SESSION["open_feedback_analysis"].get("codeframe", [])
+        for item in cframe:
+            t_name = item.get("theme", "")
+            quotes = item.get("evidence_samples", [])
+            if quotes:
+                q_text = quotes[0].get("quote", "")
+                if any(w in t_name for w in ["Sulit", "Service", "Affordable", "Affinity", "Fragrance", "Softness", "Protection", "Ayuda"]):
+                    delights.append({"quote": q_text, "author": f"Respondent ({t_name.split('/')[0].strip()})"})
+                elif not any(w in t_name for w in ["General Feedback", "Non-Substantive"]):
+                    frictions.append({"quote": q_text, "author": f"Respondent ({t_name.split('/')[0].strip()})"})
+
+    return {
+        "project_title": SESSION.get("filename", "Customer Voice Analysis"),
+        "sample_n": n,
+        "eff_n": neff,
+        "csat_score": csat_val,
+        "weighting_eff": f"{eff}%",
+        "findings": [],
+        "delights": delights if delights else None,
+        "frictions": frictions if frictions else None,
+        "action_matrix": []
+    }
 
 
 class ClearSightRequestHandler(BaseHTTPRequestHandler):
@@ -186,69 +239,32 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             mime, _ = mimetypes.guess_type(local_path)
             self.serve_file(local_path, mime or "application/octet-stream")
         elif path == "/preview-snapshot":
-            # Generate snapshot directly and stream (CS-N05 resolution)
-            n = len(SESSION["df"]) if SESSION["df"] is not None else 412
-            diag = SESSION["weight_diagnostics"] or {}
-            neff = diag.get("kish_n_eff", float(n))
-            eff = diag.get("weighting_efficiency_pct", 100.0)
-
-            # Compute actual CSAT if available
-            csat_val = "84.2%"
-            if SESSION["df"] is not None:
-                for c in SESSION["df"].columns:
-                    if any(k in c.lower() for k in ["csat", "satisfaction"]):
-                        s_vals = pd.to_numeric(SESSION["df"][c], errors="coerce").dropna()
-                        if len(s_vals) > 0 and s_vals.max() <= 5:
-                            csat_val = f"{(s_vals >= 4).mean() * 100:.1f}%"
-                        break
-
-            # Extract actual delights and frictions from NLP coding if available
-            findings = []
-            delights = []
-            frictions = []
-            if SESSION.get("open_feedback_analysis"):
-                cframe = SESSION["open_feedback_analysis"].get("codeframe", [])
-                for item in cframe:
-                    t_name = item.get("theme", "")
-                    quotes = item.get("evidence_samples", [])
-                    if quotes:
-                        q_text = quotes[0].get("quote", "")
-                        if any(w in t_name for w in ["Sulit", "Service", "Affordable", "Affinity"]):
-                            delights.append({"quote": q_text, "author": f"Respondent ({t_name.split('/')[0].strip()})"})
-                        else:
-                            frictions.append({"quote": q_text, "author": f"Respondent ({t_name.split('/')[0].strip()})"})
-
-            data = {
-                "project_title": SESSION.get("filename", "Customer Voice Analysis"),
-                "sample_n": n,
-                "eff_n": neff,
-                "csat_score": csat_val,
-                "weighting_eff": f"{eff}%",
-                "findings": findings if findings else None,
-                "delights": delights if delights else None,
-                "frictions": frictions if frictions else None
-            }
-            with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp_f:
-                tmp_path = tmp_f.name
             try:
-                generate_customer_voice_snapshot_html(tmp_path, data)
-                with open(tmp_path, "rb") as f:
-                    snap_bytes = f.read()
-            finally:
-                if os.path.exists(tmp_path):
-                    try:
-                        os.remove(tmp_path)
-                    except Exception:
-                        pass
+                data = build_snapshot_data()
+                with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp_f:
+                    tmp_path = tmp_f.name
+                try:
+                    generate_customer_voice_snapshot_html(tmp_path, data)
+                    with open(tmp_path, "rb") as f:
+                        snap_bytes = f.read()
+                finally:
+                    if os.path.exists(tmp_path):
+                        try:
+                            os.remove(tmp_path)
+                        except Exception:
+                            pass
 
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(snap_bytes)))
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self';")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
-            self.end_headers()
-            self.wfile.write(snap_bytes)
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(snap_bytes)))
+                self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self';")
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.end_headers()
+                self.wfile.write(snap_bytes)
+            except Exception as e:
+                logging.exception("Failed to generate preview snapshot")
+                self.send_error(500, f"Snapshot preview error: {e}")
         elif path == "/api/dataset-status":
             has_data = SESSION["df"] is not None
             resp = {
@@ -311,6 +327,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 SESSION["weights"] = None
                 SESSION["weight_diagnostics"] = None
                 SESSION["hygiene_audit"] = audit_log
+                SESSION["last_tabulation"] = None
+                SESSION["open_feedback_analysis"] = None
 
                 self.send_json_response({
                     "status": "success",
@@ -386,14 +404,23 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 load_bundled_sample()
 
             df = SESSION["df"]
+            try:
+                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+            except Exception:
+                req_data = {}
+
+            req_col = req_data.get("column")
+            open_cols = [c for c, v in SESSION.get("schema", {}).items() if v.get("type") == "open_ended"]
+
             open_col = None
-            for col in df.columns:
-                if any(k in col.lower() for k in ["open", "feedback", "comment", "verbatim", "text"]):
-                    open_col = col
-                    break
-            if not open_col:
+            if req_col and req_col in df.columns:
+                open_col = req_col
+            elif open_cols:
+                open_col = open_cols[0]
+            else:
                 for col in df.columns:
-                    if df[col].dtype == object and df[col].dropna().astype(str).str.len().mean() > 15:
+                    c_low = col.lower()
+                    if re.search(r'\b(?:open|feedback|comment|verbatim)\b', c_low) or (df[col].dtype == object and df[col].dropna().astype(str).str.len().mean() > 20):
                         open_col = col
                         break
 
@@ -402,7 +429,11 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 return
 
             verbatims = df[open_col].dropna().astype(str).tolist()
-            coding_results = batch_code_open_ends(verbatims)
+            coding_results = batch_code_open_ends(
+                verbatims,
+                category=req_data.get("category"),
+                apply_lumping=bool(req_data.get("apply_lumping", req_data.get("lump", False)))
+            )
             SESSION["open_feedback_analysis"] = coding_results
 
             self.send_json_response({
@@ -439,6 +470,11 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
             else:
                 self.send_error(500, f"Failed to generate export file: {filename}")
+        except NotImplementedError as nie:
+            self.send_error(501, str(nie))
+        except Exception as e:
+            logging.exception(f"Export error: {e}")
+            self.send_error(500, f"Export error: {e}")
         finally:
             if os.path.exists(tmp_path):
                 try:
@@ -452,33 +488,28 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             load_bundled_sample()
 
         diag = SESSION["weight_diagnostics"] or {}
-        n = len(SESSION["df"]) if SESSION["df"] is not None else 412
-        neff = diag.get("kish_n_eff", 389.2)
-        eff = diag.get("weighting_efficiency_pct", 94.5)
+        n = len(SESSION["df"]) if SESSION["df"] is not None else 0
+        neff = diag.get("kish_n_eff", float(n))
+        eff = diag.get("weighting_efficiency_pct", 100.0)
+        weighted_n = float(SESSION["weights"].sum()) if SESSION.get("weights") is not None else float(n)
 
         if "Banner_Book" in filename:
             tables = SESSION.get("last_tabulation") or self.build_default_tables()
+            fdr_mode = "Benjamini-Hochberg False Discovery Rate (FDR)" if SESSION.get("fdr_enabled", True) else "None (Uncorrected)"
             metadata = {
-                "date_range": "September - October 2026",
+                "date_range": SESSION.get("field_dates") or "N/A",
                 "unweighted_n": n,
-                "weighted_n": float(n),
+                "weighted_n": weighted_n,
                 "effective_n": neff,
-                "efficiency_pct": eff
+                "efficiency_pct": eff,
+                "fdr_correction": fdr_mode
             }
             generate_excel_banner_book(target_path, SESSION.get("filename", "Consumer Study"), tables, metadata)
         elif "Snapshot" in filename:
-            data = {
-                "project_title": SESSION.get("filename", "Customer Voice Analysis"),
-                "sample_n": n,
-                "eff_n": neff,
-                "csat_score": "84.2%",
-                "weighting_eff": f"{eff}%"
-            }
+            data = build_snapshot_data()
             generate_customer_voice_snapshot_html(target_path, data)
-        elif "Thesis" in filename and filename.endswith(".html"):
-            generate_thesis_chapter_4_package(target_path, SESSION.get("filename", "Survey Analysis"), n, neff)
-        elif "Thesis" in filename and filename.endswith(".xlsx"):
-            generate_thesis_excel_tables(target_path, SESSION.get("filename", "Survey Analysis"))
+        elif "Thesis" in filename:
+            raise NotImplementedError("Thesis Chapter 4 Package is currently under calibration and disabled until dynamic inference is certified.")
 
     def handle_save_to_downloads(self, path: str):
         """Handles saving deliverable files directly to user's ~/Downloads directory."""
@@ -505,6 +536,11 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 "filename": "ClearSight_Customer_Voice_Snapshot_A4.html"
             })
         elif path == "/api/export/save-thesis-to-downloads":
+            self.send_json_response({
+                "status": "error",
+                "message": "Thesis Chapter 4 Package is currently under calibration and disabled until dynamic inference is certified."
+            }, 501)
+            return
             target_html = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Package.html")
             target_xlsx = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Tables.xlsx")
             self.generate_export_artifacts("ClearSight_Thesis_Chapter_4_Package.html", target_html)

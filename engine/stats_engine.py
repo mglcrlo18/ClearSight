@@ -163,12 +163,20 @@ def calculate_rim_weights(
             continue
         
         raw_sum = sum(targets.values())
-        if raw_sum <= 0:
-            raise ValueError(f"Target margins for variable '{var}' must sum to a positive value.")
+        if 99.0 <= raw_sum <= 101.0:
+            norm_factor = 100.0
+        elif 0.99 <= raw_sum <= 1.01:
+            norm_factor = 1.0
+        else:
+            raise ValueError(f"Targets for {var} sum to {raw_sum}; must be 1.0 or 100%")
         
-        # If given in percentage format (e.g. 14, 45, 20, 21 summing to 100)
-        norm_factor = 100.0 if 90.0 <= raw_sum <= 110.0 else raw_sum
-        
+        # Check that categories in df are covered by targets (CS-050)
+        df_cats = set(df[var].dropna().map(normalize_category_key))
+        target_cats = set(map(normalize_category_key, targets.keys()))
+        missing_in_targets = df_cats - target_cats
+        if missing_in_targets:
+            raise ValueError(f"{var}: categories without targets: {sorted(missing_in_targets)}")
+
         normalized_targets[var] = {}
         for cat, val in targets.items():
             norm_key = normalize_category_key(cat)
@@ -271,16 +279,23 @@ def calculate_rim_weights(
     return weights, diagnostics
 
 
-def apply_soft_mean_shift_trim(weights: np.ndarray, percentile: float = 95.0) -> np.ndarray:
-    """Compresses weights exceeding the threshold logarithmically, preserving total sample weight."""
+def apply_soft_mean_shift_trim(weights: np.ndarray, percentile: Optional[float] = 95.0, cap_ratio: Optional[float] = None) -> np.ndarray:
+    """Compresses extreme weights relative to mean weight or percentile. If None, returns weights unchanged (CS-113)."""
     if len(weights) == 0:
         return weights
-    total_target = np.sum(weights)
+    if percentile is None and cap_ratio is None:
+        return weights
+    total_target = float(np.sum(weights))
+    if cap_ratio is not None:
+        cap = cap_ratio * float(np.mean(weights))
+        trimmed = np.minimum(weights, cap)
+        return trimmed * (total_target / float(np.sum(trimmed)))
     threshold = float(np.percentile(weights, percentile))
     excess_mask = weights > threshold
     if np.any(excess_mask):
+        weights = weights.copy()
         weights[excess_mask] = threshold + np.log1p(weights[excess_mask] - threshold)
-    current_sum = np.sum(weights)
+    current_sum = float(np.sum(weights))
     if current_sum > 0:
         weights = weights * (total_target / current_sum)
     return weights
@@ -319,9 +334,11 @@ def test_pairwise_proportions(
     if neff1 <= 1 or neff2 <= 1:
         return 0.0, 1.0, True
 
-    # Validate inputs
-    p1 = max(0.0, min(1.0, float(p1)))
-    p2 = max(0.0, min(1.0, float(p2)))
+    # Validate inputs (CS-055)
+    p1 = float(p1)
+    p2 = float(p2)
+    if not (0.0 <= p1 <= 1.0 and 0.0 <= p2 <= 1.0):
+        raise ValueError(f"Proportions must be in [0, 1], got {p1}, {p2}")
 
     p_pool = (p1 * neff1 + p2 * neff2) / (neff1 + neff2)
     se_pool = math.sqrt(p_pool * (1.0 - p_pool) * (1.0 / neff1 + 1.0 / neff2))

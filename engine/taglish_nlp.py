@@ -4,9 +4,10 @@ Industrial-grade qualitative engine calibrated on real-world Philippine FMCG
 (Harmony W3) and Civic/Public Opinion (Frontier 2022) codeframes.
 
 Key Capabilities:
-1. PII Redaction: Masks Philippine mobile numbers, landlines, emails, Gov IDs (TIN, SSS, PhilHealth, UMID), and names.
+1. PII Redaction: Masks Philippine mobile numbers (including DITO 0895-0898), landlines (with lookaround to avoid #order digits),
+   emails, PhilSys numbers (12/16-digit), Gov IDs (TIN, SSS, PhilHealth, UMID), and names (including Ate/Kuya honorifics and ALL-CAPS).
 2. Orthographic & Dialect Normalization: Normalizes SMS shortcuts (kc, diko, lng, hnd, brgy),
-   brand typos (calgate, soff), and Visayan/Cebuano regional enclitics (ra gyod, jud).
+   brand typos (calgate, soff), and Visayan/Cebuano regional vocabulary (barato, maayo, nindot, lami, ra gyod, jud).
 3. Taglish Morphosyntax & Loanword Affixation: Decomposes hybrid prefixes (na-expose,
    nag t-trigger, napafabconan, plinancha).
 4. Semantic Clause Disentanglement: Splits compound responses across conjunctions
@@ -17,36 +18,49 @@ Key Capabilities:
    - "hiyang" (biological/dermatological suitability).
    - "tingi" / "tingi-tingi" (sachet packaging economics).
    - "ayuda" (social safety net subsidies) & "tambay" (street loiterers).
-6. Hierarchical Codeframe & Dynamic Lumping:
+6. Comprehensive Negation Windowing: Detects negators (hindi, di, wala, walang, not, never, ayaw, kulang, dili, indi)
+   in the 3 tokens preceding a pattern match and flips to paired complaint/opposite code.
+7. Hierarchical Codeframe & Dynamic Lumping:
    - 4-Tier Tree: Net -> Subnet -> Sub-subnet -> Code/Description.
    - Dynamic Consolidation ("Lump to Code X") preserving granular audit trail.
-7. Category Guardrails: Flags or suppresses invalid domain claims (e.g. whitening in fabcon).
-8. Inter-Coder Reliability: Multi-label Jaccard agreement, Macro-F1, and Cohen's Kappa.
+8. Category Guardrails & Non-Answer Classification: Maps 'wala/none' to Code 999 (None),
+   'ok lang' to Neutral, and reserves Reask for non-substantive text.
+9. Inter-Coder Reliability: Multi-label Jaccard agreement, per-code Cohen's Kappa, and mean Kappa.
 """
 
 import re
 from collections import Counter
 from typing import Optional, Union
+import numpy as np
 
 # ---------------------------------------------------------------------------
-# 1. PII Redaction Pipeline
+# 1. PII Redaction Pipeline (P3-09, CS-023, CS-N12)
 # ---------------------------------------------------------------------------
 
-PHONE_REGEX = re.compile(r'(?:\+?63[\s.-]?\(?9\d{2}\)?|\(?09\d{2}\)?|09\d{2})[\s.-]?(?:\d[\s.-]?){7}\b')
-LANDLINE_REGEX = re.compile(r'(?:\(?0\d{1,2}\)?|\b0\d{1,2})[\s.-]?\d{3,4}[\s.-]?\d{4}\b')
+# Philippine Mobile numbers: standard 09xx, DITO 0895-0898, +63 9xx, +63 89x
+PHONE_REGEX = re.compile(
+    r'(?<!\d)(?:\+?63[\s.-]?\(?(?:9\d{2}|89[5-8])\)?|\(?0(?:9\d{2}|89[5-8])\)?|0(?:9\d{2}|89[5-8]))[\s.-]?(?:\d[\s.-]?){7}(?!\d)'
+)
+
+# Philippine Landlines: (02) 8123 4567, 02-8123-4567 (with lookaround to avoid masking order numbers like #2024)
+LANDLINE_REGEX = re.compile(r'(?<![\d#])(?:\(0\d{1,2}\)|0\d{1,2})[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)')
+
 EMAIL_REGEX = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
+PHILSYS_REGEX = re.compile(r'(?<![\d#])(?:\d{4}-\d{4}-\d{4}|\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4})(?!\d)')
 TIN_REGEX = re.compile(r'\b\d{3}[-\s]\d{3}[-\s]\d{3}(?:[-\s]\d{3})?\b')
 SSS_REGEX = re.compile(r'\b\d{2}[-\s]\d{7}[-\s]\d{1}\b')
 PHILHEALTH_REGEX = re.compile(r'\b\d{2}[-\s]\d{9}[-\s]\d{1}\b')
 UMID_REGEX = re.compile(r'\b\d{4}[-\s]\d{7}[-\s]\d{1}\b')
 
+# Name honorifics in Philippine English / Tagalog (including kinship terms & ALL-CAPS names)
 NAME_HONORIFICS = re.compile(
-    r'\b(?i:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|si\b|kay\b|ni\b)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b'
+    r'\b(?i:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|si|kay|ni|ate|kuya|tita|tito|mang|aling|manang|manong)\s+'
+    r'((?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,})){0,2})\b'
 )
 
 
 def scrub_pii(text: Optional[str]) -> str:
-    """Masks Philippine mobile numbers, landlines, emails, government IDs, and names."""
+    """Masks Philippine mobile numbers, landlines, emails, PhilSys, government IDs, and names."""
     if text is None:
         return ""
     text_str = str(text)
@@ -54,6 +68,7 @@ def scrub_pii(text: Optional[str]) -> str:
     scrubbed = PHONE_REGEX.sub("[PHONE_REDACTED]", text_str)
     scrubbed = LANDLINE_REGEX.sub("[PHONE_REDACTED]", scrubbed)
     scrubbed = EMAIL_REGEX.sub("[EMAIL_REDACTED]", scrubbed)
+    scrubbed = PHILSYS_REGEX.sub("[PHILSYS_REDACTED]", scrubbed)
     scrubbed = TIN_REGEX.sub("[TIN_REDACTED]", scrubbed)
     scrubbed = SSS_REGEX.sub("[SSS_REDACTED]", scrubbed)
     scrubbed = PHILHEALTH_REGEX.sub("[PHILHEALTH_REDACTED]", scrubbed)
@@ -64,7 +79,7 @@ def scrub_pii(text: Optional[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 2. Text-Speak, Orthographic & Regional Dialect Normalization
+# 2. Text-Speak, Orthographic & Regional Dialect Normalization (P3-18)
 # ---------------------------------------------------------------------------
 
 TEXT_SPEAK_MAP = {
@@ -104,7 +119,7 @@ TEXT_SPEAK_MAP = {
     r'\bbka\b': 'baka',
     r'\bbrgy\b': 'barangay',
 
-    # Regional Visayan/Cebuano markers found in national research
+    # Regional Visayan/Cebuano markers found in national research (P3-18)
     r'\bra gyod\b': 'lang talaga',
     r'\bra gyud\b': 'lang talaga',
     r'\bman gud\b': 'kasi nga',
@@ -131,14 +146,16 @@ def normalize_taglish_text(text: str) -> str:
     return normalized
 
 
-# Affix pattern for Tagalog verbal prefixes, loanword hyphens, and infixes
+# Affix pattern for Tagalog verbal prefixes, loanword hyphens, circumfixes, and infixes (P3-13)
 AFFIX_PATTERN = re.compile(r'^(?:nag-|mag-|naka-|ipag-|i-|um-|mapa-|pina-|na-)?(.+?)(?:-in|-an)?$')
 
 
 def normalize_taglish_affixes(token: str) -> str:
-    """Strips common Tagalog verbal affixes to isolate root words, including English loanword stems."""
+    """Strips Tagalog verbal affixes, loanword hyphens, circumfixes, and infixes to isolate root words."""
     clean = token.lower().strip()
     clean = re.sub(r'^(?:nag\s*t-|na-|i-|mag-)', '', clean)
+    clean = re.sub(r'^(?:napa|pina|ipa)(.+?)(?:an|in)$', r'\1', clean)  # napafabconan -> fabcon
+    clean = re.sub(r'^([bcdfghjklmnpqrstvwxyz])(?:in|um)', r'\1', clean)  # plinancha -> plantsa
     match = AFFIX_PATTERN.match(clean)
     if match and len(match.group(1)) >= 3:
         return match.group(1)
@@ -149,19 +166,14 @@ def normalize_taglish_affixes(token: str) -> str:
 # 3. Semantic Clause Chunking (Multi-Coding Foundation)
 # ---------------------------------------------------------------------------
 
-# Conjunctions and punctuation that delineate independent thoughts in Taglish
 CLAUSE_DELIMITERS = re.compile(
-    r'(?:[;,]|\b(?i:at|tapos|kaso|kaso lang|pero|kaya|kaya lang|habang|dahil|lalo na kung)\b)',
+    r'(?:[;,]|\b(?i:at|tapos|kaso|kaso lang|pero|kaya|kaya lang|habang|lalo na kung)\b)',
     re.IGNORECASE
 )
 
 
 def split_into_semantic_clauses(text: str) -> list[str]:
-    """
-    Splits compound Taglish responses into constituent thoughts/clauses.
-    e.g. 'Mabango at malambot sa damit hindi na kailangan plantsahin'
-    -> ['Mabango', 'malambot sa damit', 'hindi na kailangan plantsahin']
-    """
+    """Splits compound Taglish responses into constituent thoughts/clauses."""
     if not text:
         return []
     parts = CLAUSE_DELIMITERS.split(text)
@@ -175,13 +187,32 @@ def split_into_semantic_clauses(text: str) -> list[str]:
 
 PRICE_KEYWORDS = {"presyo", "bayad", "shipping", "sf", "fee", "cost", "gastos", "price", "singil", "pamasahe"}
 AFFINITY_KEYWORDS = {"ko", "namin", "customer", "serbisyo", "ganda", "loyal", "love", "gusto", "bait"}
-NEGATION_WORDS = {"hindi", "di", "wala", "not", "walang", "hndi"}
+EXTENDED_NEGATORS = {"hindi", "di", "wala", "walang", "not", "never", "ayaw", "kulang", "dili", "indi"}
 
-# Non-responsive verbatims that coders mark as "Reask / Non-Answer"
-NON_ANSWER_PATTERNS = [
-    r'^(?:wala(?:\s+lang)?|wala\s+akong\s+masabi|wala\s+naman|n/?a|none|kasi\s+gusto\s+ko\s+lang|basta|ok\s+lang)$',
-    r'^(?:wla|wla\s+lng|wla\s+masabi|no\s+comment)$'
+# Categorization of Non-Substantive and Neutral answers (P3-16)
+NONE_PATTERNS = [
+    r'^(?:wala(?:\s+naman|\s+lang)?|none|n/?a|wla(?:\s+lng)?|no\s+comment)$'
 ]
+NEUTRAL_PATTERNS = [
+    r'^(?:ok(?:ay)?(?:\s+(?:lang|naman)){1,2}|ayos\s+lang)$'
+]
+REASK_PATTERNS = [
+    r'^\W*$',
+    r'^(?:asdf|xxx|\.+)$',
+    r'^(?:kasi\s+gusto\s+ko\s+lang|basta)$'
+]
+
+# Opposite/complaint code mapping when a pattern is negated (P3-08)
+OPPOSITE_CODES = {
+    210: (230, "Negative / Unfavorable Comment", "Fragrance & Freshness", "Musty Odor / Scent Defect"),
+    220: (230, "Negative / Unfavorable Comment", "Fragrance & Freshness", "Musty Odor / Scent Defect"),
+    240: (245, "Negative / Unfavorable Comment", "Fabric Feel & Garment Care", "Rough / Difficult to Iron Fabric"),
+    250: (255, "Negative / Unfavorable Comment", "Dermatological Compatibility", "Skin Irritation / Hindi Hiyang"),
+    110: (120, "Negative / Unfavorable Comment", "Pricing & Value Perception", "Expensive / High Pricing Friction"),
+    130: (135, "Negative / Unfavorable Comment", "Pack Size & Sachet Format", "No Sachet / Pack Format Unavailable"),
+    310: (315, "Negative / Unfavorable Comment", "Customer Experience & Service", "Unresponsive / Poor Customer Service"),
+    410: (415, "Negative / Unfavorable Comment", "Social Welfare & Assistance", "Government Aid Not Received / Delayed Distribution")
+}
 
 # Comprehensive hierarchical taxonomy derived from Harmony W3 & Frontier 2022
 HIERARCHICAL_CODEFRAME = [
@@ -202,7 +233,9 @@ HIERARCHICAL_CODEFRAME = [
             r'\bpang[- ]?masa\b',
             r'\bkayang[- ]?kaya sa bulsa\b',
             r'\bhindi\s+mahal\b',
-            r'\bdi\s+mahal\b'
+            r'\bdi\s+mahal\b',
+            r'\bbarato\b',
+            r'\bbarato ra\b'
         ]
     },
     {
@@ -220,7 +253,9 @@ HIERARCHICAL_CODEFRAME = [
             r'\bmedyo mahal\b',
             r'\bsobrang mahal\b',
             r'\bhindi sulit\b',
-            r'\bdi sulit\b'
+            r'\bdi sulit\b',
+            r'\bdili barato\b',
+            r'\bmahal kaayo\b'
         ]
     },
     {
@@ -228,7 +263,7 @@ HIERARCHICAL_CODEFRAME = [
         "net": "Positive / Favorable Comment",
         "subnet": "Pack Size & Sachet Format",
         "theme": "Sachet / Tingi-Tingi Availability",
-        "lump_into": 110,  # Lumped into general affordability in high-level summaries
+        "lump_into": 110,
         "patterns": [
             r'\btingi[- ]?tingi\b',
             r'\btingi\b',
@@ -253,7 +288,8 @@ HIERARCHICAL_CODEFRAME = [
             r'\bmatagal mawala ang bango\b',
             r'\bparang pabango\b',
             r'\bmild scent\b',
-            r'\bfresh scent\b'
+            r'\bfresh scent\b',
+            r'\bnabango-?han\b'
         ]
     },
     {
@@ -297,7 +333,9 @@ HIERARCHICAL_CODEFRAME = [
             r'\bmadaling plantsahin\b',
             r'\bhindi na kailangan plantsahin\b',
             r'\bready to wear\b',
-            r'\biwas gusot\b'
+            r'\biwas gusot\b',
+            r'\bplinancha\b',
+            r'\bplantsa\b'
         ]
     },
     {
@@ -339,9 +377,8 @@ HIERARCHICAL_CODEFRAME = [
         "theme": "Slow Logistics / Delivery Delay",
         "lump_into": None,
         "patterns": [
-            r'(?:mabagal|ang bagal|tagal|matagal).*(?:deliver|dating|shipping|order)',
-            r'\b(?:ang\s+)?tagal\s+(?:dumating|ng\s+order)\b',
-            r'\bmatagal\s+dumating\b',
+            # P3-17: Require delay word and delivery term within 3 words
+            r'\b(?:mabagal|ang bagal|matagal|tagal)\b(?:\W+\w+){0,3}?\W+(?:dumating|darating|ma-?deliver|delivery|shipping|ang order)\b',
             r'\bdelay(?:ed)?\b',
             r'\bhindi\s+dumating\b'
         ]
@@ -368,7 +405,8 @@ HIERARCHICAL_CODEFRAME = [
             r'\bloyal customer\b',
             r'\bgo[- ]?to choice\b',
             r'\bfavorite\b',
-            r'\bpaborito\b'
+            r'\bpaborito\b',
+            r'\b(?:maayo|nindot|lami)\b'
         ]
     },
 
@@ -420,25 +458,18 @@ HIERARCHICAL_CODEFRAME = [
     }
 ]
 
+CODEFRAME_MAP = {entry["code_id"]: entry for entry in HIERARCHICAL_CODEFRAME}
+
 
 # ---------------------------------------------------------------------------
 # 5. Core Analytical Engine & Category Guardrails
 # ---------------------------------------------------------------------------
 
-def is_non_answer(text: str) -> bool:
-    """Detects circular, empty, or non-substantive answers flagged by human coders as 'Reask'."""
-    clean = text.strip().lower()
-    for pat in NON_ANSWER_PATTERNS:
-        if re.search(pat, clean):
-            return True
-    return False
-
-
 def check_negation(tokens: list[str], target_idx: int, window: int = 3) -> bool:
     """Checks if a negation token exists within a preceding window."""
     start = max(0, target_idx - window)
     preceding = tokens[start:target_idx]
-    return any(neg in preceding for neg in NEGATION_WORDS)
+    return any(neg in preceding for neg in EXTENDED_NEGATORS)
 
 
 def analyze_taglish_verbatim(
@@ -449,26 +480,46 @@ def analyze_taglish_verbatim(
     """
     Parses a single Taglish response, resolving polysemy, conditionality,
     negations, and decomposing compound clauses for multi-coding.
-
-    Parameters:
-        text: Raw verbatim string from survey respondent.
-        category: Optional domain constraint (e.g. 'fabcon', 'fmcg', 'civic').
-        apply_lumping: If True, consolidates sub-codes into parent codes.
     """
     scrubbed = scrub_pii(text)
     if not scrubbed.strip():
         return []
 
-    # Quality Control Gate: Check for non-substantive answers
-    if is_non_answer(scrubbed):
-        return [{
-            "code_id": 999,
-            "net": "Uncoded / Non-Substantive",
-            "subnet": "Data Quality",
-            "theme": "Non-Substantive / Needs Reask",
-            "evidence": scrubbed,
-            "rule_weight": 0.99
-        }]
+    clean_strip = scrubbed.strip().lower()
+
+    # P3-16: Non-answer and neutral mapping
+    for pat in NONE_PATTERNS:
+        if re.search(pat, clean_strip):
+            return [{
+                "code_id": 999,
+                "net": "Neutral / No Comment",
+                "subnet": "No Opinion",
+                "theme": "None / No Particular Reason",
+                "evidence": scrubbed,
+                "rule_weight": 0.99
+            }]
+
+    for pat in NEUTRAL_PATTERNS:
+        if re.search(pat, clean_strip):
+            return [{
+                "code_id": 900,
+                "net": "Neutral / General Feedback",
+                "subnet": "General Comment",
+                "theme": "General / Neutral Feedback",
+                "evidence": scrubbed,
+                "rule_weight": 0.90
+            }]
+
+    for pat in REASK_PATTERNS:
+        if re.search(pat, clean_strip):
+            return [{
+                "code_id": 998,
+                "net": "Uncoded / Non-Substantive",
+                "subnet": "Data Quality",
+                "theme": "Non-Substantive / Needs Reask",
+                "evidence": scrubbed,
+                "rule_weight": 0.99
+            }]
 
     normalized = normalize_taglish_text(scrubbed)
     clauses = split_into_semantic_clauses(normalized)
@@ -476,12 +527,14 @@ def analyze_taglish_verbatim(
     matched_themes = []
     seen_code_ids = set()
 
-    # Category guardrail rules (e.g. Harmony W3: whitening is invalid for fabric softener)
     is_fabcon = category and category.lower() in ("fabcon", "fabric_conditioner", "fabric conditioner")
 
     for clause in clauses:
         clause_lower = clause.lower()
-        clause_tokens = re.findall(r'\b\w+\b', clause_lower)
+        clause_tokens = re.findall(r'\b[\w-]+\b', clause_lower)
+        # P3-13: Augment clause with normalized roots
+        root_tokens = [normalize_taglish_affixes(t) for t in clause_tokens]
+        clause_augmented = clause_lower + " " + " ".join(root_tokens)
 
         # 1. Polysemy Disambiguation for "mahal" (Expense vs. Brand Love)
         is_negated_mahal = bool(re.search(r'\b(?:hindi|di|hndi|not)\s+(?:masyadong\s+)?mahal\b', clause_lower))
@@ -548,18 +601,38 @@ def analyze_taglish_verbatim(
                     })
                     seen_code_ids.add(120)
 
-        # 2. Evaluate Codeframe Rules
+        # 2. Evaluate Codeframe Rules with Negation Windowing (P3-08)
         for entry in HIERARCHICAL_CODEFRAME:
             target_id = entry["lump_into"] if (apply_lumping and entry["lump_into"]) else entry["code_id"]
             if target_id in seen_code_ids:
                 continue
 
-            # Respect affinity suppression of pricing friction
             if has_affinity and entry["code_id"] == 120:
                 continue
 
             for pat in entry["patterns"]:
-                if re.search(pat, clause_lower):
+                mm = re.search(pat, clause_augmented)
+                if mm:
+                    # Check for preceding negator in the last 3 tokens
+                    toks_before = re.findall(r'\w+', clause_lower[:mm.start()])[-3:]
+                    is_negated = any(t in EXTENDED_NEGATORS for t in toks_before)
+
+                    if is_negated:
+                        opp = OPPOSITE_CODES.get(entry["code_id"])
+                        if opp:
+                            opp_id, opp_net, opp_sub, opp_theme = opp
+                            if opp_id not in seen_code_ids:
+                                matched_themes.append({
+                                    "code_id": opp_id,
+                                    "net": opp_net,
+                                    "subnet": opp_sub,
+                                    "theme": opp_theme,
+                                    "evidence": clause,
+                                    "rule_weight": 0.88
+                                })
+                                seen_code_ids.add(opp_id)
+                        break
+
                     # Guard against negated matches
                     if is_negated_sulit and entry["code_id"] == 110:
                         continue
@@ -570,18 +643,22 @@ def analyze_taglish_verbatim(
                     if is_fabcon and "puti" in clause_lower and entry["code_id"] not in (210, 220, 240, 250):
                         continue
 
+                    theme_label = entry["theme"]
+                    if apply_lumping and entry["lump_into"] and entry["lump_into"] in CODEFRAME_MAP:
+                        parent_entry = CODEFRAME_MAP[entry["lump_into"]]
+                        theme_label = parent_entry["theme"]
+
                     matched_themes.append({
                         "code_id": target_id,
                         "net": entry["net"],
                         "subnet": entry["subnet"],
-                        "theme": entry["theme"],
+                        "theme": theme_label,
                         "evidence": clause,
                         "rule_weight": 0.88
                     })
                     seen_code_ids.add(target_id)
                     break
 
-    # Fallback to general feedback if nothing matched
     if not matched_themes:
         matched_themes.append({
             "code_id": 900,
@@ -606,7 +683,7 @@ def batch_code_open_ends(
 ) -> dict:
     """
     Codes an entire battery of open-ended answers, generating a standardized
-    4-tier hierarchical codeframe with verbatim citations and frequency distribution.
+    hierarchical codeframe with verbatim citations and frequency distribution.
     """
     if not verbatims:
         return {
@@ -670,7 +747,7 @@ def batch_code_open_ends(
 
 
 # ---------------------------------------------------------------------------
-# 7. Inter-Coder Reliability Metrics (Multi-Label & Kappa)
+# 7. Inter-Coder Reliability Metrics (P3-14)
 # ---------------------------------------------------------------------------
 
 def compute_human_agreement(
@@ -679,8 +756,7 @@ def compute_human_agreement(
 ) -> dict:
     """
     Computes Observed Percent Agreement, Jaccard Multi-label Similarity,
-    and Cohen's Kappa for inter-coder reliability audits.
-    Supports both single-label and multi-label code assignments.
+    and per-code Cohen's Kappa for inter-coder reliability audits.
     """
     if len(human_codes) != len(ai_codes):
         raise ValueError(
@@ -692,10 +768,10 @@ def compute_human_agreement(
             "observed_agreement_pct": 0.0,
             "jaccard_mean_pct": 0.0,
             "cohens_kappa": 0.0,
+            "per_code_kappa": {},
             "audited_count": 0
         }
 
-    # Normalize inputs to sets of strings
     norm_human = []
     norm_ai = []
     for h, a in zip(human_codes, ai_codes):
@@ -704,7 +780,7 @@ def compute_human_agreement(
         norm_human.append(h_set)
         norm_ai.append(a_set)
 
-    # 1. Exact agreement (set equality)
+    # 1. Exact agreement
     exact_matches = sum(1 for h_s, a_s in zip(norm_human, norm_ai) if h_s == a_s)
     p_o = exact_matches / N
 
@@ -712,28 +788,28 @@ def compute_human_agreement(
     jaccards = []
     for h_s, a_s in zip(norm_human, norm_ai):
         union = h_s.union(a_s)
-        if not union:
-            jaccards.append(1.0)
-        else:
-            jaccards.append(len(h_s.intersection(a_s)) / len(union))
+        jaccards.append(len(h_s.intersection(a_s)) / len(union) if union else 1.0)
     jaccard_mean = sum(jaccards) / len(jaccards)
 
-    # 3. Cohen's Kappa for dominant/primary label
-    h_dominant = [sorted(list(s))[0] if s else "" for s in norm_human]
-    a_dominant = [sorted(list(s))[0] if s else "" for s in norm_ai]
+    # 3. Per-code Cohen's Kappa across multi-label indicators (P3-14)
+    all_codes = sorted(set().union(*norm_human, *norm_ai))
+    per_code = {}
+    for c in all_codes:
+        h_bin = [c in s for s in norm_human]
+        a_bin = [c in s for s in norm_ai]
+        p_agree = sum(1 for h_i, a_i in zip(h_bin, a_bin) if h_i == a_i) / N
+        p_h_pos = sum(h_bin) / N
+        p_a_pos = sum(a_bin) / N
+        p_exp = (p_h_pos * p_a_pos) + ((1.0 - p_h_pos) * (1.0 - p_a_pos))
+        k_c = (p_agree - p_exp) / (1.0 - p_exp) if (1.0 - p_exp) > 0 else 1.0
+        per_code[c] = round(float(k_c), 3)
 
-    all_categories = list(set(h_dominant + a_dominant))
-    p_e = 0.0
-    for cat in all_categories:
-        p_h = sum(1 for x in h_dominant if x == cat) / N
-        p_a = sum(1 for x in a_dominant if x == cat) / N
-        p_e += (p_h * p_a)
-
-    kappa = (p_o - p_e) / (1.0 - p_e) if (1.0 - p_e) > 0 else 1.0
+    mean_k = float(np.mean(list(per_code.values()))) if per_code else 1.0
 
     return {
         "observed_agreement_pct": round(p_o * 100.0, 1),
         "jaccard_mean_pct": round(jaccard_mean * 100.0, 1),
-        "cohens_kappa": round(kappa, 3),
+        "cohens_kappa": round(mean_k, 3),
+        "per_code_kappa": per_code,
         "audited_count": N
     }

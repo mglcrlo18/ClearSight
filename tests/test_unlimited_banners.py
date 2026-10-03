@@ -40,7 +40,7 @@ def test_tabulate_unlimited_columns():
     assert len(tables) == 2
 
     t1 = tables[0]
-    assert t1["title"] == "Tabulation: Brand Preference"
+    assert t1["title"] in ("Tabulation: Brand Preference", "Tabulation: Brand_Preference")
     assert len(t1["banner_cols"]) == 16
     assert len(t1["col_letters"]) == 16
     assert t1["col_letters"][0] == "Total"

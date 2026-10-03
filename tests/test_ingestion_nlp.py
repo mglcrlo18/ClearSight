@@ -37,10 +37,21 @@ def test_pii_scrubbing_formats():
         ("0917 1234 567", "[PHONE_REDACTED]"),
         ("(02) 8123 4567", "[PHONE_REDACTED]"),
         ("TIN: 123-456-789-000", "TIN: [TIN_REDACTED]"),
-        ("SSS: 34-1234567-8", "SSS: [SSS_REDACTED]")
+        ("SSS: 34-1234567-8", "SSS: [SSS_REDACTED]"),
+        ("DITO: 0895 111 2233", "[PHONE_REDACTED]"),
+        ("DITO: 0896-222-3344", "[PHONE_REDACTED]"),
+        ("DITO: 0897.333.4455", "[PHONE_REDACTED]"),
+        ("DITO: +63 898 444 5566", "[PHONE_REDACTED]"),
+        ("PhilSys: 1234-5678-9012", "[PHILSYS_REDACTED]"),
+        ("PhilSys PCN: 1234 5678 9012 3456", "[PHILSYS_REDACTED]"),
+        ("Ate Joy sa cashier", "[NAME_REDACTED] sa cashier")
     ]
     for raw, expected in test_cases:
         assert expected in scrub_pii(raw)
+
+    # False-positive protection
+    assert "Order #2024 1234 5678" in scrub_pii("Order #2024 1234 5678 dumating na")
+    assert "kay barato" in scrub_pii("Nindot kaayo ang bugas kay barato ra ug lami pa.")
 
 
 def test_google_forms_checkbox_resolution():
@@ -159,23 +170,43 @@ def test_dynamic_lumping():
 
 
 def test_category_guardrail_and_reask():
-    """Verifies domain constraints (Harmony W3) and non-answer filtering."""
+    """Verifies domain constraints (Harmony W3) and non-answer filtering (P3-16)."""
     # Fabric conditioner guardrail: ignore whitening claims
     fabcon = analyze_taglish_verbatim("Mabango at nakakaputi", category="fabcon")
     assert any("Fragrance" in m["theme"] for m in fabcon)
 
-    # Reask detection
-    reask = analyze_taglish_verbatim("Wala lang")
+    # Reask detection on garbage text
+    reask = analyze_taglish_verbatim("asdf")
     assert len(reask) == 1
-    assert reask[0]["code_id"] == 999
+    assert reask[0]["code_id"] == 998
     assert "Reask" in reask[0]["theme"]
+
+    # None answer mapping to Code 999
+    none_ans = analyze_taglish_verbatim("Wala lang")
+    assert len(none_ans) == 1
+    assert none_ans[0]["code_id"] == 999
+    assert "None" in none_ans[0]["theme"]
+
+
+def test_taglish_negation_and_opposites():
+    """P3-08, P3-17: Verifies negation windowing and flipping to opposite complaint codes."""
+    assert any("Musty" in m["theme"] for m in analyze_taglish_verbatim("hindi mabango ang sabon"))
+    assert any("No Sachet" in m["theme"] for m in analyze_taglish_verbatim("walang sachet na mabili"))
+    assert any("Rough" in m["theme"] for m in analyze_taglish_verbatim("hindi malambot sa damit"))
+    assert any("Irritation" in m["theme"] for m in analyze_taglish_verbatim("hindi hiyang sa balat"))
+    assert any("Not Received" in m["theme"] for m in analyze_taglish_verbatim("walang ayuda na natanggap"))
+    assert any("Expensive" in m["theme"] for m in analyze_taglish_verbatim("dili barato ang presyo"))
+    # P3-17: Loyalty mentioning former/dating brand is NOT delivery delay
+    loyalty = analyze_taglish_verbatim("matagal na kong customer ng dating brand")
+    assert not any("Delay" in m["theme"] or "Delivery" in m["theme"] for m in loyalty)
 
 
 def test_human_agreement_and_kappa():
-    """CS-075: Evaluates agreement, multi-label Jaccard similarity, and Cohen's kappa."""
-    h = ["Positive", "Negative", "Neutral", "Positive"]
-    a = ["Positive", "Negative", "Negative", "Positive"]
+    """CS-075, P3-14: Evaluates agreement, multi-label Jaccard similarity, and per-code Cohen's kappa."""
+    h = [["a", "b"], ["c"], ["b"]]
+    a = [["a"], ["c"], ["b"]]
     res = compute_human_agreement(h, a)
-    assert res["observed_agreement_pct"] == 75.0
+    assert res["observed_agreement_pct"] == 66.7
     assert "cohens_kappa" in res
+    assert "per_code_kappa" in res
     assert "jaccard_mean_pct" in res

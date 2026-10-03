@@ -1,21 +1,33 @@
 """
-ClearSight Analytics - Data Ingestion & Hygiene Engine
-Handles multi-format reading (CSV, Excel, SPSS), Google Forms delimiter resolution,
-schema profiling, and immutable hygiene auditing.
+ClearSight Analytics - Survey Data Ingestion & Hygiene Engine
+Supports:
+1. Multi-Format Ingestion: CSV, Excel (.xlsx/.xls), and SPSS (.sav) with metadata preservation
+2. Google Forms Checkbox & Comma-Delimiter Collision Resolution
+3. Survey Schema Autodetection (IDs, Datetime, Rating batteries, Single/Multi-select, Categorical)
+4. Survey Hygiene Auditing (Straight-liners, Speeders, Invalid Durations, Duplicate IDs, Demographic Duplicates)
+5. Audit logging in ~/.clearsight/cleaning_audit_trail.log
 """
 
 import io
+import os
 import re
 import datetime
 from pathlib import Path
-import pandas as pd
+from typing import Optional, Union, Tuple
 import numpy as np
+import pandas as pd
 
 try:
     import pyreadstat
     HAS_PYREADSTAT = True
 except ImportError:
     HAS_PYREADSTAT = False
+
+
+# App Data Directory for Persistent Audit Trail (CS-066, CS-087)
+LOG_DIR = Path(os.environ.get('CLEARSIGHT_DATA', Path.home() / '.clearsight'))
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+DEFAULT_LOG_FILEPATH = str(LOG_DIR / "cleaning_audit_trail.log")
 
 
 # ---------------------------------------------------------------------------
@@ -25,9 +37,9 @@ except ImportError:
 def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, dict]:
     """
     Reads survey data from raw bytes supporting:
-    - CSV (.csv): with automatic encoding fallback (utf-8, utf-8-sig, latin-1, cp1252)
-    - Excel (.xlsx, .xls): via openpyxl/xlrd
-    - SPSS (.sav): via pyreadstat with value labels applied and user-missing mapping
+    - CSV (.csv): with automatic encoding fallback, preserving leading zeros (P3-20)
+    - Excel (.xlsx, .xls): via openpyxl/xlrd, preserving leading zeros
+    - SPSS (.sav): via pyreadstat with value labels applied and user-missing mapping to NaN (CS-003)
     Returns (df, metadata_dict).
     """
     ext = Path(filename).suffix.lower()
@@ -43,7 +55,8 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
         df = None
         for enc in encodings:
             try:
-                df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc)
+                # P3-20: Read as string first to preserve leading zeros in codes/stubs
+                df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc, dtype=str, keep_default_na=False, na_values=[''])
                 metadata["encoding"] = enc
                 break
             except (UnicodeDecodeError, pd.errors.ParserError):
@@ -52,17 +65,27 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
             raise ValueError(f"Could not parse CSV file '{filename}' with supported encodings.")
 
     elif ext in [".xlsx", ".xls"]:
-        df = pd.read_excel(io.BytesIO(file_bytes))
+        # P3-20: Read as string first to preserve leading zeros
+        df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
         metadata["encoding"] = "binary"
 
     elif ext == ".sav":
         if HAS_PYREADSTAT:
-            # Use pyreadstat to read SAV and apply value formats
+            # CS-003: Read with apply_value_formats=False and map missing ranges to NaN
             df, meta = pyreadstat.read_sav(
                 io.BytesIO(file_bytes),
-                apply_value_formats=True,
+                apply_value_formats=False,
                 user_missing=True
             )
+            # Map declared missing ranges to NaN
+            missing_ranges = getattr(meta, "missing_ranges", None) or {}
+            for col, rng_list in missing_ranges.items():
+                if col in df.columns:
+                    for rng in rng_list:
+                        lo = rng.get("lo", float("-inf"))
+                        hi = rng.get("hi", float("inf"))
+                        df.loc[df[col].between(lo, hi), col] = np.nan
+
             metadata["variable_labels"] = getattr(meta, "column_names_to_labels", {}) or getattr(meta, "variable_to_label", {}) or {}
             metadata["value_labels"] = getattr(meta, "variable_value_labels", {}) or {}
         else:
@@ -72,6 +95,17 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
             )
     else:
         raise ValueError(f"Unsupported file format '{ext}'. ClearSight supports .csv, .xlsx, .xls, and .sav.")
+
+    # P3-20: Convert purely numeric columns without leading zeros to numeric
+    if ext in [".csv", ".xlsx", ".xls"]:
+        for c in df.columns:
+            s = df[c].dropna()
+            # Do not convert if column has numbers with leading zero (e.g. '0042')
+            has_leading_zero = s.astype(str).str.match(r'^0\d+').any()
+            if len(s) > 0 and not has_leading_zero:
+                conv = pd.to_numeric(s, errors='coerce')
+                if conv.notna().all():
+                    df[c] = pd.to_numeric(df[c])
 
     return df, metadata
 
@@ -90,16 +124,13 @@ def resolve_google_forms_checkboxes(series: pd.Series, known_options: list = Non
     raw_strings = series.dropna().astype(str).tolist()
 
     if not known_options:
-        # Build candidate frequency map of comma-delimited tokens
         token_counts = {}
         for item in raw_strings:
             parts = [p.strip() for p in item.split(",") if p.strip()]
             for p in parts:
                 token_counts[p] = token_counts.get(p, 0) + 1
-        # Options appearing in at least 2 respondents or unique if small sample
         known_options = [k for k, v in token_counts.items() if v >= 2 or len(raw_strings) < 10]
 
-    # Clean whitespace and sort by length descending (greedy longest-match first)
     clean_options = [opt.strip() for opt in known_options if opt.strip()]
     sorted_options = sorted(clean_options, key=len, reverse=True)
 
@@ -116,40 +147,42 @@ def resolve_google_forms_checkboxes(series: pd.Series, known_options: list = Non
         text = str(item).strip()
         other_part = ""
 
-        # Match known options using boundary-aware regex to prevent substring collisions
         for opt in sorted_options:
             escaped_opt = re.escape(opt)
-            # Match opt as a distinct segment bounded by commas or string ends
             pattern = rf"(?:^|,\s*){escaped_opt}(?:\s*,|$)"
             if re.search(pattern, text):
                 row_dict[opt] = 1
-                # Remove matched token
                 text = re.sub(pattern, ", ", text).strip(", ")
 
-        # If any unmatched text remains (e.g. "Other: customized answer")
-        if text:
-            other_part = text.strip()
+        if text and text != ",":
+            cleaned_other = re.sub(r"^Other:\s*", "", text).strip(", ")
+            if cleaned_other:
+                other_part = cleaned_other
 
         records.append(row_dict)
         other_texts.append(other_part)
 
-    indicator_df = pd.DataFrame(records, index=series.index)
-    other_series = pd.Series(other_texts, index=series.index, name=f"{series.name}_other")
-    return indicator_df, other_series
+    df_indicators = pd.DataFrame(records, index=series.index)
+    series_other = pd.Series(other_texts, index=series.index, name=f"{series.name}_other_text")
+
+    return df_indicators, series_other
 
 
 # ---------------------------------------------------------------------------
-# 3. Survey Schema Autodetection
+# 3. Survey Schema Autodetection (P3-23, CS-061)
 # ---------------------------------------------------------------------------
 
 def autodetect_schema(df: pd.DataFrame) -> dict:
     """
     Profiles columns into validated survey data types:
+    - 'id': Respondent ID or row index
+    - 'datetime': Timestamp
+    - 'binary': 0/1 binary indicator
     - 'rating_scale': Bounded numeric matrix questions (1-5, 1-7, 0-10 NPS)
-    - 'open_ended': Long text verbatims or high lexical diversity
+    - 'open_ended': Long text verbatims or qualitative feedback
     - 'multi_select': Delimiter-separated selections
     - 'single_select': Categorical / discrete response
-    - 'numeric': Continuous numeric
+    - 'numeric': Continuous numeric (counts, wait hours, age)
     """
     schema = {}
     for col in df.columns:
@@ -162,23 +195,67 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
             continue
 
         sample_vals = [str(x)[:60] for x in series.head(3).tolist()]
+        str_series = series.astype(str).str.strip()
 
-        # 1. Check numeric / rating scales
+        # 1. ID Column detection (P3-23)
+        if (str_series.nunique() / len(str_series) > 0.95 and re.search(r'(?i)(?:respondent|resp)?_?id$|^id$|_no$', str(col))) or re.search(r'(?i)^row_?no$', str(col)):
+            schema[col] = {"type": "id", "sample": sample_vals}
+            continue
+
+        # 2. Datetime detection (P3-23)
+        try:
+            if not pd.to_numeric(series, errors='coerce').notna().all():
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    dt_conv = pd.to_datetime(series, errors='coerce', format='mixed')
+                if dt_conv.notna().mean() > 0.85:
+                    schema[col] = {"type": "datetime", "sample": sample_vals}
+                    continue
+        except Exception:
+            pass
+
+        # 3. Numeric & Rating Scales
         numeric_series = pd.to_numeric(series, errors='coerce')
         valid_numeric_ratio = numeric_series.notna().mean()
 
         if valid_numeric_ratio > 0.85:
+            # Check for binary 0/1
+            num_set = set(numeric_series.dropna().unique())
+            if num_set <= {0, 1} or num_set <= {0.0, 1.0}:
+                schema[col] = {"type": "binary", "sample": sample_vals}
+                continue
+
             min_val = float(numeric_series.min())
             max_val = float(numeric_series.max())
             uniques = int(numeric_series.nunique())
 
-            # Bounded rating batteries (1-5 Likert, 1-7, or 0-10 NPS)
-            if (min_val in [0.0, 1.0] and max_val in [5.0, 7.0, 10.0]) or (uniques <= 10 and max_val <= 10.0 and min_val >= 0.0):
+            # Bounded rating batteries (explicit naming _1to5, _0to10, _1to7 or battery pattern)
+            m_scale_name = re.search(r'_(\d+)to(\d+)$', str(col), re.IGNORECASE)
+            is_explicit_rating = bool(m_scale_name)
+
+            if is_explicit_rating:
+                lo_b = int(m_scale_name.group(1))
+                hi_b = int(m_scale_name.group(2))
+                schema[col] = {
+                    "type": "rating_scale",
+                    "scale_min": lo_b,
+                    "scale_max": hi_b,
+                    "mean": float(round(numeric_series.mean(), 2)),
+                    "sample": sample_vals
+                }
+            elif any(k in str(col).lower() for k in ["sat_", "_sat", "satisfaction", "rating", "nps", "likert"]) and min_val in [0.0, 1.0] and max_val in [5.0, 7.0, 10.0]:
                 schema[col] = {
                     "type": "rating_scale",
                     "scale_min": int(min_val),
                     "scale_max": int(max_val),
                     "mean": float(round(numeric_series.mean(), 2)),
+                    "sample": sample_vals
+                }
+            elif uniques <= 20 and str(col).lower().startswith("qa_stub"):
+                schema[col] = {
+                    "type": "single_select",
+                    "categories": [str(x) for x in series.unique()[:20]],
                     "sample": sample_vals
                 }
             else:
@@ -190,23 +267,22 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
                 }
             continue
 
-        # 2. String Analysis: Open-ended vs. Multi-select vs. Single-select
-        str_series = series.astype(str).str.strip()
+        # 4. Multi-select vs Open-ended vs Single-select (P3-23)
+        # Check comma not followed by 3 digits to ignore money formats like '10,000'
+        has_comma_delim = str_series.str.contains(r',\s*(?!\d{3}\b)', regex=True).mean() > 0.20
         avg_len = float(str_series.str.len().mean())
-        comma_ratio = float((str_series.str.contains(",", regex=False)).mean())
         unique_ratio = float(str_series.nunique() / max(1, len(str_series)))
 
-        # High average length or high uniqueness indicates qualitative open-ends
-        if avg_len > 45 or (avg_len > 25 and unique_ratio > 0.70):
-            schema[col] = {
-                "type": "open_ended",
-                "avg_char_length": round(avg_len, 1),
-                "sample": sample_vals
-            }
-        elif comma_ratio > 0.25:
+        if has_comma_delim:
             schema[col] = {
                 "type": "multi_select",
                 "delimiter_detected": ",",
+                "sample": sample_vals
+            }
+        elif avg_len > 45 or (avg_len > 20 and unique_ratio > 0.70) or any(k in str(col).lower() for k in ["open", "feedback", "comment", "verbatim", "_other"]):
+            schema[col] = {
+                "type": "open_ended",
+                "avg_char_length": round(avg_len, 1),
                 "sample": sample_vals
             }
         else:
@@ -220,38 +296,53 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 4. Data Hygiene Audit & Immutable Logging
+# 4. Data Hygiene Audit & Immutable Logging (P3-21, P3-22, CS-064, CS-065, CS-066)
 # ---------------------------------------------------------------------------
 
 def run_hygiene_audit(
     df: pd.DataFrame, 
     time_col: str = None, 
     rating_cols: list = None,
-    log_filepath: str = "cleaning_audit_trail.log"
+    log_filepath: str = None
 ) -> tuple[pd.DataFrame, list]:
     """
-    Identifies straight-liners and speeders without destructive deletion.
-    Writes audit records to cleaning_audit_trail.log.
+    Identifies straight-liners, speeders, invalid durations, duplicate IDs, and demographic duplicates.
+    Writes audit records to persistent app-data log path (~/.clearsight/cleaning_audit_trail.log).
     Returns (annotated_df, audit_log_records).
     """
     audit_log = []
     df = df.copy()
-
-    # Determine rating battery columns BEFORE creating helper flag columns!
-    if not rating_cols:
-        rating_cols = [
-            c for c in df.columns 
-            if not str(c).startswith("__") 
-            and pd.to_numeric(df[c], errors='coerce').notna().mean() > 0.85 
-            and df[c].nunique() <= 7 
-            and pd.to_numeric(df[c], errors='coerce').max() <= 7
-        ]
+    if log_filepath is None:
+        log_filepath = DEFAULT_LOG_FILEPATH
 
     # Initialize helper columns
     df["__is_flagged"] = False
     df["__flag_reasons"] = ""
 
-    # 1. Straight-Liner Detection (0 variance across >= 3 Likert items)
+    # 1. Duplicate Respondent ID Check (P3-21)
+    id_cols = [c for c in df.columns if re.search(r'(?i)(?:respondent|resp)?_?id$|^id$', str(c)) and not str(c).startswith("__")]
+    if id_cols:
+        id_col = id_cols[0]
+        id_keys = df[id_col].astype(str).str.strip().str.upper()
+        dup_ids = id_keys.duplicated(keep=False)
+        for idx in df.index[dup_ids]:
+            df.loc[idx, "__is_flagged"] = True
+            df.loc[idx, "__flag_reasons"] += f"Duplicate Respondent ID: {id_keys.loc[idx]}; "
+            audit_log.append({
+                "timestamp": datetime.datetime.now().isoformat(),
+                "row_index": int(idx),
+                "type": "DUPLICATE_ID",
+                "details": f"Respondent ID '{id_keys.loc[idx]}' appears multiple times in dataset."
+            })
+
+    # 2. Straight-Liner Detection across Likert Rating Battery (CS-064)
+    if not rating_cols:
+        rating_cols = [
+            c for c in df.columns 
+            if not str(c).startswith("__")
+            and (re.search(r'_(?:[01]to[57]|sat|rating)', str(c), re.IGNORECASE) or (pd.to_numeric(df[c], errors='coerce').notna().mean() > 0.85 and 2 <= df[c].nunique() <= 7 and pd.to_numeric(df[c], errors='coerce').max() <= 7 and pd.to_numeric(df[c], errors='coerce').min() >= 0 and not re.search(r'(?i)(?:age|region|lgu|income|gender|sec|id|time|duration)', str(c))))
+        ]
+
     if len(rating_cols) >= 3:
         sub_df = df[rating_cols].apply(pd.to_numeric, errors='coerce')
         variances = sub_df.var(axis=1)
@@ -266,8 +357,7 @@ def run_hygiene_audit(
                 "details": f"Zero variance across {len(rating_cols)} rating columns: {', '.join(rating_cols[:4])}."
             })
 
-    # 2. Speeder Detection (< 1/3 of median completion duration)
-    # Autodetect time column if not provided
+    # 3. Speeder & Invalid Duration Detection (P3-22)
     if not time_col:
         for c in df.columns:
             lower = str(c).lower()
@@ -277,11 +367,24 @@ def run_hygiene_audit(
 
     if time_col and time_col in df.columns:
         durations = pd.to_numeric(df[time_col], errors='coerce')
+
+        # Flag non-positive durations as INVALID_DURATION (P3-22)
+        invalid_mask = durations.isna() | (durations <= 0)
+        for idx in durations.index[invalid_mask]:
+            df.loc[idx, "__is_flagged"] = True
+            df.loc[idx, "__flag_reasons"] += f"Invalid survey duration ({durations.loc[idx]}); "
+            audit_log.append({
+                "timestamp": datetime.datetime.now().isoformat(),
+                "row_index": int(idx),
+                "type": "INVALID_DURATION",
+                "details": f"Survey duration is non-positive or missing: {durations.loc[idx]}"
+            })
+
         valid_durations = durations[durations > 0]
         if len(valid_durations) > 0:
             median_time = float(valid_durations.median())
             speeder_threshold = median_time / 3.0
-            speeder_indices = durations[durations < speeder_threshold].index
+            speeder_indices = durations[(durations > 0) & (durations < speeder_threshold)].index
             for idx in speeder_indices:
                 df.loc[idx, "__is_flagged"] = True
                 df.loc[idx, "__flag_reasons"] += f"Speeder (duration {durations.loc[idx]:.1f}s < 1/3 median {median_time:.1f}s); "
@@ -292,9 +395,11 @@ def run_hygiene_audit(
                     "details": f"Duration {durations.loc[idx]:.1f}s is below 1/3 median threshold ({speeder_threshold:.1f}s)."
                 })
 
-    # 3. Demographic Duplicate Check
-    demo_cols = [c for c in df.columns if df[c].nunique() < 20 and not str(c).startswith("__")]
-    if len(demo_cols) >= 3:
+    # 4. Demographic Duplicate Check (CS-065)
+    demo_cols = [c for c in ('Respondent_ID', 'Gender', 'Age', 'Region', 'Socioeconomic_Class', 'QA_City_LGU') if c in df.columns and c not in id_cols]
+    if len(demo_cols) < 2:
+        demo_cols = [c for c in df.columns if 2 <= df[c].nunique() < 15 and not str(c).startswith("__") and c not in id_cols][:4]
+    if len(demo_cols) >= 2:
         dup_mask = df.duplicated(subset=demo_cols, keep=False)
         for idx in df[dup_mask].index:
             df.loc[idx, "__is_flagged"] = True
@@ -303,14 +408,14 @@ def run_hygiene_audit(
                 "timestamp": datetime.datetime.now().isoformat(),
                 "row_index": int(idx),
                 "type": "DEMOGRAPHIC_DUPLICATE",
-                "details": f"Identical demographic responses across {', '.join(demo_cols[:4])}."
+                "details": f"Identical demographic responses across {', '.join(demo_cols)}."
             })
 
-    # 4. Write Immutable Audit Trail Log
+    # 5. Write Immutable Audit Trail Log (CS-066, CS-087)
     if log_filepath:
         try:
             with open(log_filepath, "a", encoding="utf-8") as f:
-                f.write(f"\n--- CLEARIGHT HYGIENE AUDIT: {datetime.datetime.now().isoformat()} ---\n")
+                f.write(f"\n--- CLEARSIGHT HYGIENE AUDIT: {datetime.datetime.now().isoformat()} ---\n")
                 f.write(f"Evaluated rows: {len(df)} | Total flagged: {int(df['__is_flagged'].sum())}\n")
                 for entry in audit_log:
                     f.write(f"[{entry['timestamp']}] Row {entry['row_index']} | {entry['type']} | {entry['details']}\n")

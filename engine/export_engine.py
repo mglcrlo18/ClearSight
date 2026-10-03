@@ -24,11 +24,12 @@ SIG_COLOR_NEG = "B91C1C" # Crimson for -/--
 
 
 def sanitize_excel_cell(val):
-    """Prevents CSV/Excel formula injection for user-controlled strings while preserving internal sig markers (CS-N08)."""
+    """Prevents CSV/Excel formula injection for user-controlled strings while preserving internal sig markers (CS-N08, P3-19)."""
     if isinstance(val, str) and len(val) > 0:
         if val in ('+', '++', '-', '--'):
             return val
-        if val[0] in ('=', '+', '-', '@', '\t', '\r'):
+        stripped = val.lstrip(' \t\r\n')
+        if stripped and stripped[0] in ('=', '+', '-', '@', '\t', '\r'):
             return "'" + val
     return val
 
@@ -81,6 +82,7 @@ def generate_excel_banner_book(
     ws_meta.cell(row=2, column=2, value=sanitize_excel_cell("CLEARSIGHT - AGENCY TABULATION BOOK")).font = title_font
     ws_meta.cell(row=3, column=2, value=sanitize_excel_cell(f"Project: {project_title or 'Survey Study'}")).font = section_font
 
+    fdr_text = metadata.get("fdr_correction", "Benjamini-Hochberg False Discovery Rate (FDR)")
     meta_rows = [
         ("Field Date Range", metadata.get("date_range", "N/A")),
         ("Total Unweighted Sample (N)", metadata.get("unweighted_n", "N/A")),
@@ -89,18 +91,18 @@ def generate_excel_banner_book(
         ("Weighting Efficiency", f"{metadata.get('efficiency_pct', 'N/A')}%" if metadata.get('efficiency_pct') is not None else "N/A"),
         ("Dual Significance Testing System", "Agency Standard: Column Letters & Overlap-Corrected Benchmark"),
         ("Sig Row 1: Column Comparisons", "a, b, c... (>= 90% Conf) | A, B, C... (>= 95% Conf)"),
-        ("Sig Row 2: Benchmark vs. Total", "+ / ++ : Higher than rest-of-sample (90% / 95%)"),
-        ("                               ", "- / -- : Lower than rest-of-sample (90% / 95%)"),
-        ("Multiple Comparison Correction", "Benjamini-Hochberg False Discovery Rate (FDR)")
+        ("Sig Row 2: Benchmark vs. Total", "Plus signs (+ / ++): higher than rest-of-sample (90% / 95%)"),
+        ("                               ", "Minus signs (- / --): lower than rest-of-sample (90% / 95%)"),
+        ("Multiple Comparison Correction", fdr_text)
     ]
 
     for r_idx, (label, val) in enumerate(meta_rows, start=6):
-        cell_lbl = ws_meta.cell(row=r_idx, column=2, value=sanitize_excel_cell(label))
+        cell_lbl = ws_meta.cell(row=r_idx, column=2, value=str(label))
         cell_lbl.font = bold_font
         cell_lbl.fill = PatternFill(start_color=LIGHT_GRAY, end_color=LIGHT_GRAY, fill_type="solid")
         cell_lbl.border = thin_border
 
-        cell_val = ws_meta.cell(row=r_idx, column=3, value=sanitize_excel_cell(str(val)))
+        cell_val = ws_meta.cell(row=r_idx, column=3, value=str(val))
         cell_val.font = regular_font
         cell_val.border = thin_border
 
@@ -299,41 +301,49 @@ def generate_customer_voice_snapshot_html(filepath: str, data: dict) -> str:
     weighting_eff = html.escape(str(data.get("weighting_eff", "N/A")))
 
     # Dynamic or formatted findings
-    findings = data.get("findings")
-    if not findings:
-        findings = [
-            {"title": "1. Significant Urban Consideration Vector", "text": "Consideration within urban centres outpaces provincial clusters (p < 0.05).", "tag": "Col Comparisons"},
-            {"title": "2. Youth Channel Adoption", "text": "Generation Z respondents report significantly higher trial rates across digital touchpoints (p < 0.01).", "tag": "Digital Adoption"}
-        ]
-
-    findings_html = ""
-    for f in findings:
-        f_title = html.escape(str(f.get("title", "")))
-        f_text = html.escape(str(f.get("text", "")))
-        f_tag = html.escape(str(f.get("tag", "")))
-        findings_html += f"""
+    findings = data.get("findings") or []
+    if findings:
+        findings_html = "".join([
+            f"""
         <div class="finding-box">
-            <b>{f_title}:</b> {f_text} <span class="sig-tag">[{f_tag}]</span>
+            <b>{html.escape(str(f.get("title", "")))}:</b> {html.escape(str(f.get("text", "")))} <span class="sig-tag">[{html.escape(str(f.get("tag", "")))}]</span>
+        </div>"""
+            for f in findings
+        ])
+    else:
+        findings_html = """
+        <div class="finding-box" style="color: #666; font-style: italic;">
+            No statistically significant findings recorded yet for this dataset.
         </div>"""
 
     # Delights and Frictions
-    delights = data.get("delights") or [
-        {"quote": "Mabilis ang processing at malinaw ang instructions.", "author": "Respondent (NCR)"},
-        {"quote": "Very responsive customer service, na-resolve agad ang inquiry ko.", "author": "Respondent (Visayas)"}
-    ]
-    frictions = data.get("frictions") or [
-        {"quote": "Mataas ang shipping fee sa probinsya kaya nagdadalawang-isip umulit.", "author": "Respondent (Mindanao)"},
-        {"quote": "Kailangan pa ng mas maraming payment options tulad ng local e-wallets.", "author": "Respondent (Balance Luzon)"}
-    ]
+    delights = data.get("delights") or []
+    frictions = data.get("frictions") or []
 
-    delights_html = "".join([
-        f'<div class="quote-box">"{html.escape(str(d["quote"]))}"<div style="font-size: 10px; color: #888; margin-top: 4px;">— {html.escape(str(d["author"]))}</div></div>'
-        for d in delights
-    ])
-    frictions_html = "".join([
-        f'<div class="quote-box friction">"{html.escape(str(f["quote"]))}"<div style="font-size: 10px; color: #888; margin-top: 4px;">— {html.escape(str(f["author"]))}</div></div>'
-        for f in frictions
-    ])
+    if delights:
+        delights_html = "".join([
+            f'<div class="quote-box">"{html.escape(str(d["quote"]))}"<div style="font-size: 10px; color: #888; margin-top: 4px;">— {html.escape(str(d.get("author", "Respondent")))}</div></div>'
+            for d in delights
+        ])
+    else:
+        delights_html = '<div class="quote-box" style="color: #777; font-style: italic; border-left-color: #D1D5DB;">No verified customer delights recorded yet.</div>'
+
+    if frictions:
+        frictions_html = "".join([
+            f'<div class="quote-box friction">"{html.escape(str(f["quote"]))}"<div style="font-size: 10px; color: #888; margin-top: 4px;">— {html.escape(str(f.get("author", "Respondent")))}</div></div>'
+            for f in frictions
+        ])
+    else:
+        frictions_html = '<div class="quote-box friction" style="color: #777; font-style: italic; border-left-color: #D1D5DB;">No verified customer frictions recorded yet.</div>'
+
+    action_matrix = data.get("action_matrix") or []
+    if action_matrix:
+        action_rows = "".join([
+            f'<tr><td><b>{html.escape(str(a.get("priority", "")))}</b></td><td>{html.escape(str(a.get("focus", "")))}</td><td>{html.escape(str(a.get("action", "")))}</td><td>{html.escape(str(a.get("metric", "")))}</td></tr>'
+            for a in action_matrix
+        ])
+    else:
+        action_rows = '<tr><td colspan="4" style="text-align: center; color: #777; font-style: italic; padding: 12px;">No automated 30-day action matrix defined for this dataset.</td></tr>'
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -478,24 +488,7 @@ def generate_customer_voice_snapshot_html(filepath: str, data: dict) -> str:
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td><b>P1</b></td>
-                <td>Provincial Logistics & Shipping</td>
-                <td>Subsidize shipping thresholds outside NCR to mitigate regional checkout friction.</td>
-                <td>Reduce regional drop-off by 15%</td>
-            </tr>
-            <tr>
-                <td><b>P2</b></td>
-                <td>Youth Demographics Acquisition</td>
-                <td>Expand interactive social commerce channels with value-oriented messaging.</td>
-                <td>Lift Gen Z trial from 54% to 65%</td>
-            </tr>
-            <tr>
-                <td><b>P3</b></td>
-                <td>Fulfillment QA & Packaging</td>
-                <td>Audit courier protective packaging to prevent transit damage complaints.</td>
-                <td>Lower defect rate &lt; 1.0%</td>
-            </tr>
+            {action_rows}
         </tbody>
     </table>
 </body>
