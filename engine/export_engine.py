@@ -63,10 +63,10 @@ def generate_excel_banner_book(
     ws_meta.title = "Methodology & Legend"
     ws_meta.views.sheetView[0].showGridLines = True
 
-    title_font = Font(name="Calibri", size=15, bold=True, color=CARBON_HEADER)
-    section_font = Font(name="Calibri", size=12, bold=True, color="333333")
-    regular_font = Font(name="Calibri", size=11, color="444444")
-    bold_font = Font(name="Calibri", size=11, bold=True, color="111111")
+    title_font = Font(name="Helvetica Neue", size=15, bold=True, color=CARBON_HEADER)
+    section_font = Font(name="Helvetica Neue", size=12, bold=True, color="333333")
+    regular_font = Font(name="Helvetica Neue", size=11, color="444444")
+    bold_font = Font(name="Helvetica Neue", size=11, bold=True, color="111111")
 
     thin_border = Border(
         left=Side(style='thin', color=BORDER_GRAY),
@@ -105,13 +105,23 @@ def generate_excel_banner_book(
     ws_meta.column_dimensions['B'].width = 34
     ws_meta.column_dimensions['C'].width = 55
 
-    # 2. Add Tables
+    # 2. Add Tables (Agency-Grade Executive Presentation Layout)
     header_fill = PatternFill(start_color=CARBON_HEADER, end_color=CARBON_HEADER, fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_font = Font(name="Helvetica Neue", size=11, bold=True, color="FFFFFF")
     base_fill = PatternFill(start_color="E9ECEF", end_color="E9ECEF", fill_type="solid")
-    sig_letter_font = Font(name="Calibri", size=10, bold=True, color="2D46B9")
-    sig_pos_font = Font(name="Calibri", size=10, bold=True, color=SIG_COLOR_POS)
-    sig_neg_font = Font(name="Calibri", size=10, bold=True, color=SIG_COLOR_NEG)
+    base_font = Font(name="Helvetica Neue", size=11, color="444444")
+    sig_letter_font = Font(name="Helvetica Neue", size=10, bold=True, color="2D46B9")
+    sig_pos_font = Font(name="Helvetica Neue", size=10, bold=True, color=SIG_COLOR_POS)
+    sig_neg_font = Font(name="Helvetica Neue", size=10, bold=True, color=SIG_COLOR_NEG)
+    net_fill = PatternFill(start_color="EEF2FF", end_color="EEF2FF", fill_type="solid")
+    table_title_font = Font(name="Helvetica Neue", size=15, bold=True, color=CARBON_HEADER)
+    question_font = Font(name="Helvetica Neue", size=15, bold=True, italic=True, color=CARBON_HEADER)
+    subtitle_font = Font(name="Helvetica Neue", size=8, italic=True, color="444444")
+    table_bold_font = Font(name="Helvetica Neue", size=11, bold=True, color="111111")
+    table_regular_font = Font(name="Helvetica Neue", size=11, color="444444")
+
+    def clean_banner_name(name: str) -> str:
+        return re.sub(r"\s*[\(\[]\s*[A-Z]+\s*[\)\]]$", "", str(name)).strip()
 
     existing_sheet_names = {"Methodology & Legend"}
 
@@ -119,92 +129,104 @@ def generate_excel_banner_book(
         clean_title = t_data.get("title", f"Table_{t_idx}")
         safe_sheet_name = sanitize_sheet_name(clean_title, t_idx, existing_sheet_names)
         ws = wb.create_sheet(title=safe_sheet_name)
-        ws.views.sheetView[0].showGridLines = True
+        ws.views.sheetView[0].showGridLines = False
 
-        ws.cell(row=2, column=2, value=sanitize_excel_cell(clean_title)).font = title_font
-        ws.cell(row=3, column=2, value=sanitize_excel_cell("Column % | Dual Sig: Letters (Col) and +/++ -/-- (vs Total)")).font = regular_font
+        # Row 2: Table Title
+        ws.cell(row=2, column=2, value=sanitize_excel_cell(clean_title)).font = table_title_font
+        # Row 3: Dedicated Question Phrasing Slot
+        question_phrasing = t_data.get("question_text") or t_data.get("question") or "Insert Question Phrasing Here"
+        ws.cell(row=3, column=2, value=sanitize_excel_cell(question_phrasing)).font = question_font
+        # Row 4: Methodology Subtitle
+        ws.cell(row=4, column=2, value=sanitize_excel_cell("Column % | Dual Sig: Letters (Col) and +/++ -/-- (vs Total)")).font = subtitle_font
 
         banner_cols = t_data.get("banner_cols", [])
         col_letters = t_data.get("col_letters", [])
 
-        # Banner Header Row
-        ws.cell(row=5, column=2, value=sanitize_excel_cell("Variables / Stubs")).font = header_font
-        ws.cell(row=5, column=2).fill = header_fill
-        ws.cell(row=5, column=2).border = thin_border
+        # Process banner columns and letters
+        if banner_cols and str(banner_cols[0]).strip().lower().startswith("total"):
+            sub_banners = [clean_banner_name(b) for b in banner_cols[1:]]
+            sub_letters = col_letters[1:] if len(col_letters) > 1 else [chr(65 + i) for i in range(len(sub_banners))]
+        else:
+            sub_banners = [clean_banner_name(b) for b in banner_cols]
+            sub_letters = col_letters if col_letters else [chr(65 + i) for i in range(len(sub_banners))]
 
-        for c_idx, b_col in enumerate(banner_cols, start=3):
-            cell = ws.cell(row=5, column=c_idx, value=sanitize_excel_cell(b_col))
+        # Row 6: Banner Header Row
+        ws.row_dimensions[6].height = 75.0
+        stub_header = t_data.get("stub_label") or t_data.get("variable_name") or clean_title.split(":")[-1].strip()
+        cell_stub = ws.cell(row=6, column=2, value=sanitize_excel_cell(stub_header))
+        cell_stub.font = header_font
+        cell_stub.fill = header_fill
+        cell_stub.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        cell_tot = ws.cell(row=6, column=3, value=sanitize_excel_cell("Total"))
+        cell_tot.font = header_font
+        cell_tot.fill = header_fill
+        cell_tot.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        for c_offset, b_col in enumerate(sub_banners):
+            c_idx = 4 + c_offset
+            cell = ws.cell(row=6, column=c_idx, value=sanitize_excel_cell(b_col))
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        # Row 7: Integrated Column Letters Row (Col B & C blank, Col D+ integrated header letters)
+        for c_offset, letter in enumerate(sub_letters):
+            c_idx = 4 + c_offset
+            cell = ws.cell(row=7, column=c_idx, value=sanitize_excel_cell(str(letter)))
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.border = thin_border
 
-        # Column Letters Row
-        ws.cell(row=6, column=2, value=sanitize_excel_cell("Column Names")).font = bold_font
-        ws.cell(row=6, column=2).border = thin_border
-        for c_idx, letter in enumerate(col_letters, start=3):
-            cell = ws.cell(row=6, column=c_idx, value=sanitize_excel_cell(letter if letter else "Total"))
-            cell.font = bold_font
-            cell.alignment = Alignment(horizontal="center")
-            cell.border = thin_border
-
-        # Sample Bases
-        ws.cell(row=7, column=2, value=sanitize_excel_cell("Column Sample Size (N)")).font = regular_font
-        ws.cell(row=7, column=2).fill = base_fill
-        ws.cell(row=7, column=2).border = thin_border
-        for c_idx, b_val in enumerate(t_data.get("unweighted_bases", []), start=3):
-            cell = ws.cell(row=7, column=c_idx, value=b_val if b_val is not None else 0)
-            cell.font = regular_font
-            cell.fill = base_fill
-            cell.alignment = Alignment(horizontal="center")
-            cell.border = thin_border
-
-        # Weighted Base
-        ws.cell(row=8, column=2, value=sanitize_excel_cell("Weighted Base (Nw)")).font = regular_font
+        # Row 8: Sample Base N
+        ws.cell(row=8, column=2, value=sanitize_excel_cell("Column Sample Size (N)")).font = base_font
         ws.cell(row=8, column=2).fill = base_fill
-        ws.cell(row=8, column=2).border = thin_border
-        for c_idx, w_val in enumerate(t_data.get("weighted_bases", []), start=3):
-            cell = ws.cell(row=8, column=c_idx, value=round(w_val, 1) if w_val is not None else 0.0)
-            cell.font = regular_font
+        for c_idx, b_val in enumerate(t_data.get("unweighted_bases", []), start=3):
+            cell = ws.cell(row=8, column=c_idx, value=b_val if b_val is not None else 0)
+            cell.font = base_font
             cell.fill = base_fill
-            cell.alignment = Alignment(horizontal="center")
-            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        # Kish Effective Base
-        ws.cell(row=9, column=2, value=sanitize_excel_cell("Kish Effective Base (Neff)")).font = regular_font
+        # Row 9: Weighted Base Nw
+        ws.cell(row=9, column=2, value=sanitize_excel_cell("Weighted Base (Nw)")).font = base_font
         ws.cell(row=9, column=2).fill = base_fill
-        ws.cell(row=9, column=2).border = thin_border
-        for c_idx, b_val in enumerate(t_data.get("effective_bases", []), start=3):
-            cell = ws.cell(row=9, column=c_idx, value=round(b_val, 1) if b_val is not None else 0.0)
-            cell.font = regular_font
+        for c_idx, w_val in enumerate(t_data.get("weighted_bases", []), start=3):
+            cell = ws.cell(row=9, column=c_idx, value=round(w_val, 1) if w_val is not None else 0.0)
+            cell.font = base_font
             cell.fill = base_fill
-            cell.alignment = Alignment(horizontal="center")
-            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        # Data Rows
-        curr_row = 11
+        # Row 10: Kish Effective Base Neff
+        ws.cell(row=10, column=2, value=sanitize_excel_cell("Kish Effective Base (Neff)")).font = base_font
+        ws.cell(row=10, column=2).fill = base_fill
+        for c_idx, b_val in enumerate(t_data.get("effective_bases", []), start=3):
+            cell = ws.cell(row=10, column=c_idx, value=round(b_val, 1) if b_val is not None else 0.0)
+            cell.font = base_font
+            cell.fill = base_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # Row 11: Blank Spacer Row
+        curr_row = 12
         for row_info in t_data.get("rows", []):
             label = row_info.get("label", "")
-            is_net = row_info.get("is_net", False)
+            is_net = row_info.get("is_net", False) or str(label).strip().upper().startswith("NET:")
             values = row_info.get("values", [])
             sig_letters = row_info.get("sig_letters", [""] * len(values))
             sig_benchmarks = row_info.get("sig_benchmarks", [""] * len(values))
 
             # Line 1: Data Values (% or mean)
             lbl_cell = ws.cell(row=curr_row, column=2, value=sanitize_excel_cell(label))
-            lbl_cell.font = bold_font if is_net else regular_font
-            lbl_cell.border = thin_border
+            lbl_cell.font = table_bold_font if is_net else table_regular_font
             if is_net:
-                lbl_cell.fill = PatternFill(start_color="EEF2FF", end_color="EEF2FF", fill_type="solid")
+                lbl_cell.fill = net_fill
 
             for c_idx, val in enumerate(values, start=3):
                 val_cell = ws.cell(row=curr_row, column=c_idx)
-                # If numeric percentage string like "42.5%"
                 if isinstance(val, str) and val.endswith("%"):
                     try:
                         num_float = float(val.replace("%", "").strip()) / 100.0
                         val_cell.value = num_float
-                        val_cell.number_format = '0.0%'
+                        val_cell.number_format = "0%" if round(num_float * 100, 1) == round(num_float * 100) else "0.0%"
                     except ValueError:
                         val_cell.value = sanitize_excel_cell(val)
                 elif isinstance(val, (int, float)):
@@ -212,47 +234,52 @@ def generate_excel_banner_book(
                 else:
                     val_cell.value = sanitize_excel_cell(str(val))
 
-                val_cell.font = bold_font if is_net else regular_font
-                val_cell.alignment = Alignment(horizontal="center")
-                val_cell.border = thin_border
+                val_cell.font = table_bold_font if is_net else table_regular_font
+                val_cell.alignment = Alignment(horizontal="center", vertical="center")
                 if is_net:
-                    val_cell.fill = PatternFill(start_color="EEF2FF", end_color="EEF2FF", fill_type="solid")
+                    val_cell.fill = net_fill
             curr_row += 1
 
-            # Line 2: Col Comparisons (Letters)
-            lbl_sig1 = ws.cell(row=curr_row, column=2, value=sanitize_excel_cell("  ↳ Col Comparisons (Letters)"))
-            lbl_sig1.font = Font(name="Calibri", size=9, italic=True, color="666666")
-            lbl_sig1.border = thin_border
-
+            # Line 2: Col Comparisons (Letters) — Col B & C blank
             for c_idx, s_val in enumerate(sig_letters, start=3):
                 s_clean = str(s_val).strip() if s_val is not None else ""
-                s_cell = ws.cell(row=curr_row, column=c_idx, value=sanitize_excel_cell(s_clean if s_clean != "-" else ""))
-                s_cell.font = sig_letter_font
-                s_cell.alignment = Alignment(horizontal="center")
-                s_cell.border = thin_border
+                if c_idx > 3 and s_clean and s_clean != "-":
+                    s_cell = ws.cell(row=curr_row, column=c_idx, value=sanitize_excel_cell(s_clean))
+                    s_cell.font = sig_letter_font
+                    s_cell.alignment = Alignment(horizontal="center", vertical="center")
             curr_row += 1
 
-            # Line 3: vs Total Benchmark
-            lbl_sig2 = ws.cell(row=curr_row, column=2, value=sanitize_excel_cell("  ↳ vs. Total (+/++, -/--)"))
-            lbl_sig2.font = Font(name="Calibri", size=9, italic=True, color="666666")
-            lbl_sig2.border = thin_border
-
+            # Line 3: vs Total Benchmark (+/++, -/--) — Col B & C blank
             for c_idx, b_val in enumerate(sig_benchmarks, start=3):
                 b_clean = str(b_val).strip() if b_val is not None else ""
-                b_cell = ws.cell(row=curr_row, column=c_idx, value=sanitize_excel_cell(b_clean if b_clean != "-" else ""))
-                if "+" in b_clean:
-                    b_cell.font = sig_pos_font
-                elif "-" in b_clean and b_clean != "-":
-                    b_cell.font = sig_neg_font
-                else:
-                    b_cell.font = regular_font
-                b_cell.alignment = Alignment(horizontal="center")
-                b_cell.border = thin_border
+                if c_idx > 3 and b_clean and b_clean != "-":
+                    b_cell = ws.cell(row=curr_row, column=c_idx, value=sanitize_excel_cell(b_clean))
+                    if "+" in b_clean:
+                        b_cell.font = sig_pos_font
+                    elif "-" in b_clean:
+                        b_cell.font = sig_neg_font
+                    else:
+                        b_cell.font = table_regular_font
+                    b_cell.alignment = Alignment(horizontal="center", vertical="center")
             curr_row += 1
 
-        ws.column_dimensions['B'].width = 38
-        for c in range(3, len(banner_cols) + 3):
-            ws.column_dimensions[get_column_letter(c)].width = 16
+        last_row = curr_row - 1
+        total_cols = 3 + len(sub_banners)
+
+        # Apply Outer Bounding Box Border (Minimalist Executive Frame)
+        for r in range(6, last_row + 1):
+            for c in range(2, total_cols + 1):
+                top_s = Side(style="thin", color="000000") if r == 6 else None
+                bot_s = Side(style="thin", color="000000") if r == last_row else None
+                left_s = Side(style="thin", color="000000") if c == 2 else None
+                right_s = Side(style="thin", color="000000") if c == total_cols else None
+                if top_s or bot_s or left_s or right_s:
+                    ws.cell(row=r, column=c).border = Border(top=top_s, bottom=bot_s, left=left_s, right=right_s)
+
+        ws.column_dimensions["B"].width = 38.0
+        ws.column_dimensions["C"].width = 16.0
+        for c in range(4, total_cols + 1):
+            ws.column_dimensions[get_column_letter(c)].width = 13.0
 
     wb.save(filepath)
     return filepath
