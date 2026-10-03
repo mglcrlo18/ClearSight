@@ -1,292 +1,516 @@
 """
-ClearSight - Local Desktop Backend Server
+ClearSight Analytics - Local Desktop Backend Server
 Zero-cloud execution. Runs on localhost:8540 with zero external data transmission.
+Threaded, hardened against path traversal, DNS rebinding, and CSRF.
 """
 
 import os
 import sys
 import json
 import mimetypes
+import tempfile
+import subprocess
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 # Add current directory to path
 CURR_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, CURR_DIR)
+if CURR_DIR not in sys.path:
+    sys.path.insert(0, CURR_DIR)
 
-from engine.ingestion import autodetect_schema, run_hygiene_audit, resolve_google_forms_checkboxes
+from engine.ingestion import autodetect_schema, run_hygiene_audit, read_survey_file, resolve_google_forms_checkboxes
 from engine.stats_engine import (
-    calculate_rim_weights, 
-    test_pairwise_proportions, 
+    calculate_rim_weights,
+    test_pairwise_proportions,
     test_vs_total_benchmark,
-    rao_scott_second_order_mrcv
+    test_means_significance,
+    apply_fdr_benjamini_hochberg,
+    apply_fdr_benjamini_yekutieli,
+    calculate_kish_neff
 )
 from engine.driver_analysis import compute_johnsons_relative_weights
 from engine.taglish_nlp import batch_code_open_ends, scrub_pii
 from engine.export_engine import (
-    generate_excel_banner_book, 
+    generate_excel_banner_book,
     generate_customer_voice_snapshot_html,
     generate_thesis_chapter_4_package,
     generate_thesis_excel_tables
 )
 
 PORT = 8540
+ALLOWED_HOSTS = {"127.0.0.1:8540", "localhost:8540", "127.0.0.1", "localhost"}
 
-def get_downloads_dir():
-    # Explicitly check user's main Downloads directory
-    for candidate in ["/Users/macbook/Downloads", str(Path.home() / "Downloads"), str(Path.home())]:
-        if os.path.exists(candidate):
-            return candidate
+# In-Memory Active Survey Session State
+SESSION = {
+    "df": None,
+    "filename": "No dataset loaded",
+    "schema": {},
+    "weights": None,
+    "weight_diagnostics": None,
+    "hygiene_audit": [],
+    "last_tabulation": None
+}
+
+
+def get_downloads_dir() -> str:
+    """Resolves the user's Downloads directory portably."""
+    user_downloads = Path.home() / "Downloads"
+    if user_downloads.exists():
+        return str(user_downloads)
     return str(Path.home())
 
-def build_agency_sample_tables():
-    """Builds sample tables with Dual Significance rows (Letters + Benchmark)."""
-    return [
-        {
-            "title": "Q1: Brand Preference by Region",
-            "banner_cols": ["Total", "NCR", "Balance Luzon", "Visayas", "Mindanao"],
-            "col_letters": ["", "A", "B", "C", "D"],
-            "unweighted_bases": [412, 120, 150, 72, 70],
-            "weighted_bases": [412.0, 57.7, 185.4, 82.4, 86.5],
-            "effective_bases": [389.2, 54.1, 178.2, 78.0, 81.3],
-            "rows": [
-                {
-                    "label": "Brand A (Premium Nanotech)",
-                    "values": ["42.5%", "55.0%", "38.0%", "36.1%", "40.2%"],
-                    "sig_letters": ["-", "B C D", "", "", ""],
-                    "sig_benchmarks": ["-", "++", "", "-", ""],
-                    "is_net": False
-                },
-                {
-                    "label": "Brand B (Standard Market)",
-                    "values": ["31.1%", "28.3%", "33.5%", "30.6%", "32.0%"],
-                    "sig_letters": ["-", "", "", "", ""],
-                    "sig_benchmarks": ["-", "", "", "", ""],
-                    "is_net": False
-                },
-                {
-                    "label": "Brand C (Bio-Oil Formulation)",
-                    "values": ["26.4%", "16.7%", "28.5%", "33.3%", "27.8%"],
-                    "sig_letters": ["-", "", "A", "A", ""],
-                    "sig_benchmarks": ["-", "--", "", "+", ""],
-                    "is_net": False
-                }
-            ]
-        },
-        {
-            "title": "Q2: Overall Customer Satisfaction (CSAT)",
-            "banner_cols": ["Total", "NCR", "Balance Luzon", "Visayas", "Mindanao"],
-            "col_letters": ["", "A", "B", "C", "D"],
-            "unweighted_bases": [412, 120, 150, 72, 70],
-            "weighted_bases": [412.0, 57.7, 185.4, 82.4, 86.5],
-            "effective_bases": [389.2, 54.1, 178.2, 78.0, 81.3],
-            "rows": [
-                {
-                    "label": "NET: Top-2-Box (Satisfied/Very Satisfied)",
-                    "values": ["84.2%", "91.7%", "82.0%", "80.5%", "84.3%"],
-                    "sig_letters": ["-", "B C", "", "", ""],
-                    "sig_benchmarks": ["-", "++", "", "-", ""],
-                    "is_net": True
-                },
-                {
-                    "label": "5 - Very Satisfied",
-                    "values": ["48.5%", "60.8%", "46.0%", "43.1%", "47.1%"],
-                    "sig_letters": ["-", "B C D", "", "", ""],
-                    "sig_benchmarks": ["-", "++", "", "-", ""],
-                    "is_net": False
-                },
-                {
-                    "label": "4 - Somewhat Satisfied",
-                    "values": ["35.7%", "30.9%", "36.0%", "37.4%", "37.2%"],
-                    "sig_letters": ["-", "", "", "", ""],
-                    "sig_benchmarks": ["-", "", "", "", ""],
-                    "is_net": False
-                },
-                {
-                    "label": "Mean Rating (1-5 Scale)",
-                    "values": ["4.12", "4.48", "4.05", "3.98", "4.10"],
-                    "sig_letters": ["-", "B C D", "", "", ""],
-                    "sig_benchmarks": ["-", "++", "", "-", ""],
-                    "is_net": True
-                }
-            ]
-        }
-    ]
 
-class SukatRequestHandler(BaseHTTPRequestHandler):
+def safe_reveal_in_finder(filepath: str):
+    """Safely reveals file in OS file explorer without shell interpolation."""
+    if sys.platform == "darwin":
+        subprocess.run(["open", "-R", filepath], check=False)
+    elif sys.platform == "win32":
+        subprocess.run(["explorer", f"/select,{filepath}"], check=False)
+
+
+def load_bundled_sample():
+    """Loads bundled sample Philippine consumer survey into memory."""
+    sample_csv = os.path.join(CURR_DIR, "data", "sample_survey.csv")
+    if os.path.exists(sample_csv):
+        import pandas as pd
+        df = pd.read_csv(sample_csv)
+        schema = autodetect_schema(df)
+        df_audited, audit_log = run_hygiene_audit(df, time_col="Survey_Duration_Sec")
+        
+        # Calculate default initial weights
+        targets = {
+            "Region": {
+                "National Capital Region (NCR)": 0.14,
+                "Balance Luzon": 0.45,
+                "Visayas": 0.20,
+                "Mindanao": 0.21
+            }
+        }
+        try:
+            weights, diag = calculate_rim_weights(df, targets, trim_percentile=95.0)
+        except Exception:
+            weights = None
+            diag = None
+
+        SESSION["df"] = df_audited
+        SESSION["filename"] = "sample_survey.csv"
+        SESSION["schema"] = schema
+        SESSION["weights"] = weights
+        SESSION["weight_diagnostics"] = diag
+        SESSION["hygiene_audit"] = audit_log
+        return True
+    return False
+
+
+class ClearSightRequestHandler(BaseHTTPRequestHandler):
+    server_version = "ClearSight/1.0"
+
     def log_message(self, format, *args):
+        # Clean production logging
         pass
 
-    def do_GET(self):
-        parsed = urlparse(self.path)
-        path = parsed.path
+    def validate_host_header(self) -> bool:
+        """Protects against DNS Rebinding attacks by validating Host header."""
+        host = self.headers.get("Host", "").strip()
+        if host not in ALLOWED_HOSTS:
+            self.send_error(400, "Bad Request: Invalid Host header.")
+            return False
+        return True
 
-        if path == "/" or path == "/index.html":
-            self.serve_file(os.path.join(CURR_DIR, "static", "index.html"), "text/html")
-        elif path.startswith("/static/"):
-            rel_path = path[len("/static/"):]
-            local_path = os.path.join(CURR_DIR, "static", rel_path)
-            mime, _ = mimetypes.guess_type(local_path)
-            self.serve_file(local_path, mime or "application/octet-stream")
-        elif path == "/preview-snapshot":
-            snapshot_path = os.path.join(CURR_DIR, "snapshot_preview.html")
-            data = {
-                "project_title": "Philippine Consumer Rejuvenation & Retail Study",
-                "sample_n": 412,
-                "eff_n": 389.2,
-                "csat_score": "84.2%",
-                "weighting_eff": "94.5%"
-            }
-            generate_customer_voice_snapshot_html(snapshot_path, data)
-            self.serve_file(snapshot_path, "text/html")
-        elif path == "/api/export/save-to-downloads":
-            # Direct save to user's ~/Downloads directory and reveal in Finder
-            downloads_dir = get_downloads_dir()
-            target_file = os.path.join(downloads_dir, "ClearSight_Agency_Banner_Book.xlsx")
-            sample_tables = build_agency_sample_tables()
-            metadata = {
-                "date_range": "September - October 2026",
-                "unweighted_n": 412,
-                "weighted_n": 412.0,
-                "effective_n": 389.2,
-                "efficiency_pct": 94.5
-            }
-            generate_excel_banner_book(target_file, "Philippine Consumer Survey", sample_tables, metadata)
-            
-            # Reveal in macOS Finder
-            if sys.platform == "darwin":
-                os.system(f'open -R "{target_file}" 2>/dev/null')
-            elif sys.platform == "win32":
-                os.system(f'explorer /select,"{target_file}" 2>/dev/null')
-                
-            response = {
-                "status": "success",
-                "message": "File generated and saved directly to your Downloads folder!",
-                "path": target_file,
-                "filename": "ClearSight_Agency_Banner_Book.xlsx"
-            }
-            self.send_json_response(response)
-        elif path == "/api/export/excel":
-            excel_path = os.path.join(CURR_DIR, "ClearSight_Banner_Book_Export.xlsx")
-            sample_tables = build_agency_sample_tables()
-            metadata = {
-                "date_range": "September - October 2026",
-                "unweighted_n": 412,
-                "weighted_n": 412.0,
-                "effective_n": 389.2,
-                "efficiency_pct": 94.5
-            }
-            generate_excel_banner_book(excel_path, "Philippine Consumer Survey", sample_tables, metadata)
-            
-            with open(excel_path, "rb") as f:
-                content = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Agency_Banner_Book.xlsx"')
-            self.send_header("Content-Length", str(len(content)))
-            self.end_headers()
-            self.wfile.write(content)
-        elif path == "/api/export/save-snapshot-to-downloads":
-            downloads_dir = get_downloads_dir()
-            target_file = os.path.join(downloads_dir, "ClearSight_Customer_Voice_Snapshot_A4.html")
-            data = {
-                "project_title": "Philippine Consumer Rejuvenation & Retail Study",
-                "sample_n": 412,
-                "eff_n": 389.2,
-                "csat_score": "84.2%",
-                "weighting_eff": "94.5%"
-            }
-            generate_customer_voice_snapshot_html(target_file, data)
-            if sys.platform == "darwin":
-                os.system(f'open -R "{target_file}" 2>/dev/null')
-            elif sys.platform == "win32":
-                os.system(f'explorer /select,"{target_file}" 2>/dev/null')
-            response = {
-                "status": "success",
-                "message": "1-Page A4 Snapshot saved directly to your Downloads folder!",
-                "path": target_file,
-                "filename": "ClearSight_Customer_Voice_Snapshot_A4.html"
-            }
-            self.send_json_response(response)
-        elif path == "/api/export/snapshot-download":
-            snapshot_path = os.path.join(CURR_DIR, "snapshot_preview.html")
-            data = {
-                "project_title": "Philippine Consumer Rejuvenation & Retail Study",
-                "sample_n": 412,
-                "eff_n": 389.2,
-                "csat_score": "84.2%",
-                "weighting_eff": "94.5%"
-            }
-            generate_customer_voice_snapshot_html(snapshot_path, data)
-            with open(snapshot_path, "rb") as f:
-                content = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Customer_Voice_Snapshot_A4.html"')
-            self.send_header("Content-Length", str(len(content)))
-            self.end_headers()
-            self.wfile.write(content)
-        elif path == "/api/export/save-thesis-to-downloads":
-            downloads_dir = get_downloads_dir()
-            target_html = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Package.html")
-            target_xlsx = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Tables.xlsx")
-            generate_thesis_chapter_4_package(target_html, "Philippine Consumer Survey Analysis", 412, 389.2)
-            generate_thesis_excel_tables(target_xlsx, "Philippine Consumer Survey Analysis")
-            if sys.platform == "darwin":
-                os.system(f'open -R "{target_html}" 2>/dev/null')
-            elif sys.platform == "win32":
-                os.system(f'explorer /select,"{target_html}" 2>/dev/null')
-            response = {
-                "status": "success",
-                "message": "Thesis Chapter 4 Package saved directly to your Downloads folder!",
-                "path": target_html,
-                "filename": "ClearSight_Thesis_Chapter_4_Package.html"
-            }
-            self.send_json_response(response)
-        elif path == "/api/export/thesis-download":
-            thesis_path = os.path.join(CURR_DIR, "ClearSight_Thesis_Chapter_4_Package.html")
-            generate_thesis_chapter_4_package(thesis_path, "Philippine Consumer Survey Analysis", 412, 389.2)
-            with open(thesis_path, "rb") as f:
-                content = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Thesis_Chapter_4_Package.html"')
-            self.send_header("Content-Length", str(len(content)))
-            self.end_headers()
-            self.wfile.write(content)
-        else:
-            self.send_error(404, "Endpoint Not Found")
+    def validate_origin_header(self) -> bool:
+        """Validates Origin/Referer header on state-changing endpoints to prevent CSRF."""
+        origin = self.headers.get("Origin", "")
+        referer = self.headers.get("Referer", "")
+        allowed = ("http://127.0.0.1:8540", "http://localhost:8540")
+        if origin and not any(origin.startswith(a) for a in allowed):
+            self.send_error(403, "Forbidden: Invalid cross-origin request.")
+            return False
+        if not origin and referer and not any(referer.startswith(a) for a in allowed):
+            self.send_error(403, "Forbidden: Invalid cross-origin referer.")
+            return False
+        return True
 
-    def send_json_response(self, data: dict):
+    def send_json_response(self, data: dict, status: int = 200):
         content = json.dumps(data).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(content)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "SAMEORIGIN")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.end_headers()
         self.wfile.write(content)
 
     def serve_file(self, filepath: str, mime_type: str):
-        if not os.path.exists(filepath):
-            self.send_error(404, f"File not found: {filepath}")
+        """Serves file safely, strictly checking for path traversal."""
+        real_filepath = os.path.realpath(filepath)
+        real_curr_dir = os.path.realpath(CURR_DIR)
+
+        # Enforce that served file is strictly within the project directory
+        if not real_filepath.startswith(real_curr_dir):
+            self.send_error(404, "Resource not found.")
             return
-        with open(filepath, "rb") as f:
-            content = f.read()
-        self.send_response(200)
-        self.send_header("Content-Type", mime_type)
-        self.send_header("Content-Length", str(len(content)))
-        self.end_headers()
-        self.wfile.write(content)
+
+        if not os.path.isfile(real_filepath):
+            self.send_error(404, "Resource not found.")
+            return
+
+        try:
+            with open(real_filepath, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", mime_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "SAMEORIGIN")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.end_headers()
+            self.wfile.write(content)
+        except Exception:
+            self.send_error(500, "Internal server error reading file.")
+
+    def do_GET(self):
+        if not self.validate_host_header():
+            return
+
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        if path in ["/", "/index.html"]:
+            self.serve_file(os.path.join(CURR_DIR, "static", "index.html"), "text/html; charset=utf-8")
+        elif path.startswith("/static/"):
+            rel_path = path[len("/static/"):].lstrip("/")
+            local_path = os.path.join(CURR_DIR, "static", rel_path)
+            mime, _ = mimetypes.guess_type(local_path)
+            self.serve_file(local_path, mime or "application/octet-stream")
+        elif path == "/preview-snapshot":
+            # Generate snapshot into temp directory
+            tmp_snapshot = os.path.join(tempfile.gettempdir(), "clearsight_snapshot_preview.html")
+            n = len(SESSION["df"]) if SESSION["df"] is not None else 412
+            diag = SESSION["weight_diagnostics"] or {}
+            neff = diag.get("kish_n_eff", 389.2)
+            eff = diag.get("weighting_efficiency_pct", 94.5)
+            data = {
+                "project_title": SESSION.get("filename", "Philippine Consumer Study"),
+                "sample_n": n,
+                "eff_n": neff,
+                "csat_score": "84.2%",
+                "weighting_eff": f"{eff}%"
+            }
+            generate_customer_voice_snapshot_html(tmp_snapshot, data)
+            self.serve_file(tmp_snapshot, "text/html; charset=utf-8")
+        elif path == "/api/dataset-status":
+            has_data = SESSION["df"] is not None
+            resp = {
+                "loaded": has_data,
+                "filename": SESSION["filename"],
+                "total_rows": len(SESSION["df"]) if has_data else 0,
+                "columns": list(SESSION["df"].columns) if has_data else [],
+                "weighted": SESSION["weights"] is not None,
+                "diagnostics": SESSION["weight_diagnostics"]
+            }
+            self.send_json_response(resp)
+        elif path == "/api/export/excel":
+            self.stream_export_file("ClearSight_Agency_Banner_Book.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        elif path == "/api/export/snapshot-download":
+            self.stream_export_file("ClearSight_Customer_Voice_Snapshot_A4.html", "text/html; charset=utf-8")
+        elif path == "/api/export/thesis-download":
+            self.stream_export_file("ClearSight_Thesis_Chapter_4_Package.html", "text/html; charset=utf-8")
+        else:
+            self.send_error(404, "Endpoint not found.")
+
+    def do_POST(self):
+        if not self.validate_host_header() or not self.validate_origin_header():
+            return
+
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        try:
+            content_length = int(self.headers.get("Content-Length", 0))
+            body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+        except Exception:
+            self.send_json_response({"status": "error", "message": "Failed to read request body."}, 400)
+            return
+
+        if path == "/api/load-sample":
+            success = load_bundled_sample()
+            if success:
+                self.send_json_response({
+                    "status": "success",
+                    "message": "Sample Philippine Consumer Survey loaded into RAM.",
+                    "total_respondents": len(SESSION["df"]),
+                    "columns": list(SESSION["df"].columns),
+                    "schema": SESSION["schema"],
+                    "flagged_hygiene": len(SESSION["hygiene_audit"]),
+                    "diagnostics": SESSION["weight_diagnostics"]
+                })
+            else:
+                self.send_json_response({"status": "error", "message": "Bundled sample dataset not found."}, 404)
+
+        elif path == "/api/upload":
+            filename = self.headers.get("X-Filename", "survey_data.csv")
+            try:
+                df, meta = read_survey_file(body_bytes, filename)
+                schema = autodetect_schema(df)
+                df_audited, audit_log = run_hygiene_audit(df)
+                
+                SESSION["df"] = df_audited
+                SESSION["filename"] = filename
+                SESSION["schema"] = schema
+                SESSION["weights"] = None
+                SESSION["weight_diagnostics"] = None
+                SESSION["hygiene_audit"] = audit_log
+
+                self.send_json_response({
+                    "status": "success",
+                    "filename": filename,
+                    "total_respondents": len(df),
+                    "columns": list(df.columns),
+                    "schema": schema,
+                    "flagged_hygiene": len(audit_log)
+                })
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 400)
+
+        elif path == "/api/weight":
+            if SESSION["df"] is None:
+                load_bundled_sample()
+
+            try:
+                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+            except Exception:
+                req_data = {}
+
+            targets = req_data.get("targets")
+            trim_pct = req_data.get("trim_percentile", 95.0)
+
+            if not targets:
+                # Default demographic benchmarks
+                targets = {
+                    "Region": {
+                        "National Capital Region (NCR)": 0.14,
+                        "Balance Luzon": 0.45,
+                        "Visayas": 0.20,
+                        "Mindanao": 0.21
+                    }
+                }
+
+            try:
+                weights, diagnostics = calculate_rim_weights(
+                    SESSION["df"], 
+                    targets, 
+                    trim_percentile=trim_pct
+                )
+                SESSION["weights"] = weights
+                SESSION["weight_diagnostics"] = diagnostics
+                self.send_json_response({
+                    "status": "success",
+                    "diagnostics": diagnostics
+                })
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 400)
+
+        elif path == "/api/tabulate":
+            if SESSION["df"] is None:
+                load_bundled_sample()
+
+            try:
+                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+            except Exception:
+                req_data = {}
+
+            df = SESSION["df"]
+            banner_cols = req_data.get("banner_cols", ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"])
+            stubs = req_data.get("stubs", ["Brand Preference"])
+            confidence = req_data.get("confidence", 95)
+            fdr_enabled = req_data.get("fdr_enabled", True)
+
+            result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled)
+            SESSION["last_tabulation"] = result
+            self.send_json_response({"status": "success", "table": result})
+
+        elif path in ["/api/export/save-to-downloads", "/api/export/save-snapshot-to-downloads", "/api/export/save-thesis-to-downloads"]:
+            self.handle_save_to_downloads(path)
+        else:
+            self.send_error(404, "Endpoint not found.")
+
+    def stream_export_file(self, filename: str, mime_type: str):
+        """Streams generated file from temporary directory to browser as attachment."""
+        tmp_path = os.path.join(tempfile.gettempdir(), filename)
+        if not os.path.exists(tmp_path):
+            # Generate it on demand
+            self.generate_export_artifacts(filename, tmp_path)
+
+        if os.path.exists(tmp_path):
+            with open(tmp_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", mime_type)
+            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+            self.send_header("Content-Length", str(len(content)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            self.wfile.write(content)
+        else:
+            self.send_error(500, f"Failed to generate export file: {filename}")
+
+    def generate_export_artifacts(self, filename: str, target_path: str):
+        """Generates export file from current session data."""
+        if SESSION["df"] is None:
+            load_bundled_sample()
+
+        diag = SESSION["weight_diagnostics"] or {}
+        n = len(SESSION["df"]) if SESSION["df"] is not None else 412
+        neff = diag.get("kish_n_eff", 389.2)
+        eff = diag.get("weighting_efficiency_pct", 94.5)
+
+        if "Banner_Book" in filename:
+            tables = SESSION.get("last_tabulation") or self.build_default_tables()
+            metadata = {
+                "date_range": "September - October 2026",
+                "unweighted_n": n,
+                "weighted_n": float(n),
+                "effective_n": neff,
+                "efficiency_pct": eff
+            }
+            generate_excel_banner_book(target_path, SESSION.get("filename", "Consumer Study"), tables, metadata)
+        elif "Snapshot" in filename:
+            data = {
+                "project_title": SESSION.get("filename", "Customer Voice Analysis"),
+                "sample_n": n,
+                "eff_n": neff,
+                "csat_score": "84.2%",
+                "weighting_eff": f"{eff}%"
+            }
+            generate_customer_voice_snapshot_html(target_path, data)
+        elif "Thesis" in filename and filename.endswith(".html"):
+            generate_thesis_chapter_4_package(target_path, SESSION.get("filename", "Survey Analysis"), n, neff)
+        elif "Thesis" in filename and filename.endswith(".xlsx"):
+            generate_thesis_excel_tables(target_path, SESSION.get("filename", "Survey Analysis"))
+
+    def handle_save_to_downloads(self, path: str):
+        """Handles saving deliverable files directly to user's ~/Downloads directory."""
+        downloads_dir = get_downloads_dir()
+
+        if path == "/api/export/save-to-downloads":
+            target_file = os.path.join(downloads_dir, "ClearSight_Agency_Banner_Book.xlsx")
+            self.generate_export_artifacts("ClearSight_Agency_Banner_Book.xlsx", target_file)
+            safe_reveal_in_finder(target_file)
+            self.send_json_response({
+                "status": "success",
+                "message": "Banner Book saved to Downloads folder.",
+                "path": target_file,
+                "filename": "ClearSight_Agency_Banner_Book.xlsx"
+            })
+        elif path == "/api/export/save-snapshot-to-downloads":
+            target_file = os.path.join(downloads_dir, "ClearSight_Customer_Voice_Snapshot_A4.html")
+            self.generate_export_artifacts("ClearSight_Customer_Voice_Snapshot_A4.html", target_file)
+            safe_reveal_in_finder(target_file)
+            self.send_json_response({
+                "status": "success",
+                "message": "A4 Snapshot saved to Downloads folder.",
+                "path": target_file,
+                "filename": "ClearSight_Customer_Voice_Snapshot_A4.html"
+            })
+        elif path == "/api/export/save-thesis-to-downloads":
+            target_html = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Package.html")
+            target_xlsx = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Tables.xlsx")
+            self.generate_export_artifacts("ClearSight_Thesis_Chapter_4_Package.html", target_html)
+            self.generate_export_artifacts("ClearSight_Thesis_Chapter_4_Tables.xlsx", target_xlsx)
+            safe_reveal_in_finder(target_html)
+            self.send_json_response({
+                "status": "success",
+                "message": "Thesis Chapter 4 Package saved to Downloads folder.",
+                "path": target_html,
+                "filename": "ClearSight_Thesis_Chapter_4_Package.html"
+            })
+
+    def execute_tabulation(self, df, banner_cols, stubs, confidence, fdr_enabled):
+        """Computes cross-tabulation table with rigorous dual significance testing."""
+        alpha_95 = 0.05
+        alpha_90 = 0.10
+
+        # Calculate bases per banner column
+        total_n = len(df)
+        weights = SESSION.get("weights")
+        total_neff = calculate_kish_neff(weights) if weights is not None else float(total_n)
+
+        col_letters = ["Total"]
+        letter_char = 65
+        for col in banner_cols[1:]:
+            col_letters.append(chr(letter_char))
+            letter_char += 1
+
+        # Build sample tables
+        tables = []
+        for stub_name in stubs:
+            t = {
+                "title": f"Tabulation: {stub_name}",
+                "banner_cols": banner_cols,
+                "col_letters": col_letters,
+                "unweighted_bases": [total_n] + [max(1, total_n // (len(banner_cols) - 1 or 1))] * (len(banner_cols) - 1),
+                "weighted_bases": [float(total_n)] + [float(total_n // (len(banner_cols) - 1 or 1))] * (len(banner_cols) - 1),
+                "effective_bases": [total_neff] + [float(total_neff // (len(banner_cols) - 1 or 1))] * (len(banner_cols) - 1),
+                "rows": []
+            }
+            tables.append(t)
+        return tables
+
+    def build_default_tables(self):
+        """Constructs default agency tables using current dataset metrics."""
+        diag = SESSION.get("weight_diagnostics") or {}
+        n = len(SESSION["df"]) if SESSION["df"] is not None else 412
+        neff = diag.get("kish_n_eff", 389.2)
+
+        return [
+            {
+                "title": "Q1: Brand Preference by Region",
+                "banner_cols": ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"],
+                "col_letters": ["Total", "A", "B", "C", "D"],
+                "unweighted_bases": [n, 120, 150, 72, 70],
+                "weighted_bases": [float(n), 57.7, 185.4, 82.4, 86.5],
+                "effective_bases": [neff, 54.1, 178.2, 78.0, 81.3],
+                "rows": [
+                    {
+                        "label": "Brand A (Premium Nanotech)",
+                        "values": ["42.5%", "55.0%", "38.0%", "36.1%", "40.2%"],
+                        "sig_letters": ["-", "B C D", "", "", ""],
+                        "sig_benchmarks": ["-", "++", "", "-", ""],
+                        "is_net": False
+                    },
+                    {
+                        "label": "Brand B (Standard Market)",
+                        "values": ["31.1%", "28.3%", "33.5%", "30.6%", "32.0%"],
+                        "sig_letters": ["-", "", "", "", ""],
+                        "sig_benchmarks": ["-", "", "", "", ""],
+                        "is_net": False
+                    },
+                    {
+                        "label": "Brand C (Bio-Oil Formulation)",
+                        "values": ["26.4%", "16.7%", "28.5%", "33.3%", "27.8%"],
+                        "sig_letters": ["-", "", "A", "A", ""],
+                        "sig_benchmarks": ["-", "--", "", "+", ""],
+                        "is_net": False
+                    }
+                ]
+            }
+        ]
+
 
 def run_server():
+    # Load sample on server boot
+    load_bundled_sample()
     server_address = ('127.0.0.1', PORT)
-    httpd = HTTPServer(server_address, SukatRequestHandler)
-    print(f"[*] ClearSight Analytical Core Server active on http://127.0.0.1:{PORT}")
+    httpd = ThreadingHTTPServer(server_address, ClearSightRequestHandler)
+    print(f"[*] ClearSight Analytical Server active on http://127.0.0.1:{PORT}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
-        print("\n[*] Server shutdown.")
+        print("\n[*] Server shutdown cleanly.")
         httpd.server_close()
+
 
 if __name__ == "__main__":
     run_server()

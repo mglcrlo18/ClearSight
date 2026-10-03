@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clearsight"
+version = "1.0.0"
+description = "Zero-cloud local survey tabulation, rim weighting, and Taglish NLP platform."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "ClearSight Core Architecture Team" }
+]
+dependencies = [
+    "numpy>=2.0.0",
+    "pandas>=2.2.0",
+    "scipy>=1.15.0",
+    "openpyxl>=3.1.5",
+    "xlrd>=2.0.1",
+]
+
+[project.optional-dependencies]
+spss = ["pyreadstat>=1.2.0"]
+test = ["pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

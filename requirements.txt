@@ -1,0 +1,10 @@
+# ClearSight Analytical Engine - Production Dependencies
+# Targeted for macOS Apple Silicon (arm64) and Intel (x86_64)
+
+numpy>=2.0.0
+pandas>=2.2.0
+scipy>=1.15.0
+openpyxl>=3.1.5
+xlrd>=2.0.1
+pyreadstat>=1.2.0; platform_system != "Windows" or python_version < "3.15"
+pytest>=8.0.0

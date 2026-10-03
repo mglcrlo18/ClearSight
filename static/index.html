@@ -40,27 +40,35 @@
         </nav>
 
         <div class="header-status">
-            <span class="status-pill active-pill">● Local Sandbox (RAM Only)</span>
-            <span class="status-pill dpa-pill">RA 10173 Compliant</span>
+            <span class="status-pill active-pill">● Local Processing (Zero External Cloud)</span>
+            <span class="status-pill dpa-pill">Designed to Support RA 10173 Compliance</span>
         </div>
     </header>
 
+    <h1 class="visually-hidden">ClearSight Survey Tabulation & Analytics</h1>
+
     <!-- Notification Toast -->
-    <div id="toast" class="toast-notification hidden"></div>
+    <div id="toast" class="toast-notification hidden" role="status" aria-live="polite"></div>
+
+    <!-- Hidden File Input for Native File Browsing -->
+    <input type="file" id="file-input" style="display:none" accept=".csv,.xlsx,.xls,.sav" onchange="handleFileUpload(event)">
 
     <!-- Main Dynamic Content Workspace -->
     <main class="main-viewport">
         <!-- Step 1: Import Data -->
-        <section id="step-1" class="step-pane active-pane">
+        <section id="step-1" class="step-pane active-pane" role="tabpanel">
             <div class="hero-card">
                 <h2>Bring Your Survey Data</h2>
                 <p>Zero-cloud local processing. Works with Google Forms, Excel (.xlsx), CSV, and SPSS (.sav).</p>
                 
-                <div class="drop-zone" id="drop-zone">
+                <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()" ondrop="handleFileDrop(event)" ondragover="event.preventDefault(); event.stopPropagation();">
                     <div class="upload-icon">📥</div>
-                    <div class="drop-title">Drop your survey file here or browse</div>
+                    <div class="drop-title">Drop your survey file here or click to browse</div>
                     <div class="drop-meta">Google Forms CSV, Excel (.xlsx), or SPSS (.sav) — Data never leaves your computer.</div>
-                    <button class="primary-btn" onclick="loadSampleDataset()">⚡ Load Sample Philippine Consumer Survey (n=412)</button>
+                    <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                        <button type="button" class="primary-btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">📂 Select Data File</button>
+                        <button type="button" class="action-btn-green" onclick="event.stopPropagation(); loadSampleDataset()">⚡ Load Sample Philippine Consumer Survey (n=412)</button>
+                    </div>
                 </div>
 
                 <div id="import-summary-card" class="import-summary hidden">
@@ -106,7 +114,7 @@
                             </div>
                             <span class="tag-warn">4 flagged</span>
                             <label class="switch">
-                                <input type="checkbox" checked onchange="toggleHygiene()">
+                                <input type="checkbox" id="check-straight" checked onchange="toggleHygiene()" aria-label="Quarantine straight-liner records">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -115,9 +123,9 @@
                                 <b>Speeders</b>
                                 <span>Completed survey in &lt; 1/3 of median time</span>
                             </div>
-                            <span class="tag-warn">6 flagged</span>
+                            <span class="tag-warn" id="speeder-count-tag">6 flagged</span>
                             <label class="switch">
-                                <input type="checkbox" checked onchange="toggleHygiene()">
+                                <input type="checkbox" id="check-speeder" checked onchange="toggleHygiene()" aria-label="Quarantine speeder records">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -156,7 +164,7 @@
                                 <span>Soft Mean-Shift Weight Trimming:</span>
                                 <b id="trim-val">95th Percentile</b>
                             </div>
-                            <input type="range" min="90" max="99" value="95" class="range-slider" oninput="updateTrim(this.value)">
+                            <input type="range" min="90" max="99" value="95" class="range-slider" id="trim-slider" aria-label="Soft Mean-Shift Weight Trimming Percentile" oninput="updateTrim(this.value)">
                         </div>
                         <button class="primary-btn" onclick="executeWeighting()">Calculate Raking Weights & Kish Base</button>
                     </div>
@@ -183,13 +191,13 @@
         </section>
 
         <!-- Step 3: Custom Table Studio -->
-        <section id="step-3" class="step-pane">
+        <section id="step-3" class="step-pane" role="tabpanel">
             <!-- Conversational Prompt-to-Table Bar -->
-            <div class="prompt-bar-container">
+            <form onsubmit="event.preventDefault(); executePromptToTable();" class="prompt-bar-container">
                 <div class="prompt-icon">✨</div>
                 <input type="text" id="prompt-input" class="prompt-input" placeholder="Ask ClearSight in English or Taglish (e.g. 'Cross-tabulate brand satisfaction by age for NCR buyers only')...">
-                <button class="prompt-btn" onclick="executePromptToTable()">Generate Custom Table</button>
-            </div>
+                <button type="submit" class="prompt-btn">Generate Custom Table</button>
+            </form>
 
             <div class="table-studio-layout">
                 <!-- Variable Drawer (Sidebar) -->
@@ -288,6 +296,10 @@
                             <button class="pill-toggle active-toggle" onclick="setMetric('pct')">Column %</button>
                             <button class="pill-toggle" onclick="setMetric('t2b')">Top-2-Box (T2B)</button>
                             <button class="pill-toggle" onclick="setMetric('mean')">Scale Mean</button>
+                        </div>
+                        <div class="control-cluster">
+                            <span>FDR Control:</span>
+                            <button class="pill-toggle active-toggle" id="btn-fdr" onclick="toggleFDR()">BH FDR: ON</button>
                         </div>
                     </div>
 
@@ -411,7 +423,7 @@
                 <!-- Preview Frame of Customer Voice Snapshot -->
                 <div class="preview-container">
                     <div class="preview-header">Live A4 Snapshot Preview</div>
-                    <iframe id="snapshot-frame" src="/preview-snapshot" class="snapshot-iframe"></iframe>
+                    <iframe id="snapshot-frame" src="/preview-snapshot" class="snapshot-iframe" title="Customer Voice Snapshot Preview"></iframe>
                 </div>
             </div>
         </section>

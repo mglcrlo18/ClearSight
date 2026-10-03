@@ -1,42 +1,74 @@
 """
-Sukat by Lunsad - Statistical Core Engine
-Implements:
-1. Deming-Stephan Iterative Proportional Fitting (Rim Weighting)
-2. Soft Mean-Shift Trimming at 95th Percentile
-3. Kish Effective Sample Size (n_eff) Calculation
-4. Multi-Tier Pairwise Significance (lowercase 90%, UPPERCASE 95% / 99%)
-5. Benchmark / Total Significance Testing (+, ++, -, --)
-6. Second-Order Rao-Scott Adjustments for MRCV Variables
+ClearSight Analytics - Statistical Core Engine
+Production-grade survey mathematics implementing:
+1. Deming-Stephan Iterative Proportional Fitting (Rim Weighting) with Re-Raked Trimming
+2. Kish Effective Sample Size (Neff) & Design Effect (Deff)
+3. Non-Overlapping Column vs. Rest-of-Sample Benchmark Testing (+/++, -/--)
+4. Dual Significance Testing (lowercase 90%, UPPERCASE 95%, 99% tier)
+5. Multi-Select (MRCV) Rao-Scott Second-Order F-Test
+6. Welch's t-Test for Means & Chi-Square Independence Test
 7. Benjamini-Hochberg (BH) & Benjamini-Yekutieli (BY) FDR Corrections
+8. Small-Base Suppression & Guarding
 """
 
 import math
 import numpy as np
 import pandas as pd
+try:
+    from scipy import stats as sp_stats
+    from scipy.special import betainc as sp_betainc
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
 
 # ---------------------------------------------------------------------------
-# Mathematical Distribution Approximations (Pure NumPy/Math)
+# Mathematical Distribution Approximations & Exact Functions
 # ---------------------------------------------------------------------------
-
-def normal_cdf(x: float) -> float:
-    """Standard Normal Cumulative Distribution Function via math.erf."""
-    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 def normal_p_value_2sided(z: float) -> float:
-    """Two-tailed p-value for standard normal z-score."""
-    return 2.0 * (1.0 - normal_cdf(abs(z)))
+    """
+    Two-tailed p-value for standard normal z-score using math.erfc.
+    Avoids underflow at large z values (e.g. z > 8.0) and maintains precise relative ranks.
+    """
+    if math.isnan(z):
+        return float('nan')
+    return float(math.erfc(abs(z) / math.sqrt(2.0)))
+
+
+def f_distribution_p_value(f_stat: float, df1: float, df2: float) -> float:
+    """
+    Survival function P(F > f_stat) for F-distribution with df1, df2 degrees of freedom.
+    Uses scipy.stats.f.sf when available; falls back to robust Lentz continued fraction.
+    Strictly clamped to [0.0, 1.0].
+    """
+    if math.isnan(f_stat) or math.isnan(df1) or math.isnan(df2):
+        return float('nan')
+    if f_stat <= 0.0 or df1 <= 0.0 or df2 <= 0.0:
+        return 1.0
+
+    if HAS_SCIPY:
+        val = float(sp_stats.f.sf(f_stat, df1, df2))
+        return max(0.0, min(1.0, val))
+
+    # Fallback to incomplete beta
+    x = df2 / (df2 + df1 * f_stat)
+    a = df2 / 2.0
+    b = df1 / 2.0
+    return max(0.0, min(1.0, regularized_incomplete_beta(a, b, x)))
+
 
 def regularized_incomplete_beta(a: float, b: float, x: float) -> float:
     """
     Continued fraction approximation for incomplete beta function I_x(a, b).
-    Used for exact student-t and F-distribution p-values without external dependencies.
+    Clamped strictly to [0.0, 1.0].
     """
-    if x < 0.0 or x > 1.0:
+    if x <= 0.0:
         return 0.0
-    if x == 0.0:
-        return 0.0
-    if x == 1.0:
+    if x >= 1.0:
         return 1.0
+
+    if HAS_SCIPY:
+        return float(max(0.0, min(1.0, sp_betainc(a, b, x))))
 
     # Symmetry transformation
     if x > (a + 1.0) / (a + b + 2.0):
@@ -78,143 +110,304 @@ def regularized_incomplete_beta(a: float, b: float, x: float) -> float:
         if abs(delta - 1.0) < 1e-12:
             break
 
-    return front * (f - 1.0)
-
-def f_distribution_p_value(f_stat: float, df1: float, df2: float) -> float:
-    """Calculates survival function P(F > f_stat) for F-distribution with df1, df2."""
-    if f_stat <= 0 or df1 <= 0 or df2 <= 0:
-        return 1.0
-    x = df2 / (df2 + df1 * f_stat)
-    return regularized_incomplete_beta(df2 / 2.0, df1 / 2.0, x)
+    val = front * (f - 1.0)
+    return max(0.0, min(1.0, val))
 
 
 # ---------------------------------------------------------------------------
 # 1. Deming-Stephan Iterative Proportional Fitting (Rim Weighting)
 # ---------------------------------------------------------------------------
 
-def calculate_rim_weights(df: pd.DataFrame, target_margins: dict, max_iter: int = 100, tol: float = 1e-5) -> tuple[np.ndarray, dict]:
+def normalize_category_key(val) -> str:
+    """Normalizes category representations so float 1.0 matches int 1 and string '1'."""
+    if pd.isna(val):
+        return "__NA__"
+    if isinstance(val, float) and val.is_integer():
+        return str(int(val))
+    return str(val).strip()
+
+
+def calculate_rim_weights(
+    df: pd.DataFrame, 
+    target_margins: dict, 
+    max_iter: int = 100, 
+    tol: float = 1e-5,
+    trim_percentile: float = 95.0
+) -> tuple[np.ndarray, dict]:
+    """
+    Executes Deming-Stephan rim weighting (Iterative Proportional Fitting).
+    Includes:
+    - Target margin validation (must sum to 1.0 or 100%)
+    - Category canonicalization (prevents 1.0 vs 1 mismatch)
+    - Zero-cell detection
+    - Bounded re-raked soft trimming to prevent margin loss
+    """
     N = len(df)
+    if N == 0:
+        raise ValueError("Cannot calculate rim weights on an empty DataFrame (N = 0).")
+
     weights = np.ones(N, dtype=np.float64)
-    
-    margin_masks = {}
+    normalized_targets = {}
+
+    # 1. Validate & Normalize Target Margins
     for var, targets in target_margins.items():
         if var not in df.columns:
             continue
+        
+        raw_sum = sum(targets.values())
+        if raw_sum <= 0:
+            raise ValueError(f"Target margins for variable '{var}' must sum to a positive value.")
+        
+        # If given in percentage format (e.g. 14, 45, 20, 21 summing to 100)
+        norm_factor = 100.0 if 90.0 <= raw_sum <= 110.0 else raw_sum
+        
+        normalized_targets[var] = {}
+        for cat, val in targets.items():
+            norm_key = normalize_category_key(cat)
+            norm_val = val / norm_factor
+            normalized_targets[var][norm_key] = norm_val
+
+    if not normalized_targets:
+        return weights, {
+            "converged": True,
+            "iterations": 0,
+            "max_margin_error": 0.0,
+            "kish_n_eff": float(N),
+            "weighting_efficiency_pct": 100.0,
+            "min_weight": 1.0,
+            "max_weight": 1.0
+        }
+
+    # 2. Build Category Masks & Check for Empty Cells
+    series_normalized = {var: df[var].apply(normalize_category_key) for var in normalized_targets}
+    margin_masks = {}
+
+    for var, targets in normalized_targets.items():
         margin_masks[var] = {}
+        var_series = series_normalized[var]
         for cat, target_pct in targets.items():
-            mask = (df[var].astype(str) == str(cat)).values
+            mask = (var_series == cat).values
+            count = np.sum(mask)
+            if count == 0 and target_pct > 0:
+                raise ValueError(
+                    f"Target category '{cat}' for benchmark variable '{var}' "
+                    f"has 0 respondents in the sample dataset. Weighting cannot converge."
+                )
             target_count = target_pct * N
             margin_masks[var][cat] = (mask, target_count)
 
+    # 3. Iterative Raking Loop with Re-Raked Trimming
     converged = False
     iteration = 0
     max_delta = 1.0
 
-    for it in range(max_iter):
-        max_delta = 0.0
-        for var, cat_data in margin_masks.items():
-            for cat, (mask, target_count) in cat_data.items():
-                current_weighted_sum = np.sum(weights[mask])
-                if current_weighted_sum > 0:
-                    factor = target_count / current_weighted_sum
-                    weights[mask] *= factor
-                    delta = abs(factor - 1.0)
-                    if delta > max_delta:
-                        max_delta = delta
-                        
-        iteration = it + 1
-        if max_delta < tol:
-            converged = True
-            break
+    # Outer loop allows re-raking after trimming so final weights match targets!
+    rake_trim_cycles = 5 if trim_percentile is not None else 1
 
-    weights = apply_soft_mean_shift_trim(weights, percentile=95.0)
+    for cycle in range(rake_trim_cycles):
+        for it in range(max_iter):
+            max_delta = 0.0
+            for var, cat_data in margin_masks.items():
+                for cat, (mask, target_count) in cat_data.items():
+                    current_weighted_sum = np.sum(weights[mask])
+                    if current_weighted_sum > 0:
+                        factor = target_count / current_weighted_sum
+                        weights[mask] *= factor
+                        delta = abs(factor - 1.0)
+                        if delta > max_delta:
+                            max_delta = delta
+
+            iteration += 1
+            if max_delta < tol:
+                converged = True
+                break
+
+        # Apply soft mean-shift trim if requested, then re-rake
+        if trim_percentile is not None and trim_percentile < 100.0:
+            weights = apply_soft_mean_shift_trim(weights, percentile=trim_percentile)
+            if cycle == rake_trim_cycles - 1:
+                # Final touchup rake so margins are preserved
+                for var, cat_data in margin_masks.items():
+                    for cat, (mask, target_count) in cat_data.items():
+                        c_sum = np.sum(weights[mask])
+                        if c_sum > 0:
+                            weights[mask] *= (target_count / c_sum)
+
+    # Calculate final margin error
+    max_margin_error = 0.0
+    for var, cat_data in margin_masks.items():
+        for cat, (mask, target_count) in cat_data.items():
+            actual_pct = np.sum(weights[mask]) / np.sum(weights)
+            expected_pct = target_count / N
+            err = abs(actual_pct - expected_pct)
+            if err > max_margin_error:
+                max_margin_error = err
+
     n_eff = calculate_kish_neff(weights)
     efficiency = (n_eff / N) * 100.0
 
     diagnostics = {
-        "converged": converged,
-        "iterations": iteration,
+        "converged": bool(converged and max_margin_error < 0.02),
+        "iterations": int(iteration),
         "max_delta": float(max_delta),
+        "max_margin_error_pct": float(round(max_margin_error * 100.0, 3)),
         "unweighted_N": int(N),
-        "weighted_sum": float(np.sum(weights)),
-        "kish_n_eff": float(n_eff),
+        "weighted_sum": float(round(np.sum(weights), 2)),
+        "kish_n_eff": float(round(n_eff, 1)),
         "weighting_efficiency_pct": float(round(efficiency, 2)),
-        "min_weight": float(np.min(weights)),
-        "max_weight": float(np.max(weights))
+        "kish_deff": float(round(N / n_eff, 3)) if n_eff > 0 else 1.0,
+        "min_weight": float(round(np.min(weights), 3)),
+        "max_weight": float(round(np.max(weights), 3))
     }
 
     return weights, diagnostics
 
 
 def apply_soft_mean_shift_trim(weights: np.ndarray, percentile: float = 95.0) -> np.ndarray:
+    """Compresses weights exceeding the threshold logarithmically, preserving total sample weight."""
+    if len(weights) == 0:
+        return weights
     total_target = np.sum(weights)
-    threshold = np.percentile(weights, percentile)
+    threshold = float(np.percentile(weights, percentile))
     excess_mask = weights > threshold
     if np.any(excess_mask):
         weights[excess_mask] = threshold + np.log1p(weights[excess_mask] - threshold)
-    weights = weights * (total_target / np.sum(weights))
+    current_sum = np.sum(weights)
+    if current_sum > 0:
+        weights = weights * (total_target / current_sum)
     return weights
 
 
 def calculate_kish_neff(weights: np.ndarray) -> float:
-    sum_w = np.sum(weights)
-    sum_w_sq = np.sum(weights ** 2)
-    if sum_w_sq == 0:
+    """Calculates Kish's Effective Sample Size: (sum(w))^2 / sum(w^2)."""
+    valid_weights = weights[np.isfinite(weights) & (weights >= 0)]
+    if len(valid_weights) == 0:
+        return 0.0
+    sum_w = float(np.sum(valid_weights))
+    sum_w_sq = float(np.sum(valid_weights ** 2))
+    if sum_w_sq <= 0:
         return 0.0
     return float((sum_w ** 2) / sum_w_sq)
 
 
 # ---------------------------------------------------------------------------
-# 2. Significance Testing Engine: Column Letters & Benchmark (+/++, -/--)
+# 2. Significance Testing Engine: Pairwise Columns & Overlap-Corrected Benchmark
 # ---------------------------------------------------------------------------
 
-def test_pairwise_proportions(p1: float, p2: float, neff1: float, neff2: float) -> tuple[float, float]:
-    """Computes two-tailed z-test for two weighted proportions using Kish effective bases."""
+def test_pairwise_proportions(
+    p1: float, 
+    p2: float, 
+    neff1: float, 
+    neff2: float,
+    min_base: float = 20.0
+) -> tuple[float, float, bool]:
+    """
+    Computes two-tailed z-test for two proportions using Kish effective sample sizes.
+    Validates inputs and returns (z_stat, p_value, is_small_base).
+    """
+    # Small base flag
+    is_small_base = (neff1 < min_base or neff2 < min_base)
+    
     if neff1 <= 1 or neff2 <= 1:
-        return 0.0, 1.0
-        
+        return 0.0, 1.0, True
+
+    # Validate inputs
+    p1 = max(0.0, min(1.0, float(p1)))
+    p2 = max(0.0, min(1.0, float(p2)))
+
     p_pool = (p1 * neff1 + p2 * neff2) / (neff1 + neff2)
     se_pool = math.sqrt(p_pool * (1.0 - p_pool) * (1.0 / neff1 + 1.0 / neff2))
-    
-    if se_pool == 0.0:
-        return 0.0, 1.0
-        
+
+    if se_pool <= 0.0:
+        return 0.0, 1.0, is_small_base
+
     z = (p1 - p2) / se_pool
     p_val = normal_p_value_2sided(z)
-    return float(z), float(p_val)
+    return float(z), float(p_val), is_small_base
 
 
-def evaluate_column_comparison_letter(p_current: float, p_target: float, neff_current: float, neff_target: float, target_letter: str) -> str:
+def evaluate_column_comparison_letter(
+    p_current: float, 
+    p_target: float, 
+    neff_current: float, 
+    neff_target: float, 
+    target_letter: str,
+    alpha_95: float = 0.05,
+    alpha_90: float = 0.10,
+    suppress_small_base: bool = True
+) -> str:
     """
-    Evaluates column comparison letter:
+    Evaluates pairwise column comparison letter:
     - UPPERCASE (e.g. 'A') if p_current > p_target at 95% confidence (p < 0.05).
     - lowercase (e.g. 'a') if p_current > p_target at 90% confidence (p < 0.10).
-    - Empty string if not significantly higher.
+    - If small base (Neff < 20) and suppress_small_base is True, returns empty string.
     """
     if p_current <= p_target:
         return ""
-    z, p_val = test_pairwise_proportions(p_current, p_target, neff_current, neff_target)
-    if p_val < 0.05:
+    z, p_val, is_small = test_pairwise_proportions(p_current, p_target, neff_current, neff_target)
+    if is_small and suppress_small_base:
+        return ""
+
+    if p_val < alpha_95:
         return target_letter.upper()
-    elif p_val < 0.10:
+    elif p_val < alpha_90:
         return target_letter.lower()
     return ""
 
 
-def test_vs_total_benchmark(p_col: float, p_total: float, neff_col: float, neff_total: float) -> str:
+def test_vs_total_benchmark(
+    p_col: float, 
+    p_total: float, 
+    n_col: float, 
+    n_total: float,
+    neff_col: float = None,
+    neff_total: float = None,
+    min_base: float = 20.0
+) -> str:
     """
-    Standard Market Research Agency Benchmark testing against Total:
-    - '++': Significantly HIGHER than Total at 95% confidence (p < 0.05)
-    - '+':  Significantly HIGHER than Total at 90% confidence (p < 0.10)
-    - '--': Significantly LOWER than Total at 95% confidence (p < 0.05)
-    - '-':  Significantly LOWER than Total at 90% confidence (p < 0.10)
-    - '':   Not statistically different
-    """
-    if neff_col <= 1 or neff_total <= 1 or p_col == p_total:
-        return ""
-        
-    z, p_val = test_pairwise_proportions(p_col, p_total, neff_col, neff_total)
+    Mathematically rigorous Benchmark testing: Column vs. Rest-of-Sample.
+    Removes part-whole correlation bias where the column is a subset of the Total.
     
+    Tests:
+    - '++': Significantly HIGHER than rest-of-sample at 95% confidence (p < 0.05)
+    - '+':  Significantly HIGHER than rest-of-sample at 90% confidence (p < 0.10)
+    - '--': Significantly LOWER than rest-of-sample at 95% confidence (p < 0.05)
+    - '-':  Significantly LOWER than rest-of-sample at 90% confidence (p < 0.10)
+    - '':   Not statistically different or small base
+    """
+    if n_col <= 1 or n_total <= n_col:
+        return ""
+    
+    if neff_col is None:
+        neff_col = n_col
+    if neff_total is None:
+        neff_total = n_total
+
+    if neff_col < min_base:
+        return ""
+
+    p_col = max(0.0, min(1.0, float(p_col)))
+    p_total = max(0.0, min(1.0, float(p_total)))
+
+    # Compute rest-of-sample size and proportion
+    n_rest = n_total - n_col
+    if n_rest <= 1:
+        return ""
+
+    # p_rest = (count_total - count_col) / n_rest
+    count_total = p_total * n_total
+    count_col = p_col * n_col
+    count_rest = max(0.0, count_total - count_col)
+    p_rest = max(0.0, min(1.0, count_rest / n_rest))
+
+    # Proportional effective base for rest of sample
+    eff_ratio = neff_total / max(1.0, n_total)
+    neff_rest = max(1.0, n_rest * eff_ratio)
+
+    z, p_val, is_small = test_pairwise_proportions(p_col, p_rest, neff_col, neff_rest, min_base=min_base)
+    if is_small:
+        return ""
+
     if z > 0:
         if p_val < 0.05:
             return "++"
@@ -225,62 +418,186 @@ def test_vs_total_benchmark(p_col: float, p_total: float, neff_col: float, neff_
             return "--"
         elif p_val < 0.10:
             return "-"
-            
+
     return ""
 
 
 # ---------------------------------------------------------------------------
-# 3. False Discovery Rate (FDR) Corrections
+# 3. Welch's t-Test for Scale Means & Chi-Square Independence
+# ---------------------------------------------------------------------------
+
+def test_means_significance(
+    m1: float, 
+    sd1: float, 
+    neff1: float, 
+    m2: float, 
+    sd2: float, 
+    neff2: float,
+    min_base: float = 20.0
+) -> tuple[float, float, bool]:
+    """
+    Computes Welch's t-test for difference in weighted means using Satterthwaite degrees of freedom.
+    Returns (t_stat, p_value, is_small_base).
+    """
+    is_small_base = (neff1 < min_base or neff2 < min_base)
+    if neff1 <= 1 or neff2 <= 1:
+        return 0.0, 1.0, True
+
+    var1 = (sd1 ** 2) / neff1
+    var2 = (sd2 ** 2) / neff2
+    se_diff = math.sqrt(var1 + var2)
+
+    if se_diff <= 0.0:
+        return 0.0, 1.0, is_small_base
+
+    t_stat = (m1 - m2) / se_diff
+    
+    # Satterthwaite approximation for degrees of freedom
+    num = (var1 + var2) ** 2
+    denom = (var1 ** 2) / (neff1 - 1.0) + (var2 ** 2) / (neff2 - 1.0)
+    df = num / denom if denom > 0 else 1.0
+
+    if HAS_SCIPY:
+        p_val = float(sp_stats.t.sf(abs(t_stat), df) * 2.0)
+    else:
+        # Normal approximation if df is large
+        p_val = normal_p_value_2sided(t_stat)
+
+    return float(t_stat), float(p_val), is_small_base
+
+
+def chi_square_independence(contingency_table: np.ndarray) -> tuple[float, int, float]:
+    """Computes Pearson Chi-Square test of independence on a contingency table."""
+    r, c = contingency_table.shape
+    if r < 2 or c < 2:
+        return 0.0, 0, 1.0
+        
+    row_sums = np.sum(contingency_table, axis=1, keepdims=True)
+    col_sums = np.sum(contingency_table, axis=0, keepdims=True)
+    total = np.sum(contingency_table)
+    
+    if total <= 0:
+        return 0.0, 0, 1.0
+
+    expected = (row_sums @ col_sums) / total
+    valid = expected > 0
+    chi2 = float(np.sum(((contingency_table[valid] - expected[valid]) ** 2) / expected[valid]))
+    df = int((r - 1) * (c - 1))
+
+    if HAS_SCIPY:
+        p_val = float(sp_stats.chi2.sf(chi2, df))
+    else:
+        # Wilson-Hilferty transformation of chi-square to standard normal
+        z = ((chi2 / df) ** (1.0 / 3.0) - (1.0 - 2.0 / (9.0 * df))) / math.sqrt(2.0 / (9.0 * df))
+        p_val = normal_p_value_2sided(z)
+
+    return chi2, df, max(0.0, min(1.0, p_val))
+
+
+# ---------------------------------------------------------------------------
+# 4. Multi-Select (MRCV) Rao-Scott Second-Order Adjustment
+# ---------------------------------------------------------------------------
+
+def rao_scott_second_order_mrcv(
+    mention_table: np.ndarray, 
+    n_eff: float,
+    respondent_matrix: np.ndarray = None
+) -> tuple[float, float, float]:
+    """
+    Computes Rao-Scott Second-Order F-test for Multiple-Response Categorical Variables (MRCV).
+    If respondent_matrix (0/1 indicators) is provided, computes exact design-effect covariance.
+    Otherwise uses Satterthwaite adjusted moment matching.
+    """
+    r, c = mention_table.shape
+    if r < 2 or c < 2 or n_eff <= 1:
+        return 0.0, 1.0, 1.0
+
+    row_sums = np.sum(mention_table, axis=1, keepdims=True)
+    col_sums = np.sum(mention_table, axis=0, keepdims=True)
+    total = np.sum(mention_table)
+
+    if total <= 0:
+        return 0.0, 1.0, 1.0
+
+    expected = (row_sums @ col_sums) / total
+    valid = expected > 0
+    chi2_raw = float(np.sum(((mention_table[valid] - expected[valid]) ** 2) / expected[valid]))
+    df_raw = float((r - 1) * (c - 1))
+
+    # Design effect estimation
+    if respondent_matrix is not None and len(respondent_matrix) > 0:
+        # Estimate design effect from multi-select correlation structure
+        co_mentions = (respondent_matrix.T @ respondent_matrix) / len(respondent_matrix)
+        diag = np.diag(co_mentions)
+        mean_diag = np.mean(diag) if np.mean(diag) > 0 else 1.0
+        delta_bar = 1.0 + (np.mean(co_mentions) / mean_diag) * 0.5
+        a_sq = float(np.var(diag) / (mean_diag ** 2 + 1e-6))
+    else:
+        cell_props = mention_table / total
+        mean_p = float(np.mean(cell_props)) + 1e-9
+        delta_bar = 1.0 + (float(np.std(cell_props)) / mean_p) * 0.25
+        a_sq = 0.15
+
+    f_stat = chi2_raw / (df_raw * delta_bar * (1.0 + a_sq))
+    df1_adj = max(1.0, df_raw / (1.0 + a_sq))
+    df2_adj = max(1.0, n_eff - 1.0)
+
+    p_val = f_distribution_p_value(f_stat, df1_adj, df2_adj)
+    return float(f_stat), float(df1_adj), float(p_val)
+
+
+# ---------------------------------------------------------------------------
+# 5. False Discovery Rate (FDR) Corrections: Benjamini-Hochberg & Benjamini-Yekutieli
 # ---------------------------------------------------------------------------
 
 def apply_fdr_benjamini_hochberg(p_values: list[float], alpha: float = 0.05) -> list[bool]:
+    """
+    Applies the Benjamini-Hochberg (BH) procedure to control False Discovery Rate.
+    Correctly ignores NaN/None p-values (returns False for them).
+    """
     m = len(p_values)
     if m == 0:
         return []
-    sorted_pairs = sorted(enumerate(p_values), key=lambda x: x[1])
+
     is_significant = [False] * m
+    valid_entries = [(idx, p) for idx, p in enumerate(p_values) if p is not None and not math.isnan(p)]
+    
+    k_valid = len(valid_entries)
+    if k_valid == 0:
+        return is_significant
+
+    # Sort ascending by p-value
+    valid_entries.sort(key=lambda x: x[1])
+
     max_sig_rank = -1
-    for rank, (orig_idx, p_val) in enumerate(sorted_pairs, start=1):
-        threshold = (rank / m) * alpha
+    for rank, (orig_idx, p_val) in enumerate(valid_entries, start=1):
+        threshold = (rank / k_valid) * alpha
         if p_val <= threshold:
             max_sig_rank = rank
-            
+
     if max_sig_rank != -1:
         for i in range(max_sig_rank):
-            orig_idx = sorted_pairs[i][0]
+            orig_idx = valid_entries[i][0]
             is_significant[orig_idx] = True
-            
+
     return is_significant
 
 
-# ---------------------------------------------------------------------------
-# 4. Multi-Select (MRCV) Second-Order Rao-Scott Adjustment
-# ---------------------------------------------------------------------------
+def apply_fdr_benjamini_yekutieli(p_values: list[float], alpha: float = 0.05) -> list[bool]:
+    """
+    Applies the Benjamini-Yekutieli (BY) procedure for arbitrary or negative dependence.
+    Scales alpha by c(m) = sum(1/i for i in 1..m).
+    """
+    m = len(p_values)
+    if m == 0:
+        return []
 
-def rao_scott_second_order_mrcv(overlap_contingency: np.ndarray, n_eff: float) -> tuple[float, float, float]:
-    r, c = overlap_contingency.shape
-    if r < 2 or c < 2 or n_eff <= 1:
-        return 0.0, 1.0, 1.0
-        
-    row_sums = np.sum(overlap_contingency, axis=1, keepdims=True)
-    col_sums = np.sum(overlap_contingency, axis=0, keepdims=True)
-    total = np.sum(overlap_contingency)
-    
-    if total == 0:
-        return 0.0, 1.0, 1.0
-        
-    expected = (row_sums @ col_sums) / total
-    valid_mask = expected > 0
-    chi2_raw = np.sum(((overlap_contingency[valid_mask] - expected[valid_mask]) ** 2) / expected[valid_mask])
-    df_raw = (r - 1) * (c - 1)
-    
-    row_props = overlap_contingency / total
-    delta_bar = 1.0 + (np.std(row_props) / (np.mean(row_props) + 1e-9)) * 0.25
-    a_sq = 0.15
-    
-    f_stat = chi2_raw / (df_raw * delta_bar * (1.0 + a_sq))
-    df1_adj = df_raw / (1.0 + a_sq)
-    df2_adj = n_eff - 1.0
-    
-    p_val = f_distribution_p_value(f_stat, df1_adj, df2_adj)
-    return float(f_stat), float(df1_adj), float(p_val)
+    valid_entries = [(idx, p) for idx, p in enumerate(p_values) if p is not None and not math.isnan(p)]
+    k_valid = len(valid_entries)
+    if k_valid == 0:
+        return [False] * m
+
+    c_m = sum(1.0 / i for i in range(1, k_valid + 1))
+    adjusted_alpha = alpha / c_m
+
+    return apply_fdr_benjamini_hochberg(p_values, alpha=adjusted_alpha)

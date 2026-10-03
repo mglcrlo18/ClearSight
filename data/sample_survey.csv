@@ -1,0 +1,413 @@
+Respondent_ID,Region,Age_Generation,Socioeconomic_Class,Gender,Brand_Preference,Overall_CSAT,Repurchase_Intent,Survey_Duration_Sec,Open_Feedback
+1,Visayas,Millennials (28–43),Class E,Female,Brand B (Standard Market),5,2,55,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+2,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),3,3,62,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+3,Balance Luzon,Millennials (28–43),Class ABC,Male,Brand D (Local Artisan),4,5,58,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+4,National Capital Region (NCR),Generation X (44–59),Class D,Male,Brand A (Premium Nanotech),5,2,60,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+5,Visayas,Millennials (28–43),Class E,Male,Brand A (Premium Nanotech),4,5,52,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+6,Mindanao,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,3,64,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+7,Balance Luzon,Generation Z (18–27),Class D,Male,Brand C (Bio-Oil Formulation),4,5,200,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+8,National Capital Region (NCR),Generation Z (18–27),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,5,292,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+9,Balance Luzon,Millennials (28–43),Class E,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,5,214,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+10,Balance Luzon,Generation X (44–59),Class D,Female,"Brand B (Standard Market), Brand D (Local Artisan)",4,4,190,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+11,National Capital Region (NCR),Generation X (44–59),Class D,Male,Brand A (Premium Nanotech),4,4,241,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+12,Balance Luzon,Generation Z (18–27),Class D,Female,Brand B (Standard Market),4,4,253,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+13,Mindanao,Millennials (28–43),Class E,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,5,156,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+14,National Capital Region (NCR),Millennials (28–43),Class E,Male,Brand D (Local Artisan),5,5,226,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+15,National Capital Region (NCR),Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",3,5,210,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+16,National Capital Region (NCR),Generation X (44–59),Class E,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,5,201,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+17,Visayas,Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,3,178,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+18,Visayas,Millennials (28–43),Class D,Male,Brand B (Standard Market),4,5,296,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+19,Visayas,Millennials (28–43),Class E,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,4,201,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+20,National Capital Region (NCR),Generation Z (18–27),Class E,Female,Brand D (Local Artisan),5,4,120,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+21,Mindanao,Millennials (28–43),Class E,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,5,255,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+22,National Capital Region (NCR),Generation Z (18–27),Class ABC,Male,Brand A (Premium Nanotech),4,4,283,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+23,Mindanao,Millennials (28–43),Class D,Female,Brand C (Bio-Oil Formulation),5,5,192,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+24,National Capital Region (NCR),Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,206,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+25,Balance Luzon,Millennials (28–43),Class D,Male,Brand D (Local Artisan),5,5,201,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+26,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,Brand B (Standard Market),5,4,219,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+27,Mindanao,Generation Z (18–27),Class ABC,Male,Brand A (Premium Nanotech),3,3,306,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+28,Mindanao,Generation Z (18–27),Class D,Female,Brand B (Standard Market),5,5,233,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+29,Mindanao,Generation Z (18–27),Class ABC,Female,"Brand A (Premium Nanotech), Brand D (Local Artisan)",5,5,290,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+30,Balance Luzon,Generation X (44–59),Class D,Male,Brand A (Premium Nanotech),5,5,181,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+31,Mindanao,Generation X (44–59),Class D,Female,Brand B (Standard Market),4,4,216,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+32,Balance Luzon,Generation X (44–59),Class E,Male,Brand B (Standard Market),4,4,297,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+33,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand B (Standard Market),5,5,191,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+34,Visayas,Generation X (44–59),Class E,Female,Brand A (Premium Nanotech),4,5,300,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+35,Visayas,Generation Z (18–27),Class ABC,Male,Brand B (Standard Market),4,4,202,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+36,Visayas,Generation Z (18–27),Class ABC,Male,Brand A (Premium Nanotech),3,3,220,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+37,Visayas,Generation Z (18–27),Class ABC,Male,Brand C (Bio-Oil Formulation),4,4,340,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+38,Balance Luzon,Generation X (44–59),Class E,Male,Brand C (Bio-Oil Formulation),5,5,213,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+39,National Capital Region (NCR),Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,248,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+40,Mindanao,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),5,5,276,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+41,National Capital Region (NCR),Millennials (28–43),Class ABC,Female,Brand C (Bio-Oil Formulation),5,5,253,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+42,Balance Luzon,Generation X (44–59),Class D,Female,Brand B (Standard Market),1,3,255,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+43,Visayas,Generation Z (18–27),Class ABC,Female,Brand B (Standard Market),5,5,236,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+44,Balance Luzon,Generation Z (18–27),Class D,Female,Brand B (Standard Market),5,4,161,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+45,Visayas,Generation Z (18–27),Class D,Female,Brand B (Standard Market),4,4,260,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+46,Mindanao,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,5,196,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+47,National Capital Region (NCR),Millennials (28–43),Class E,Male,Brand C (Bio-Oil Formulation),5,4,286,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+48,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand D (Local Artisan),5,5,322,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+49,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),5,5,131,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+50,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,4,322,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+51,Visayas,Generation X (44–59),Class D,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,5,215,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+52,Mindanao,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),5,4,232,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+53,National Capital Region (NCR),Generation X (44–59),Class ABC,Female,Brand D (Local Artisan),4,5,185,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+54,National Capital Region (NCR),Millennials (28–43),Class E,Male,Brand A (Premium Nanotech),5,4,251,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+55,Balance Luzon,Generation Z (18–27),Class D,Female,Brand D (Local Artisan),4,4,244,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+56,Balance Luzon,Millennials (28–43),Class D,Male,"Brand B (Standard Market), Brand D (Local Artisan)",4,4,304,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+57,National Capital Region (NCR),Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,4,195,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+58,Mindanao,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",2,3,339,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+59,National Capital Region (NCR),Generation Z (18–27),Class ABC,Male,Brand B (Standard Market),4,4,279,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+60,Balance Luzon,Generation X (44–59),Class D,Male,Brand C (Bio-Oil Formulation),5,4,245,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+61,Balance Luzon,Generation Z (18–27),Class D,Female,Brand D (Local Artisan),4,5,229,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+62,Balance Luzon,Generation X (44–59),Class ABC,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,5,221,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+63,National Capital Region (NCR),Generation Z (18–27),Class E,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,5,225,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+64,Balance Luzon,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,3,250,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+65,National Capital Region (NCR),Millennials (28–43),Class E,Female,Brand C (Bio-Oil Formulation),2,3,227,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+66,National Capital Region (NCR),Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),5,5,201,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+67,National Capital Region (NCR),Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),5,5,250,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+68,Visayas,Generation X (44–59),Class D,Male,Brand D (Local Artisan),5,4,189,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+69,Balance Luzon,Millennials (28–43),Class D,Male,Brand B (Standard Market),5,4,259,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+70,Balance Luzon,Generation Z (18–27),Class E,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,226,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+71,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,Brand B (Standard Market),5,5,281,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+72,Mindanao,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),5,4,299,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+73,National Capital Region (NCR),Generation X (44–59),Class ABC,Female,Brand A (Premium Nanotech),3,3,299,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+74,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),5,5,259,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+75,Mindanao,Generation Z (18–27),Class E,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,4,266,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+76,Mindanao,Generation X (44–59),Class ABC,Male,Brand C (Bio-Oil Formulation),5,4,220,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+77,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),5,5,280,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+78,Visayas,Generation Z (18–27),Class ABC,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,4,287,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+79,Balance Luzon,Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),4,4,145,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+80,Balance Luzon,Generation Z (18–27),Class E,Male,Brand C (Bio-Oil Formulation),5,5,262,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+81,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,Brand A (Premium Nanotech),5,2,322,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+82,Mindanao,Millennials (28–43),Class E,Male,Brand B (Standard Market),4,4,218,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+83,Balance Luzon,Generation X (44–59),Class E,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,4,205,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+84,National Capital Region (NCR),Millennials (28–43),Class E,Female,Brand A (Premium Nanotech),5,4,214,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+85,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,5,149,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+86,Mindanao,Generation Z (18–27),Class D,Male,Brand B (Standard Market),5,5,247,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+87,Mindanao,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,5,241,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+88,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand C (Bio-Oil Formulation),4,5,251,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+89,Mindanao,Generation Z (18–27),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,5,264,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+90,Balance Luzon,Generation Z (18–27),Class ABC,Male,Brand C (Bio-Oil Formulation),3,2,192,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+91,Visayas,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),5,4,256,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+92,National Capital Region (NCR),Millennials (28–43),Class E,Male,Brand B (Standard Market),4,4,266,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+93,National Capital Region (NCR),Generation X (44–59),Class D,Male,Brand B (Standard Market),5,4,210,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+94,National Capital Region (NCR),Millennials (28–43),Class E,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,4,265,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+95,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,244,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+96,Visayas,Generation X (44–59),Class D,Female,Brand B (Standard Market),3,4,202,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+97,Mindanao,Generation X (44–59),Class D,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,5,256,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+98,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,4,222,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+99,Mindanao,Millennials (28–43),Class ABC,Male,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,281,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+100,Balance Luzon,Millennials (28–43),Class E,Female,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,4,225,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+101,National Capital Region (NCR),Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),4,5,162,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+102,Visayas,Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,4,256,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+103,Balance Luzon,Generation Z (18–27),Class ABC,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,4,253,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+104,National Capital Region (NCR),Millennials (28–43),Class D,Female,Brand C (Bio-Oil Formulation),5,4,175,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+105,Visayas,Generation Z (18–27),Class ABC,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,3,285,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+106,Mindanao,Generation Z (18–27),Class D,Female,Brand B (Standard Market),5,4,281,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+107,Balance Luzon,Generation Z (18–27),Class D,Male,Brand B (Standard Market),2,1,187,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+108,Balance Luzon,Millennials (28–43),Class ABC,Male,Brand B (Standard Market),4,3,200,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+109,National Capital Region (NCR),Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),2,2,231,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+110,Balance Luzon,Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,4,194,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+111,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand B (Standard Market),3,5,278,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+112,Balance Luzon,Generation X (44–59),Class D,Female,Brand A (Premium Nanotech),4,5,248,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+113,Mindanao,Generation Z (18–27),Class D,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,4,174,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+114,Balance Luzon,Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),4,5,190,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+115,Balance Luzon,Millennials (28–43),Class ABC,Male,Brand A (Premium Nanotech),5,5,311,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+116,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand C (Bio-Oil Formulation),4,3,332,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+117,Balance Luzon,Generation X (44–59),Class D,Male,Brand A (Premium Nanotech),4,4,272,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+118,Balance Luzon,Generation X (44–59),Class ABC,Female,Brand A (Premium Nanotech),5,4,227,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+119,National Capital Region (NCR),Generation Z (18–27),Class E,Female,Brand A (Premium Nanotech),5,5,213,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+120,National Capital Region (NCR),Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",3,5,272,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+121,Balance Luzon,Generation Z (18–27),Class ABC,Female,Brand A (Premium Nanotech),3,5,244,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+122,National Capital Region (NCR),Generation Z (18–27),Class E,Male,Brand B (Standard Market),1,4,143,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+123,Balance Luzon,Millennials (28–43),Class E,Male,Brand B (Standard Market),4,5,301,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+124,National Capital Region (NCR),Generation Z (18–27),Class E,Male,Brand B (Standard Market),5,5,320,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+125,Mindanao,Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand D (Local Artisan)",5,3,284,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+126,Mindanao,Generation Z (18–27),Class D,Female,Brand C (Bio-Oil Formulation),5,4,174,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+127,Mindanao,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,5,201,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+128,Visayas,Generation X (44–59),Class ABC,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,128,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+129,Balance Luzon,Generation X (44–59),Class E,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,5,335,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+130,Mindanao,Generation Z (18–27),Class D,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,5,218,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+131,Balance Luzon,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand D (Local Artisan)",3,1,379,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+132,National Capital Region (NCR),Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),5,5,357,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+133,Balance Luzon,Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),3,3,185,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+134,Balance Luzon,Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,5,197,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+135,Balance Luzon,Generation X (44–59),Class D,Male,Brand A (Premium Nanotech),5,5,267,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+136,Visayas,Generation X (44–59),Class E,Female,Brand B (Standard Market),5,4,134,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+137,National Capital Region (NCR),Millennials (28–43),Class E,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,4,213,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+138,Balance Luzon,Generation Z (18–27),Class E,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,4,207,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+139,Balance Luzon,Generation X (44–59),Class D,Female,Brand C (Bio-Oil Formulation),4,5,351,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+140,National Capital Region (NCR),Millennials (28–43),Class E,Female,Brand A (Premium Nanotech),5,4,249,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+141,Balance Luzon,Generation Z (18–27),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,4,222,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+142,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand B (Standard Market),5,4,202,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+143,Balance Luzon,Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),1,3,293,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+144,Visayas,Generation X (44–59),Class D,Male,Brand C (Bio-Oil Formulation),4,5,210,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+145,Mindanao,Generation Z (18–27),Class D,Female,Brand B (Standard Market),4,4,236,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+146,Mindanao,Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),5,4,201,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+147,Visayas,Millennials (28–43),Class ABC,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,5,148,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+148,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,180,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+149,Balance Luzon,Millennials (28–43),Class D,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,209,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+150,Visayas,Millennials (28–43),Class D,Female,Brand C (Bio-Oil Formulation),1,2,224,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+151,Balance Luzon,Generation Z (18–27),Class D,Female,Brand B (Standard Market),5,5,226,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+152,Balance Luzon,Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),2,1,234,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+153,Visayas,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",3,3,210,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+154,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),5,3,320,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+155,National Capital Region (NCR),Generation X (44–59),Class E,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",4,4,296,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+156,Mindanao,Generation X (44–59),Class D,Female,Brand D (Local Artisan),2,3,231,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+157,Balance Luzon,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,4,255,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+158,National Capital Region (NCR),Generation X (44–59),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,217,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+159,Visayas,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",2,1,69,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+160,Visayas,Millennials (28–43),Class E,Female,Brand C (Bio-Oil Formulation),4,4,241,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+161,Balance Luzon,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),5,5,258,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+162,Balance Luzon,Millennials (28–43),Class E,Female,Brand D (Local Artisan),4,4,143,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+163,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand B (Standard Market),5,2,269,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+164,Balance Luzon,Generation X (44–59),Class D,Male,Brand C (Bio-Oil Formulation),4,5,223,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+165,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),5,4,260,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+166,National Capital Region (NCR),Generation Z (18–27),Class D,Male,"Brand B (Standard Market), Brand D (Local Artisan)",4,4,224,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+167,Mindanao,Generation Z (18–27),Class D,Female,Brand C (Bio-Oil Formulation),4,4,315,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+168,Visayas,Millennials (28–43),Class D,Female,Brand B (Standard Market),4,5,253,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+169,Balance Luzon,Generation X (44–59),Class ABC,Male,Brand D (Local Artisan),4,5,300,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+170,Mindanao,Generation Z (18–27),Class D,Female,Brand B (Standard Market),4,5,305,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+171,Balance Luzon,Generation X (44–59),Class D,Female,Brand C (Bio-Oil Formulation),4,4,172,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+172,Mindanao,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,5,195,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+173,Balance Luzon,Generation X (44–59),Class ABC,Female,Brand B (Standard Market),4,3,267,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+174,Balance Luzon,Generation Z (18–27),Class E,Male,"Brand B (Standard Market), Brand D (Local Artisan)",5,5,218,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+175,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand B (Standard Market),3,3,225,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+176,Visayas,Generation X (44–59),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,317,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+177,Balance Luzon,Millennials (28–43),Class D,Male,Brand D (Local Artisan),5,5,221,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+178,Balance Luzon,Generation X (44–59),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand D (Local Artisan)",4,5,181,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+179,Visayas,Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",4,5,189,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+180,National Capital Region (NCR),Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),5,4,370,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+181,National Capital Region (NCR),Generation X (44–59),Class D,Male,Brand B (Standard Market),4,3,229,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+182,Balance Luzon,Millennials (28–43),Class ABC,Male,Brand A (Premium Nanotech),4,4,158,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+183,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),4,3,133,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+184,Balance Luzon,Generation X (44–59),Class D,Male,Brand D (Local Artisan),5,4,202,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+185,Mindanao,Millennials (28–43),Class E,Female,Brand C (Bio-Oil Formulation),4,4,228,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+186,National Capital Region (NCR),Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,4,296,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+187,Mindanao,Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),4,4,291,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+188,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand C (Bio-Oil Formulation),4,5,239,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+189,National Capital Region (NCR),Generation Z (18–27),Class E,Male,Brand A (Premium Nanotech),4,4,212,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+190,National Capital Region (NCR),Millennials (28–43),Class E,Male,Brand C (Bio-Oil Formulation),5,5,260,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+191,Balance Luzon,Generation X (44–59),Class D,Female,Brand C (Bio-Oil Formulation),5,4,135,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+192,Balance Luzon,Generation Z (18–27),Class D,Male,Brand B (Standard Market),5,4,358,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+193,Balance Luzon,Generation X (44–59),Class D,Female,Brand B (Standard Market),5,5,279,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+194,Balance Luzon,Millennials (28–43),Class D,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,5,292,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+195,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,3,175,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+196,Balance Luzon,Generation X (44–59),Class ABC,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,4,316,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+197,Balance Luzon,Generation Z (18–27),Class D,Female,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",3,4,212,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+198,Visayas,Generation Z (18–27),Class E,Male,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,4,182,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+199,Visayas,Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,4,237,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+200,Mindanao,Generation X (44–59),Class D,Male,"Brand B (Standard Market), Brand D (Local Artisan)",4,5,236,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+201,Balance Luzon,Millennials (28–43),Class ABC,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,2,175,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+202,Balance Luzon,Millennials (28–43),Class ABC,Male,Brand D (Local Artisan),5,4,186,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+203,Balance Luzon,Millennials (28–43),Class D,Male,Brand B (Standard Market),4,5,181,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+204,National Capital Region (NCR),Generation X (44–59),Class D,Female,Brand A (Premium Nanotech),5,4,182,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+205,Mindanao,Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",3,2,216,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+206,Balance Luzon,Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,5,156,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+207,Mindanao,Millennials (28–43),Class ABC,Female,"Brand A (Premium Nanotech), Brand D (Local Artisan)",3,4,198,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+208,Balance Luzon,Millennials (28–43),Class D,Female,Brand D (Local Artisan),5,5,302,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+209,Visayas,Generation Z (18–27),Class D,Male,Brand B (Standard Market),4,4,289,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+210,Visayas,Millennials (28–43),Class E,Male,"Brand A (Premium Nanotech), Brand D (Local Artisan)",4,4,177,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+211,Balance Luzon,Millennials (28–43),Class E,Female,Brand D (Local Artisan),4,4,297,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+212,Visayas,Generation Z (18–27),Class E,Female,Brand B (Standard Market),5,3,122,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+213,Visayas,Generation X (44–59),Class E,Male,Brand C (Bio-Oil Formulation),4,4,385,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+214,Mindanao,Generation X (44–59),Class E,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",4,5,318,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+215,Visayas,Millennials (28–43),Class D,Male,Brand C (Bio-Oil Formulation),4,5,206,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+216,Balance Luzon,Generation Z (18–27),Class D,Male,Brand C (Bio-Oil Formulation),5,5,262,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+217,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",3,3,155,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+218,National Capital Region (NCR),Generation Z (18–27),Class E,Male,Brand A (Premium Nanotech),5,4,243,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+219,Visayas,Generation Z (18–27),Class E,Female,Brand A (Premium Nanotech),4,4,228,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+220,Balance Luzon,Millennials (28–43),Class E,Female,Brand C (Bio-Oil Formulation),3,4,189,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+221,Balance Luzon,Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),4,4,211,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+222,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand B (Standard Market),4,4,205,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+223,Balance Luzon,Generation X (44–59),Class E,Male,Brand C (Bio-Oil Formulation),5,5,172,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+224,Visayas,Generation X (44–59),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",1,4,188,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+225,Visayas,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,5,153,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+226,Balance Luzon,Generation Z (18–27),Class D,Female,Brand B (Standard Market),4,5,291,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+227,National Capital Region (NCR),Generation Z (18–27),Class ABC,Female,Brand B (Standard Market),4,3,184,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+228,Mindanao,Millennials (28–43),Class D,Female,Brand C (Bio-Oil Formulation),4,5,166,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+229,Visayas,Millennials (28–43),Class E,Male,Brand A (Premium Nanotech),5,5,290,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+230,Mindanao,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,262,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+231,Visayas,Generation Z (18–27),Class D,Male,Brand B (Standard Market),4,2,288,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+232,Mindanao,Millennials (28–43),Class ABC,Male,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand D (Local Artisan)",5,5,294,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+233,Balance Luzon,Generation X (44–59),Class ABC,Male,Brand A (Premium Nanotech),3,4,356,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+234,Balance Luzon,Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),5,5,230,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+235,Balance Luzon,Generation X (44–59),Class E,Male,"Brand A (Premium Nanotech), Brand D (Local Artisan)",5,5,152,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+236,Balance Luzon,Generation Z (18–27),Class ABC,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,256,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+237,Balance Luzon,Millennials (28–43),Class E,Female,Brand A (Premium Nanotech),5,4,199,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+238,Balance Luzon,Generation X (44–59),Class ABC,Male,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",3,4,182,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+239,Balance Luzon,Generation Z (18–27),Class E,Female,"Brand B (Standard Market), Brand D (Local Artisan)",5,5,245,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+240,Mindanao,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,4,291,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+241,National Capital Region (NCR),Generation Z (18–27),Class ABC,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,189,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+242,Balance Luzon,Millennials (28–43),Class E,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,5,316,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+243,Balance Luzon,Generation X (44–59),Class ABC,Male,Brand A (Premium Nanotech),4,5,180,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+244,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand C (Bio-Oil Formulation),5,2,225,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+245,Balance Luzon,Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,263,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+246,Balance Luzon,Generation Z (18–27),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",3,2,216,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+247,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand C (Bio-Oil Formulation),5,4,133,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+248,Balance Luzon,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,5,295,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+249,Visayas,Generation X (44–59),Class E,Female,Brand A (Premium Nanotech),5,2,202,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+250,Balance Luzon,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),4,5,284,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+251,Visayas,Millennials (28–43),Class D,Female,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,5,164,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+252,Visayas,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",4,4,174,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+253,Visayas,Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,4,291,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+254,Mindanao,Millennials (28–43),Class ABC,Female,Brand C (Bio-Oil Formulation),1,3,260,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+255,Balance Luzon,Generation X (44–59),Class ABC,Male,Brand C (Bio-Oil Formulation),5,5,213,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+256,Balance Luzon,Generation Z (18–27),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand D (Local Artisan)",4,5,261,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+257,Balance Luzon,Generation X (44–59),Class D,Female,Brand A (Premium Nanotech),5,4,182,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+258,Visayas,Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,246,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+259,National Capital Region (NCR),Millennials (28–43),Class E,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand D (Local Artisan)",4,5,247,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+260,Mindanao,Generation Z (18–27),Class D,Female,"Brand B (Standard Market), Brand D (Local Artisan)",5,5,217,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+261,Balance Luzon,Millennials (28–43),Class D,Female,Brand C (Bio-Oil Formulation),3,4,189,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+262,Mindanao,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",3,2,244,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+263,National Capital Region (NCR),Generation X (44–59),Class E,Female,Brand D (Local Artisan),3,3,236,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+264,Mindanao,Generation Z (18–27),Class D,Female,Brand B (Standard Market),5,2,212,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+265,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,5,177,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+266,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,4,240,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+267,Balance Luzon,Generation Z (18–27),Class ABC,Female,Brand B (Standard Market),3,4,212,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+268,Balance Luzon,Generation Z (18–27),Class D,Female,Brand D (Local Artisan),4,5,177,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+269,Balance Luzon,Millennials (28–43),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",3,4,242,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+270,National Capital Region (NCR),Generation X (44–59),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",4,5,336,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+271,National Capital Region (NCR),Generation X (44–59),Class D,Female,Brand B (Standard Market),4,5,217,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+272,National Capital Region (NCR),Generation Z (18–27),Class ABC,Male,Brand A (Premium Nanotech),5,1,329,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+273,Balance Luzon,Generation X (44–59),Class D,Female,Brand D (Local Artisan),4,4,366,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+274,Balance Luzon,Millennials (28–43),Class D,Male,Brand B (Standard Market),5,5,182,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+275,Mindanao,Millennials (28–43),Class E,Male,Brand A (Premium Nanotech),4,5,240,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+276,Visayas,Generation X (44–59),Class E,Female,Brand B (Standard Market),4,5,366,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+277,Balance Luzon,Millennials (28–43),Class D,Male,Brand B (Standard Market),4,4,232,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+278,National Capital Region (NCR),Generation X (44–59),Class E,Male,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,4,242,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+279,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,Brand B (Standard Market),4,3,139,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+280,Balance Luzon,Generation Z (18–27),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,208,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+281,Mindanao,Millennials (28–43),Class E,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,5,273,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+282,Visayas,Millennials (28–43),Class D,Male,Brand B (Standard Market),5,5,385,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+283,Balance Luzon,Generation Z (18–27),Class D,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,4,228,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+284,National Capital Region (NCR),Generation Z (18–27),Class E,Male,Brand A (Premium Nanotech),5,4,140,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+285,Visayas,Millennials (28–43),Class D,Female,Brand D (Local Artisan),4,4,155,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+286,Balance Luzon,Millennials (28–43),Class E,Male,"Brand A (Premium Nanotech), Brand D (Local Artisan)",5,4,237,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+287,Visayas,Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),5,5,310,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+288,Balance Luzon,Generation X (44–59),Class D,Female,Brand C (Bio-Oil Formulation),3,2,278,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+289,Visayas,Generation Z (18–27),Class ABC,Female,Brand A (Premium Nanotech),5,5,267,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+290,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand A (Premium Nanotech),4,4,318,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+291,Balance Luzon,Generation X (44–59),Class D,Male,"Brand B (Standard Market), Brand D (Local Artisan)",4,5,196,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+292,Mindanao,Generation Z (18–27),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",2,3,241,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+293,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand D (Local Artisan)",4,3,208,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+294,Balance Luzon,Millennials (28–43),Class ABC,Female,Brand B (Standard Market),4,4,223,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+295,Mindanao,Generation Z (18–27),Class D,Female,Brand C (Bio-Oil Formulation),4,4,179,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+296,Balance Luzon,Generation X (44–59),Class D,Male,Brand A (Premium Nanotech),5,5,219,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+297,Balance Luzon,Generation X (44–59),Class D,Male,Brand A (Premium Nanotech),4,4,238,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+298,National Capital Region (NCR),Generation Z (18–27),Class ABC,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,5,217,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+299,Visayas,Generation Z (18–27),Class D,Female,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",3,2,230,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+300,Balance Luzon,Millennials (28–43),Class ABC,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,5,264,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+301,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,Brand A (Premium Nanotech),4,2,314,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+302,National Capital Region (NCR),Generation X (44–59),Class D,Male,Brand D (Local Artisan),5,3,318,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+303,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,4,285,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+304,Balance Luzon,Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),5,5,164,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+305,Balance Luzon,Millennials (28–43),Class D,Female,Brand C (Bio-Oil Formulation),3,4,218,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+306,Mindanao,Millennials (28–43),Class D,Female,Brand B (Standard Market),4,4,223,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+307,National Capital Region (NCR),Generation Z (18–27),Class ABC,Female,Brand A (Premium Nanotech),5,5,200,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+308,Visayas,Generation Z (18–27),Class D,Female,Brand D (Local Artisan),4,4,260,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+309,Balance Luzon,Millennials (28–43),Class ABC,Female,Brand A (Premium Nanotech),4,5,144,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+310,Balance Luzon,Generation Z (18–27),Class D,Female,Brand B (Standard Market),4,5,341,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+311,Visayas,Generation Z (18–27),Class E,Male,Brand C (Bio-Oil Formulation),5,3,311,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+312,Balance Luzon,Millennials (28–43),Class D,Male,Brand C (Bio-Oil Formulation),5,4,268,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+313,Mindanao,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),5,4,236,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+314,Balance Luzon,Millennials (28–43),Class D,Male,Brand C (Bio-Oil Formulation),5,4,313,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+315,National Capital Region (NCR),Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",3,3,281,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+316,Balance Luzon,Millennials (28–43),Class E,Male,Brand B (Standard Market),5,4,306,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+317,Balance Luzon,Generation Z (18–27),Class E,Female,Brand A (Premium Nanotech),4,5,236,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+318,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,Brand A (Premium Nanotech),5,3,347,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+319,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand C (Bio-Oil Formulation),4,4,310,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+320,Visayas,Millennials (28–43),Class ABC,Female,Brand A (Premium Nanotech),4,5,270,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+321,National Capital Region (NCR),Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",3,3,315,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+322,Balance Luzon,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,4,214,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+323,National Capital Region (NCR),Generation X (44–59),Class D,Female,Brand B (Standard Market),4,5,169,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+324,Mindanao,Generation Z (18–27),Class E,Female,Brand B (Standard Market),5,2,259,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+325,Visayas,Generation Z (18–27),Class E,Male,Brand C (Bio-Oil Formulation),5,5,236,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+326,Balance Luzon,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,5,228,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+327,Visayas,Generation Z (18–27),Class D,Female,Brand D (Local Artisan),4,5,312,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+328,Mindanao,Generation X (44–59),Class E,Female,Brand D (Local Artisan),5,5,250,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+329,Balance Luzon,Millennials (28–43),Class D,Female,Brand D (Local Artisan),4,4,255,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+330,Balance Luzon,Generation Z (18–27),Class D,Male,Brand B (Standard Market),5,4,220,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+331,Balance Luzon,Millennials (28–43),Class E,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,4,292,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+332,Visayas,Generation Z (18–27),Class ABC,Male,Brand A (Premium Nanotech),5,4,282,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+333,Mindanao,Millennials (28–43),Class ABC,Female,Brand D (Local Artisan),4,5,292,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+334,Balance Luzon,Millennials (28–43),Class E,Male,Brand D (Local Artisan),3,3,210,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+335,Mindanao,Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),4,5,318,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+336,Mindanao,Millennials (28–43),Class ABC,Female,Brand A (Premium Nanotech),4,5,350,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+337,Visayas,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,4,290,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+338,Balance Luzon,Generation X (44–59),Class ABC,Female,Brand A (Premium Nanotech),4,5,191,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+339,Balance Luzon,Generation X (44–59),Class D,Female,Brand B (Standard Market),5,5,191,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+340,Balance Luzon,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,5,217,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+341,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),4,3,206,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+342,Balance Luzon,Generation Z (18–27),Class D,Male,Brand C (Bio-Oil Formulation),3,1,235,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+343,Balance Luzon,Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,4,277,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+344,Visayas,Millennials (28–43),Class ABC,Female,Brand B (Standard Market),4,3,257,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+345,Balance Luzon,Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,4,252,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+346,National Capital Region (NCR),Generation X (44–59),Class E,Male,"Brand B (Standard Market), Brand D (Local Artisan)",5,4,225,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+347,National Capital Region (NCR),Generation X (44–59),Class D,Female,Brand A (Premium Nanotech),5,5,235,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+348,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,4,287,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+349,National Capital Region (NCR),Millennials (28–43),Class ABC,Female,Brand D (Local Artisan),5,4,119,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+350,National Capital Region (NCR),Generation X (44–59),Class D,Male,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",5,4,239,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+351,Balance Luzon,Generation X (44–59),Class D,Female,Brand C (Bio-Oil Formulation),5,4,257,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+352,National Capital Region (NCR),Generation X (44–59),Class D,Female,Brand A (Premium Nanotech),5,5,287,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+353,Balance Luzon,Millennials (28–43),Class E,Male,Brand A (Premium Nanotech),4,4,179,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+354,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand A (Premium Nanotech),4,3,176,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+355,Visayas,Millennials (28–43),Class D,Male,Brand D (Local Artisan),1,3,275,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+356,National Capital Region (NCR),Generation Z (18–27),Class ABC,Female,"Brand A (Premium Nanotech), Brand D (Local Artisan)",5,4,125,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+357,Mindanao,Millennials (28–43),Class ABC,Male,Brand D (Local Artisan),4,5,319,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+358,Balance Luzon,Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),3,3,253,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+359,Balance Luzon,Millennials (28–43),Class D,Female,Brand C (Bio-Oil Formulation),4,4,333,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+360,National Capital Region (NCR),Generation Z (18–27),Class E,Female,Brand B (Standard Market),5,5,174,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+361,Visayas,Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),4,4,213,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+362,National Capital Region (NCR),Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market)",5,5,95,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+363,Visayas,Millennials (28–43),Class E,Male,Brand C (Bio-Oil Formulation),5,4,192,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+364,Balance Luzon,Millennials (28–43),Class ABC,Female,Brand A (Premium Nanotech),4,5,228,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+365,Visayas,Millennials (28–43),Class ABC,Male,Brand B (Standard Market),4,4,122,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+366,Mindanao,Generation Z (18–27),Class E,Male,Brand B (Standard Market),5,5,216,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+367,Balance Luzon,Generation Z (18–27),Class E,Male,Brand A (Premium Nanotech),2,3,120,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+368,Visayas,Generation X (44–59),Class D,Male,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",4,5,224,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+369,Mindanao,Millennials (28–43),Class D,Male,Brand B (Standard Market),4,4,308,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+370,Visayas,Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),3,1,237,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+371,Balance Luzon,Millennials (28–43),Class D,Female,Brand B (Standard Market),5,1,339,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+372,National Capital Region (NCR),Generation Z (18–27),Class D,Female,Brand C (Bio-Oil Formulation),1,2,287,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+373,Mindanao,Generation Z (18–27),Class E,Male,Brand A (Premium Nanotech),4,4,320,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+374,National Capital Region (NCR),Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand D (Local Artisan)",5,5,194,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+375,Balance Luzon,Generation Z (18–27),Class ABC,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,5,192,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+376,Balance Luzon,Millennials (28–43),Class D,Male,Brand B (Standard Market),4,5,260,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+377,Mindanao,Generation X (44–59),Class D,Female,Brand D (Local Artisan),4,4,145,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+378,Balance Luzon,Millennials (28–43),Class ABC,Female,Brand B (Standard Market),2,1,268,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+379,Balance Luzon,Generation Z (18–27),Class E,Female,Brand A (Premium Nanotech),4,5,220,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+380,National Capital Region (NCR),Millennials (28–43),Class ABC,Male,Brand C (Bio-Oil Formulation),4,3,319,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+381,National Capital Region (NCR),Millennials (28–43),Class ABC,Female,Brand A (Premium Nanotech),3,3,280,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+382,Mindanao,Millennials (28–43),Class D,Male,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,4,305,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+383,Balance Luzon,Generation X (44–59),Class D,Female,"Brand A (Premium Nanotech), Brand D (Local Artisan)",5,5,194,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+384,Balance Luzon,Millennials (28–43),Class E,Female,Brand C (Bio-Oil Formulation),3,5,302,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+385,National Capital Region (NCR),Generation Z (18–27),Class ABC,Female,Brand B (Standard Market),5,4,326,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+386,Visayas,Generation Z (18–27),Class D,Female,Brand D (Local Artisan),4,4,237,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+387,Balance Luzon,Generation Z (18–27),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",3,4,195,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+388,Visayas,Generation Z (18–27),Class D,Male,Brand D (Local Artisan),4,4,196,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+389,Balance Luzon,Generation Z (18–27),Class ABC,Male,Brand B (Standard Market),4,4,314,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+390,Mindanao,Millennials (28–43),Class D,Female,Brand A (Premium Nanotech),4,4,401,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+391,Visayas,Millennials (28–43),Class D,Male,Brand C (Bio-Oil Formulation),4,3,181,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+392,Mindanao,Generation Z (18–27),Class ABC,Male,Brand B (Standard Market),3,3,176,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+393,Balance Luzon,Generation Z (18–27),Class D,Female,Brand C (Bio-Oil Formulation),5,5,295,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+394,Visayas,Generation X (44–59),Class D,Female,Brand B (Standard Market),5,4,194,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+395,Balance Luzon,Generation Z (18–27),Class ABC,Male,Brand C (Bio-Oil Formulation),5,5,301,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+396,Balance Luzon,Generation X (44–59),Class ABC,Female,"Brand C (Bio-Oil Formulation), Brand D (Local Artisan)",4,5,267,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+397,Balance Luzon,Generation Z (18–27),Class ABC,Male,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",4,5,238,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+398,Mindanao,Millennials (28–43),Class E,Female,"Brand A (Premium Nanotech), Brand B (Standard Market)",4,5,266,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+399,National Capital Region (NCR),Millennials (28–43),Class ABC,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,5,262,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+400,Mindanao,Generation Z (18–27),Class D,Female,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",4,5,229,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+401,National Capital Region (NCR),Millennials (28–43),Class D,Male,Brand C (Bio-Oil Formulation),5,5,134,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+402,Visayas,Generation X (44–59),Class ABC,Male,Brand A (Premium Nanotech),5,5,250,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+403,Balance Luzon,Generation Z (18–27),Class D,Female,Brand D (Local Artisan),4,4,334,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+404,Balance Luzon,Generation Z (18–27),Class ABC,Female,Brand A (Premium Nanotech),5,4,143,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+405,Mindanao,Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand C (Bio-Oil Formulation)",5,4,182,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+406,National Capital Region (NCR),Millennials (28–43),Class D,Female,"Brand A (Premium Nanotech), Brand B (Standard Market), Brand C (Bio-Oil Formulation)",5,5,265,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+407,Balance Luzon,Generation Z (18–27),Class D,Male,Brand B (Standard Market),5,5,242,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
+408,National Capital Region (NCR),Generation Z (18–27),Class ABC,Male,Brand A (Premium Nanotech),4,4,264,"Very responsive customer service on Chat, na-resolve agad yung delivery question ko in 5 minutes."
+409,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand A (Premium Nanotech),5,4,198,"Yupi yung box pagdating, buti na lang hindi nabasag yung item sa loob pero nakaka-disappoint."
+410,Visayas,Millennials (28–43),Class E,Female,Brand C (Bio-Oil Formulation),4,5,309,"Sulit at napaka-affordable, definitely my go-to choice every month!"
+411,Mindanao,Generation Z (18–27),Class ABC,Male,"Brand B (Standard Market), Brand C (Bio-Oil Formulation)",3,3,242,Sobrang sulit ng promo nila lalo na kung bulk order. Mas mabilis pa dumating kaysa sa inaasahan ko.
+412,National Capital Region (NCR),Generation Z (18–27),Class D,Male,Brand B (Standard Market),4,3,281,Medyo mahal na yung shipping fee sa probinsya kaya nagdadalawang-isip na akong umulit.
