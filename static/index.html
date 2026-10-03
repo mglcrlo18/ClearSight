@@ -199,22 +199,22 @@
                         <span class="badge-mini">Drag to Canvas</span>
                     </div>
                     <div class="variable-list" id="variable-list">
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Brand Preference (Multi-Select)">
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Brand Preference (Multi-Select)" title="Click to add as Stub, or drag to Tray">
                             <span class="pill-dot purple"></span> Brand Preference (Multi-Select)
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Overall CSAT (1-5 Likert)">
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Overall CSAT (1-5 Likert)" title="Click to add as Stub, or drag to Tray">
                             <span class="pill-dot green"></span> Overall CSAT (1-5 Likert)
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Repurchase Intent">
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Repurchase Intent" title="Click to add as Stub, or drag to Tray">
                             <span class="pill-dot green"></span> Repurchase Intent (1-5)
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Region">
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Region" title="Click to add as Stub, or drag to Tray">
                             <span class="pill-dot blue"></span> Region (NCR, BL, Vis, Min)
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Age Generation">
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Age Generation" title="Click to add as Stub, or drag to Tray">
                             <span class="pill-dot blue"></span> Age (Gen Z, Millennial, Gen X)
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Monthly Income Class">
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Monthly Income Class" title="Click to add as Stub, or drag to Tray">
                             <span class="pill-dot blue"></span> SEC / Income (ABC, D, E)
                         </div>
                     </div>
@@ -225,19 +225,48 @@
                     <div class="drop-tray-container">
                         <div class="tray-row">
                             <span class="tray-label">Banner (Columns):</span>
-                            <div class="drop-tray" id="banner-tray" ondrop="dropBanner(event)" ondragover="allowDrop(event)">
-                                <span class="tag-pill">Total</span>
-                                <span class="tag-pill">NCR (A)</span>
-                                <span class="tag-pill">Balance Luzon (B)</span>
-                                <span class="tag-pill">Visayas (C)</span>
-                                <span class="tag-pill">Mindanao (D)</span>
+                            <div style="flex: 1;">
+                                <div class="drop-tray" id="banner-tray" ondrop="dropBanner(event)" ondragover="allowDrop(event)">
+                                    <span class="tag-pill" data-name="Total">Total <span class="pill-remove" onclick="removeBannerPill(event, 'Total')">&times;</span></span>
+                                    <span class="tag-pill" data-name="NCR (A)">NCR (A) <span class="pill-remove" onclick="removeBannerPill(event, 'NCR (A)')">&times;</span></span>
+                                    <span class="tag-pill" data-name="Balance Luzon (B)">Balance Luzon (B) <span class="pill-remove" onclick="removeBannerPill(event, 'Balance Luzon (B)')">&times;</span></span>
+                                    <span class="tag-pill" data-name="Visayas (C)">Visayas (C) <span class="pill-remove" onclick="removeBannerPill(event, 'Visayas (C)')">&times;</span></span>
+                                    <span class="tag-pill" data-name="Mindanao (D)">Mindanao (D) <span class="pill-remove" onclick="removeBannerPill(event, 'Mindanao (D)')">&times;</span></span>
+                                </div>
+                                <div class="tray-input-wrapper">
+                                    <input type="text" id="banner-input" class="tray-input" placeholder="+ Type banner column and press Enter (e.g. 'Gen Z', 'Metro Manila', 'Male')..." onkeydown="handleBannerInputKey(event)">
+                                    <button class="tray-add-btn" onclick="addBannerFromInput()">+ Add Column</button>
+                                </div>
                             </div>
                         </div>
-                        <div class="tray-row">
+                        <div class="preset-pills-row">
+                            <span class="preset-label">Quick Banners:</span>
+                            <button class="preset-btn" onclick="setBannerPreset('region')">Region (NCR, BL, Vis, Min)</button>
+                            <button class="preset-btn" onclick="setBannerPreset('age')">Age (Gen Z, Mill, Gen X)</button>
+                            <button class="preset-btn" onclick="setBannerPreset('gender')">Gender (Male, Female)</button>
+                            <button class="preset-btn" onclick="setBannerPreset('sec')">SEC (Class ABC, D, E)</button>
+                            <button class="preset-btn clear-btn" onclick="clearBanners()">Clear Columns</button>
+                        </div>
+
+                        <div class="tray-row" style="margin-top: 10px;">
                             <span class="tray-label">Stub (Rows):</span>
-                            <div class="drop-tray" id="stub-tray" ondrop="dropStub(event)" ondragover="allowDrop(event)">
-                                <span class="tag-pill">Q1: Brand Preference</span>
+                            <div style="flex: 1;">
+                                <div class="drop-tray" id="stub-tray" ondrop="dropStub(event)" ondragover="allowDrop(event)">
+                                    <span class="tag-pill" data-name="Q1: Brand Preference">Q1: Brand Preference <span class="pill-remove" onclick="removeStubPill(event, 'Q1: Brand Preference')">&times;</span></span>
+                                </div>
+                                <div class="tray-input-wrapper">
+                                    <input type="text" id="stub-input" class="tray-input" placeholder="+ Type stub variable/question and press Enter (e.g. 'Overall CSAT', 'Repurchase Intent')..." onkeydown="handleStubInputKey(event)">
+                                    <button class="tray-add-btn" onclick="addStubFromInput()">+ Add Stub</button>
+                                </div>
                             </div>
+                        </div>
+                        <div class="preset-pills-row">
+                            <span class="preset-label">Quick Stubs:</span>
+                            <button class="preset-btn" onclick="setStubPreset('brand')">Brand Preference</button>
+                            <button class="preset-btn" onclick="setStubPreset('csat')">Overall CSAT (T2B)</button>
+                            <button class="preset-btn" onclick="setStubPreset('repurchase')">Repurchase Intent</button>
+                            <button class="preset-btn" onclick="setStubPreset('sec')">SEC / Income</button>
+                            <button class="preset-btn clear-btn" onclick="clearStubs()">Clear Stubs</button>
                         </div>
                     </div>
 
@@ -368,14 +397,14 @@
                         <div class="card-icon">📄</div>
                         <h3>Customer Voice Snapshot (A4 PDF)</h3>
                         <p>1-Page executive brief featuring KPIs, statistically verified highlights, and 30-day action matrix.</p>
-                        <button class="download-btn" onclick="downloadSnapshot()">📥 Open 1-Page A4 Snapshot</button>
+                        <button class="download-btn" id="btn-dl-snapshot" onclick="downloadSnapshot()">📥 Download 1-Page A4 Snapshot</button>
                     </div>
 
                     <div class="export-card">
                         <div class="card-icon">🎓</div>
                         <h3>Thesis Chapter 4 Package</h3>
                         <p>Formatted academic tables with automated statistical interpretation lines ready for defense panels.</p>
-                        <button class="download-btn" onclick="downloadThesisTables()">📥 Download Academic Tables</button>
+                        <button class="download-btn" id="btn-dl-thesis" onclick="downloadThesisTables()">📥 Download Academic Tables</button>
                     </div>
                 </div>
 

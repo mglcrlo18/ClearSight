@@ -24,7 +24,12 @@ from engine.stats_engine import (
 )
 from engine.driver_analysis import compute_johnsons_relative_weights
 from engine.taglish_nlp import batch_code_open_ends, scrub_pii
-from engine.export_engine import generate_excel_banner_book, generate_customer_voice_snapshot_html
+from engine.export_engine import (
+    generate_excel_banner_book, 
+    generate_customer_voice_snapshot_html,
+    generate_thesis_chapter_4_package,
+    generate_thesis_excel_tables
+)
 
 PORT = 8540
 
@@ -179,6 +184,74 @@ class SukatRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Agency_Banner_Book.xlsx"')
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+        elif path == "/api/export/save-snapshot-to-downloads":
+            downloads_dir = get_downloads_dir()
+            target_file = os.path.join(downloads_dir, "ClearSight_Customer_Voice_Snapshot_A4.html")
+            data = {
+                "project_title": "Philippine Consumer Rejuvenation & Retail Study",
+                "sample_n": 412,
+                "eff_n": 389.2,
+                "csat_score": "84.2%",
+                "weighting_eff": "94.5%"
+            }
+            generate_customer_voice_snapshot_html(target_file, data)
+            if sys.platform == "darwin":
+                os.system(f'open -R "{target_file}" 2>/dev/null')
+            elif sys.platform == "win32":
+                os.system(f'explorer /select,"{target_file}" 2>/dev/null')
+            response = {
+                "status": "success",
+                "message": "1-Page A4 Snapshot saved directly to your Downloads folder!",
+                "path": target_file,
+                "filename": "ClearSight_Customer_Voice_Snapshot_A4.html"
+            }
+            self.send_json_response(response)
+        elif path == "/api/export/snapshot-download":
+            snapshot_path = os.path.join(CURR_DIR, "snapshot_preview.html")
+            data = {
+                "project_title": "Philippine Consumer Rejuvenation & Retail Study",
+                "sample_n": 412,
+                "eff_n": 389.2,
+                "csat_score": "84.2%",
+                "weighting_eff": "94.5%"
+            }
+            generate_customer_voice_snapshot_html(snapshot_path, data)
+            with open(snapshot_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Customer_Voice_Snapshot_A4.html"')
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+        elif path == "/api/export/save-thesis-to-downloads":
+            downloads_dir = get_downloads_dir()
+            target_html = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Package.html")
+            target_xlsx = os.path.join(downloads_dir, "ClearSight_Thesis_Chapter_4_Tables.xlsx")
+            generate_thesis_chapter_4_package(target_html, "Philippine Consumer Survey Analysis", 412, 389.2)
+            generate_thesis_excel_tables(target_xlsx, "Philippine Consumer Survey Analysis")
+            if sys.platform == "darwin":
+                os.system(f'open -R "{target_html}" 2>/dev/null')
+            elif sys.platform == "win32":
+                os.system(f'explorer /select,"{target_html}" 2>/dev/null')
+            response = {
+                "status": "success",
+                "message": "Thesis Chapter 4 Package saved directly to your Downloads folder!",
+                "path": target_html,
+                "filename": "ClearSight_Thesis_Chapter_4_Package.html"
+            }
+            self.send_json_response(response)
+        elif path == "/api/export/thesis-download":
+            thesis_path = os.path.join(CURR_DIR, "ClearSight_Thesis_Chapter_4_Package.html")
+            generate_thesis_chapter_4_package(thesis_path, "Philippine Consumer Survey Analysis", 412, 389.2)
+            with open(thesis_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Thesis_Chapter_4_Package.html"')
             self.send_header("Content-Length", str(len(content)))
             self.end_headers()
             self.wfile.write(content)
