@@ -437,9 +437,20 @@ def run_hygiene_audit(
                 "details": f"Identical substantive responses across {len(sub_cols)} columns."
             })
 
-    # 5. Write Immutable Audit Trail Log (CS-066, CS-087)
+    # 5. Write Immutable Audit Trail Log (CS-066, CS-087, P4-11)
     if log_filepath:
         try:
+            # Rotate if log exceeds 5MB (P4-11)
+            p = Path(log_filepath)
+            if p.exists() and p.stat().st_size > 5_000_000:
+                backup = p.with_suffix('.log.1')
+                if backup.exists():
+                    try:
+                        backup.unlink()
+                    except Exception:
+                        pass
+                p.rename(backup)
+
             with open(log_filepath, "a", encoding="utf-8") as f:
                 f.write(f"\n--- CLEARSIGHT HYGIENE AUDIT: {datetime.datetime.now().isoformat()} ---\n")
                 f.write(f"Evaluated rows: {len(df)} | Total flagged: {int(df['__is_flagged'].sum())}\n")

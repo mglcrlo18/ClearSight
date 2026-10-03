@@ -341,8 +341,45 @@ def build_crosstab_table(
         # Benchmark vs. Total
         for j in range(1, num_banners + 1):
             if is_mean_row:
-                # For means, compare column mean to total mean
-                bm_marker = "-"
+                # vs rest for means (P4-08)
+                mask_col = all_col_masks[j]
+                valid_col = mask_col & df[stub_col].notna()
+                valid_rest = ~mask_col & df[stub_col].notna()
+
+                vals_col = df.loc[valid_col, stub_col].astype(float).to_numpy()
+                vals_col = vals_col[~np.isin(vals_col, list(missing_codes))]
+                w_c = w_all[valid_col.to_numpy()][~np.isin(df.loc[valid_col, stub_col].astype(float).to_numpy(), list(missing_codes))]
+
+                vals_rest = df.loc[valid_rest, stub_col].astype(float).to_numpy()
+                vals_rest = vals_rest[~np.isin(vals_rest, list(missing_codes))]
+                w_r = w_all[valid_rest.to_numpy()][~np.isin(df.loc[valid_rest, stub_col].astype(float).to_numpy(), list(missing_codes))]
+
+                if len(vals_col) > 1 and len(vals_rest) > 1 and w_c.sum() > 0 and w_r.sum() > 0:
+                    m_c = float(np.average(vals_col, weights=w_c))
+                    v_c = float(np.average((vals_col - m_c)**2, weights=w_c) * len(vals_col)/(len(vals_col)-1))
+                    sd_c = math.sqrt(max(0.0, v_c))
+                    neff_c = calculate_kish_neff(w_c)
+
+                    m_r = float(np.average(vals_rest, weights=w_r))
+                    v_r = float(np.average((vals_rest - m_r)**2, weights=w_r) * len(vals_rest)/(len(vals_rest)-1))
+                    sd_r = math.sqrt(max(0.0, v_r))
+                    neff_r = calculate_kish_neff(w_r)
+
+                    t_val, p_val, is_sm = test_means_significance(m_c, sd_c, neff_c, m_r, sd_r, neff_r)
+                    if is_sm:
+                        bm_marker = ""
+                    elif p_val < 0.05 and t_val > 0:
+                        bm_marker = "++"
+                    elif p_val < 0.10 and t_val > 0:
+                        bm_marker = "+"
+                    elif p_val < 0.05 and t_val < 0:
+                        bm_marker = "--"
+                    elif p_val < 0.10 and t_val < 0:
+                        bm_marker = "-"
+                    else:
+                        bm_marker = ""
+                else:
+                    bm_marker = ""
             else:
                 pj = row_vals_num[j]
                 p_tot = row_vals_num[0]
@@ -416,24 +453,58 @@ def build_crosstab_table(
             "is_net": r_def.get("is_net", False)
         })
 
-    # If mean row, calculate one-way ANOVA across banner groups (P3-02)
+    # If mean row, calculate one-way ANOVA across banner groups (P3-02, P4-08)
     anova_info = None
     if metric == "mean" and (is_numeric or is_rating_scale) and num_banners >= 2:
         groups = []
+        group_weights = []
         for c in range(1, num_banners + 1):
             valid_c = all_col_masks[c] & df[stub_col].notna()
             vals_c = df.loc[valid_c, stub_col].astype(float).to_numpy()
-            vals_c = vals_c[~np.isin(vals_c, list(missing_codes))]
+            non_miss = ~np.isin(vals_c, list(missing_codes))
+            vals_c = vals_c[non_miss]
+            w_c = w_all[valid_c.to_numpy()][non_miss]
             if len(vals_c) > 0:
                 groups.append(vals_c)
+                group_weights.append(w_c)
         if len(groups) >= 2:
-            f_stat, f_p = scipy.stats.f_oneway(*groups)
-            anova_info = {
-                "f_stat": float(round(f_stat, 4)),
-                "p_val": float(round(f_p, 4)),
-                "df1": len(groups) - 1,
-                "df2": sum(len(g) for g in groups) - len(groups)
-            }
+            is_weighted_sample = any(not np.allclose(w, 1.0) for w in group_weights)
+            if is_weighted_sample:
+                all_vals = np.concatenate(groups)
+                all_w = np.concatenate(group_weights)
+                w_grand_mean = np.average(all_vals, weights=all_w)
+                k_groups = len(groups)
+                ss_between = sum(
+                    w_i.sum() * (np.average(g_i, weights=w_i) - w_grand_mean) ** 2
+                    for g_i, w_i in zip(groups, group_weights)
+                )
+                df1 = k_groups - 1
+                ms_between = ss_between / df1 if df1 > 0 else 0.0
+
+                ss_within = sum(
+                    np.sum(w_i * (g_i - np.average(g_i, weights=w_i)) ** 2)
+                    for g_i, w_i in zip(groups, group_weights)
+                )
+                df2 = sum(len(g) for g in groups) - k_groups
+                ms_within = ss_within / df2 if df2 > 0 else 1.0
+                f_stat = ms_between / ms_within if ms_within > 0 else 0.0
+                f_p = float(scipy.stats.f.sf(f_stat, df1, df2))
+                anova_info = {
+                    "f_stat": float(round(f_stat, 4)),
+                    "p_val": float(round(f_p, 4)),
+                    "df1": df1,
+                    "df2": df2,
+                    "weighted": True
+                }
+            else:
+                f_stat, f_p = scipy.stats.f_oneway(*groups)
+                anova_info = {
+                    "f_stat": float(round(f_stat, 4)),
+                    "p_val": float(round(f_p, 4)),
+                    "df1": len(groups) - 1,
+                    "df2": sum(len(g) for g in groups) - len(groups),
+                    "weighted": False
+                }
 
     return {
         "title": f"Tabulation: {stub_col}",

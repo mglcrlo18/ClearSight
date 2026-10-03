@@ -39,14 +39,23 @@ import numpy as np
 
 # Philippine Mobile numbers: standard 09xx, DITO 0895-0898, +63 9xx, +63 89x
 PHONE_REGEX = re.compile(
-    r'(?<!\d)(?:\+?63[\s.-]?\(?(?:9\d{2}|89[5-8])\)?|\(?0(?:9\d{2}|89[5-8])\)?|0(?:9\d{2}|89[5-8]))[\s.-]?(?:\d[\s.-]?){7}(?!\d)'
+    r'(?<!\d)(?:\+?63[\s.-]?\(?(?:9\d{2}|89[5-8])\)?|\(?0(?:9\d{2}|89[5-8])\)?|0(?:9\d{2}|89[5-8]))[\s.-]?(?:\d[\s.-]?){6}\d(?!\d)'
 )
 
 # Philippine Landlines: (02) 8123 4567, 02-8123-4567 (with lookaround to avoid masking order numbers like #2024)
 LANDLINE_REGEX = re.compile(r'(?<![\d#])(?:\(0\d{1,2}\)|0\d{1,2})[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)')
 
 EMAIL_REGEX = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
-PHILSYS_REGEX = re.compile(r'(?<![\d#])(?:\d{4}[\s-]\d{4}[\s-]\d{4}(?:[\s-]\d{4})?)(?!\d)')
+CARD_REGEX = re.compile(r'(?<!\d)(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}(?!\d)')
+PHILSYS_REGEX = re.compile(
+    r'(?<![\d#])(?:'
+    r'\d{4}-\d{4}-\d{4}(?:-\d{4})?'
+    r'|'
+    r'(?i:philsys|national\s*id|pcn|psn)[\s:]*\d{4}\s\d{4}\s\d{4}'
+    r'|'
+    r'(?i:(?:philsys|national\s*id|pcn|id)(?:[^\d\n]{1,20}))\d{4}\s\d{4}\s\d{4}\s\d{4}'
+    r')(?!\d)'
+)
 TIN_REGEX = re.compile(r'\b\d{3}[-\s]\d{3}[-\s]\d{3}(?:[-\s]\d{3})?\b')
 SSS_REGEX = re.compile(r'\b\d{2}[-\s]\d{7}[-\s]\d{1}\b')
 PHILHEALTH_REGEX = re.compile(r'\b\d{2}[-\s]\d{9}[-\s]\d{1}\b')
@@ -69,6 +78,7 @@ def scrub_pii(text: Optional[str]) -> str:
 
     scrubbed = PHONE_REGEX.sub("[PHONE_REDACTED]", text_str)
     scrubbed = LANDLINE_REGEX.sub("[PHONE_REDACTED]", scrubbed)
+    scrubbed = CARD_REGEX.sub("[CARD_REDACTED]", scrubbed)
     scrubbed = EMAIL_REGEX.sub("[EMAIL_REDACTED]", scrubbed)
     scrubbed = PHILSYS_REGEX.sub("[PHILSYS_REDACTED]", scrubbed)
     scrubbed = TIN_REGEX.sub("[TIN_REDACTED]", scrubbed)

@@ -1,6 +1,16 @@
 // ClearSight Analytics - Frontend Interaction Engine
 // Fully connected to Localhost Analytical Server (Zero-Cloud Ingestion, Real Raking & Dual Significance)
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 let currentStep = 1;
 let currentConfidence = 95;
 let isFDREnabled = true;
@@ -916,7 +926,7 @@ function renderTableFromData(tables) {
     if (t.error) {
         const tbody = document.getElementById('table-body');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="99" style="text-align:center; padding: 2rem; color: #dc2626; font-weight: 500;">⚠ ${t.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="99" style="text-align:center; padding: 2rem; color: #dc2626; font-weight: 500;">⚠ ${escapeHtml(t.error)}</td></tr>`;
         }
         return;
     }
@@ -1072,7 +1082,6 @@ function renderTableFromData(tables) {
                 });
                 tbody.appendChild(trBench);
             }
-        });
         });
     });
 

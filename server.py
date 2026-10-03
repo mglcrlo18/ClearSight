@@ -478,6 +478,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 self.send_error(500, f"Failed to generate export file: {filename}")
         except NotImplementedError as nie:
             self.send_error(501, str(nie))
+        except ValueError as ve:
+            self.send_error(400, str(ve))
         except Exception as e:
             logging.exception(f"Export error: {e}")
             self.send_error(500, f"Export error: {e}")
@@ -500,7 +502,9 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         weighted_n = round(float(SESSION["weights"].sum()), 1) if SESSION.get("weights") is not None else float(n)
 
         if "Banner_Book" in filename:
-            tables = SESSION.get("last_tabulation") or self.build_default_tables()
+            tables = SESSION.get("last_tabulation")
+            if not tables:
+                raise ValueError("Build at least one table first.")
             fdr_mode = "Benjamini-Hochberg False Discovery Rate (FDR)" if SESSION.get("fdr_enabled", True) else "None (Uncorrected)"
             metadata = {
                 "date_range": SESSION.get("field_dates") or "N/A",
@@ -522,6 +526,9 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         downloads_dir = get_downloads_dir()
 
         if path == "/api/export/save-to-downloads":
+            if not SESSION.get("last_tabulation"):
+                self.send_json_response({"status": "error", "message": "Build at least one table first."}, 400)
+                return
             target_file = os.path.join(downloads_dir, "ClearSight_Agency_Banner_Book.xlsx")
             self.generate_export_artifacts("ClearSight_Agency_Banner_Book.xlsx", target_file)
             safe_reveal_in_finder(target_file)
