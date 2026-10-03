@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClearSight - Survey Tabulation & Taglish Insights</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <!-- Top Chrome & Navigation Bar -->
+    <header class="app-header">
+        <div class="brand-zone">
+            <div class="logo-mark">CS</div>
+            <div>
+                <div class="app-title">CLEARSIGHT <span class="app-byline">ANALYTICS</span></div>
+                <div class="app-subtitle">Zero-Cloud Survey Tabulation & Taglish Insights</div>
+            </div>
+        </div>
+
+        <nav class="workflow-stepper">
+            <button class="step-btn active" onclick="switchStep(1)">
+                <span class="step-num">1</span>
+                <span>Import Data</span>
+            </button>
+            <div class="step-line"></div>
+            <button class="step-btn" onclick="switchStep(2)">
+                <span class="step-num">2</span>
+                <span>Clean & Weight</span>
+            </button>
+            <div class="step-line"></div>
+            <button class="step-btn" onclick="switchStep(3)">
+                <span class="step-num">3</span>
+                <span>Table Studio</span>
+            </button>
+            <div class="step-line"></div>
+            <button class="step-btn" onclick="switchStep(4)">
+                <span class="step-num">4</span>
+                <span>Snapshot & Export</span>
+            </button>
+        </nav>
+
+        <div class="header-status">
+            <span class="status-pill active-pill">● Local Sandbox (RAM Only)</span>
+            <span class="status-pill dpa-pill">RA 10173 Compliant</span>
+        </div>
+    </header>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast-notification hidden"></div>
+
+    <!-- Main Dynamic Content Workspace -->
+    <main class="main-viewport">
+        <!-- Step 1: Import Data -->
+        <section id="step-1" class="step-pane active-pane">
+            <div class="hero-card">
+                <h2>Bring Your Survey Data</h2>
+                <p>Zero-cloud local processing. Works with Google Forms, Excel (.xlsx), CSV, and SPSS (.sav).</p>
+                
+                <div class="drop-zone" id="drop-zone">
+                    <div class="upload-icon">📥</div>
+                    <div class="drop-title">Drop your survey file here or browse</div>
+                    <div class="drop-meta">Google Forms CSV, Excel (.xlsx), or SPSS (.sav) — Data never leaves your computer.</div>
+                    <button class="primary-btn" onclick="loadSampleDataset()">⚡ Load Sample Philippine Consumer Survey (n=412)</button>
+                </div>
+
+                <div id="import-summary-card" class="import-summary hidden">
+                    <div class="summary-header">
+                        <h3>Detected Survey Schema & Sanitization Check</h3>
+                        <span class="badge-success">Ready for Tabulation</span>
+                    </div>
+                    <div class="summary-stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-number" id="detected-respondents">412</div>
+                            <div class="stat-desc">Total Respondents</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="detected-multi">3</div>
+                            <div class="stat-desc">Multi-Select (Resolved Comma Delimiters)</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="detected-scales">4</div>
+                            <div class="stat-desc">Rating Scale Batteries</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-number" id="detected-open">2</div>
+                            <div class="stat-desc">Taglish Open-Ends</div>
+                        </div>
+                    </div>
+                    <button class="action-btn-green" onclick="switchStep(2)">Proceed to Clean & Weighting →</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 2: Clean & Weight -->
+        <section id="step-2" class="step-pane">
+            <div class="split-layout">
+                <div class="panel-card">
+                    <h3>Data Hygiene Checklist</h3>
+                    <p class="panel-desc">Flagged records are quarantined without destructive deletions. Defendable in client audits.</p>
+                    
+                    <div class="hygiene-list">
+                        <div class="hygiene-item">
+                            <div class="hygiene-info">
+                                <b>Straight-Liners</b>
+                                <span>Zero variance across 5-point Likert matrices</span>
+                            </div>
+                            <span class="tag-warn">4 flagged</span>
+                            <label class="switch">
+                                <input type="checkbox" checked onchange="toggleHygiene()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="hygiene-item">
+                            <div class="hygiene-info">
+                                <b>Speeders</b>
+                                <span>Completed survey in &lt; 1/3 of median time</span>
+                            </div>
+                            <span class="tag-warn">6 flagged</span>
+                            <label class="switch">
+                                <input type="checkbox" checked onchange="toggleHygiene()">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="hygiene-item">
+                            <div class="hygiene-info">
+                                <b>Demographic Duplicates</b>
+                                <span>Identical age, region, and timestamp profile</span>
+                            </div>
+                            <span class="tag-info">0 flagged</span>
+                            <label class="switch">
+                                <input type="checkbox" checked disabled>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="audit-box">
+                        <small>Audit Trail: <code>cleaning_audit_trail.log</code> active in local memory.</small>
+                    </div>
+                </div>
+
+                <div class="panel-card">
+                    <h3>Deming-Stephan Rim Weighting</h3>
+                    <p class="panel-desc">Balances sample marginals to national benchmarks with Kish Effective Base calculation.</p>
+                    
+                    <div class="weighting-form">
+                        <div class="weight-group">
+                            <label>Target Benchmark: Region (PSA 2024 Household Census)</label>
+                            <div class="margin-row"><span>NCR: 14%</span> | <span>Balance Luzon: 45%</span> | <span>Visayas: 20%</span> | <span>Mindanao: 21%</span></div>
+                        </div>
+                        <div class="weight-group">
+                            <label>Target Benchmark: Gender Distribution</label>
+                            <div class="margin-row"><span>Female: 51%</span> | <span>Male: 49%</span></div>
+                        </div>
+                        <div class="trim-slider-box">
+                            <div class="slider-label">
+                                <span>Soft Mean-Shift Weight Trimming:</span>
+                                <b id="trim-val">95th Percentile</b>
+                            </div>
+                            <input type="range" min="90" max="99" value="95" class="range-slider" oninput="updateTrim(this.value)">
+                        </div>
+                        <button class="primary-btn" onclick="executeWeighting()">Calculate Raking Weights & Kish Base</button>
+                    </div>
+
+                    <div id="weighting-results" class="weight-metrics-card">
+                        <div class="metric-row">
+                            <span>Unweighted Sample Size (N):</span>
+                            <b>412</b>
+                        </div>
+                        <div class="metric-row">
+                            <span>Kish Effective Sample Size (Neff):</span>
+                            <b id="neff-disp">389.2</b>
+                        </div>
+                        <div class="metric-row">
+                            <span>Weighting Efficiency:</span>
+                            <b id="eff-disp" style="color: #10B981;">94.5%</b>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="text-align: right; margin-top: 18px;">
+                <button class="action-btn-green" onclick="switchStep(3)">Launch Table Studio →</button>
+            </div>
+        </section>
+
+        <!-- Step 3: Custom Table Studio -->
+        <section id="step-3" class="step-pane">
+            <!-- Conversational Prompt-to-Table Bar -->
+            <div class="prompt-bar-container">
+                <div class="prompt-icon">✨</div>
+                <input type="text" id="prompt-input" class="prompt-input" placeholder="Ask ClearSight in English or Taglish (e.g. 'Cross-tabulate brand satisfaction by age for NCR buyers only')...">
+                <button class="prompt-btn" onclick="executePromptToTable()">Generate Custom Table</button>
+            </div>
+
+            <div class="table-studio-layout">
+                <!-- Variable Drawer (Sidebar) -->
+                <aside class="variable-drawer">
+                    <div class="drawer-header">
+                        <h4>Survey Variables</h4>
+                        <span class="badge-mini">Drag to Canvas</span>
+                    </div>
+                    <div class="variable-list" id="variable-list">
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Brand Preference (Multi-Select)">
+                            <span class="pill-dot purple"></span> Brand Preference (Multi-Select)
+                        </div>
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Overall CSAT (1-5 Likert)">
+                            <span class="pill-dot green"></span> Overall CSAT (1-5 Likert)
+                        </div>
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Repurchase Intent">
+                            <span class="pill-dot green"></span> Repurchase Intent (1-5)
+                        </div>
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Region">
+                            <span class="pill-dot blue"></span> Region (NCR, BL, Vis, Min)
+                        </div>
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Age Generation">
+                            <span class="pill-dot blue"></span> Age (Gen Z, Millennial, Gen X)
+                        </div>
+                        <div class="var-pill" draggable="true" ondragstart="drag(event)" data-var="Monthly Income Class">
+                            <span class="pill-dot blue"></span> SEC / Income (ABC, D, E)
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Interactive Table Canvas -->
+                <div class="table-canvas">
+                    <div class="drop-tray-container">
+                        <div class="tray-row">
+                            <span class="tray-label">Banner (Columns):</span>
+                            <div class="drop-tray" id="banner-tray" ondrop="dropBanner(event)" ondragover="allowDrop(event)">
+                                <span class="tag-pill">Total</span>
+                                <span class="tag-pill">NCR (A)</span>
+                                <span class="tag-pill">Balance Luzon (B)</span>
+                                <span class="tag-pill">Visayas (C)</span>
+                                <span class="tag-pill">Mindanao (D)</span>
+                            </div>
+                        </div>
+                        <div class="tray-row">
+                            <span class="tray-label">Stub (Rows):</span>
+                            <div class="drop-tray" id="stub-tray" ondrop="dropStub(event)" ondragover="allowDrop(event)">
+                                <span class="tag-pill">Q1: Brand Preference</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Significance & Display Controls -->
+                    <div class="canvas-controls">
+                        <div class="control-cluster">
+                            <span>Dual Sig Display:</span>
+                            <button class="pill-toggle active-toggle" id="btn-sig-both" onclick="setSigDisplayMode('both')">Both Rows</button>
+                            <button class="pill-toggle" id="btn-sig-letters" onclick="setSigDisplayMode('letters')">Letters (Col)</button>
+                            <button class="pill-toggle" id="btn-sig-bench" onclick="setSigDisplayMode('bench')">vs Total (+/-, ++/--)</button>
+                        </div>
+                        <div class="control-cluster">
+                            <span>Confidence:</span>
+                            <button class="pill-toggle" onclick="setConfidence(90)">90% (a/b/c, +/-)</button>
+                            <button class="pill-toggle active-toggle" onclick="setConfidence(95)">95% (A/B/C, ++/--)</button>
+                        </div>
+                        <div class="control-cluster">
+                            <span>Metric:</span>
+                            <button class="pill-toggle active-toggle" onclick="setMetric('pct')">Column %</button>
+                            <button class="pill-toggle" onclick="setMetric('t2b')">Top-2-Box (T2B)</button>
+                            <button class="pill-toggle" onclick="setMetric('mean')">Scale Mean</button>
+                        </div>
+                    </div>
+
+                    <!-- Live Crosstab Matrix with Dual Significance Rows -->
+                    <div class="table-scroll-wrapper">
+                        <table class="agency-table" id="crosstab-table">
+                            <thead>
+                                <tr>
+                                    <th class="stub-header">Category / Brand Option</th>
+                                    <th>Total</th>
+                                    <th>NCR (A)</th>
+                                    <th>Balance Luzon (B)</th>
+                                    <th>Visayas (C)</th>
+                                    <th>Mindanao (D)</th>
+                                </tr>
+                                <tr class="meta-row">
+                                    <td>Column Names</td>
+                                    <td>Total</td>
+                                    <td>A</td>
+                                    <td>B</td>
+                                    <td>C</td>
+                                    <td>D</td>
+                                </tr>
+                                <tr class="meta-row">
+                                    <td>Column Sample Size (N)</td>
+                                    <td>412</td>
+                                    <td>120</td>
+                                    <td>150</td>
+                                    <td>72</td>
+                                    <td>70</td>
+                                </tr>
+                                <tr class="meta-row">
+                                    <td>Kish Effective Base (Neff)</td>
+                                    <td>389.2</td>
+                                    <td>113.8</td>
+                                    <td>141.6</td>
+                                    <td>68.1</td>
+                                    <td>65.7</td>
+                                </tr>
+                            </thead>
+                            <tbody id="table-body">
+                                <!-- Populated dynamically by app.js -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Taglish Qualitative Coder with Human Lock-Step -->
+            <div class="qual-studio-card">
+                <div class="qual-header">
+                    <div>
+                        <h4>Taglish Qualitative Verbatim Analysis</h4>
+                        <div class="qual-sub">Automatic morphosyntax disambiguation with Human Lock-Step verification.</div>
+                    </div>
+                    <div class="lock-status">
+                        <span id="agreement-score">Observed Agreement: <b>88.5%</b> (on 26 audited answers)</span>
+                        <button class="lock-btn" id="lock-btn" onclick="toggleLock()">🔒 Lock Codeframe</button>
+                    </div>
+                </div>
+
+                <div class="codeframe-grid">
+                    <div class="code-item">
+                        <div class="code-title">
+                            <b>Affordable / High Value (Sulit)</b>
+                            <span class="code-pct">46.2% (190)</span>
+                        </div>
+                        <div class="code-quote">"Sobrang sulit ng promo nila lalo na kung bulk order..." [Resp #84]</div>
+                    </div>
+                    <div class="code-item">
+                        <div class="code-title">
+                            <b>Expensive / High Pricing Friction</b>
+                            <span class="code-pct">31.8% (131)</span>
+                        </div>
+                        <div class="code-quote">"Medyo mahal na yung shipping fee sa probinsya..." [Resp #142]</div>
+                    </div>
+                    <div class="code-item">
+                        <div class="code-title">
+                            <b>Slow Logistics / Delivery Delay</b>
+                            <span class="code-pct">22.1% (91)</span>
+                        </div>
+                        <div class="code-quote">"Mabagal mag-deliver kapag weekend..." [Resp #305]</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: right; margin-top: 18px;">
+                <button class="action-btn-green" onclick="switchStep(4)">Proceed to Snapshot & Export →</button>
+            </div>
+        </section>
+
+        <!-- Step 4: Snapshot & Export -->
+        <section id="step-4" class="step-pane">
+            <div class="export-hero">
+                <h2>Export Executive Deliverables</h2>
+                <p>One-click delivery in agency formats. All formulas, significance markers, and quotes preserved.</p>
+                
+                <div class="export-grid">
+                    <div class="export-card">
+                        <div class="card-icon">📊</div>
+                        <h3>Excel Banner Book (.xlsx)</h3>
+                        <p>Multi-tab workbook with <b>Dual Significance rows</b> (Letters + Benchmark <code>+/++</code>, <code>-/--</code>), active formulas, and base sizes.</p>
+                        <button class="download-btn" id="btn-dl-excel" onclick="downloadExcel()">📥 Download Excel Banner Book</button>
+                    </div>
+
+                    <div class="export-card">
+                        <div class="card-icon">📄</div>
+                        <h3>Customer Voice Snapshot (A4 PDF)</h3>
+                        <p>1-Page executive brief featuring KPIs, statistically verified highlights, and 30-day action matrix.</p>
+                        <button class="download-btn" onclick="downloadSnapshot()">📥 Open 1-Page A4 Snapshot</button>
+                    </div>
+
+                    <div class="export-card">
+                        <div class="card-icon">🎓</div>
+                        <h3>Thesis Chapter 4 Package</h3>
+                        <p>Formatted academic tables with automated statistical interpretation lines ready for defense panels.</p>
+                        <button class="download-btn" onclick="downloadThesisTables()">📥 Download Academic Tables</button>
+                    </div>
+                </div>
+
+                <!-- Preview Frame of Customer Voice Snapshot -->
+                <div class="preview-container">
+                    <div class="preview-header">Live A4 Snapshot Preview</div>
+                    <iframe id="snapshot-frame" src="/preview-snapshot" class="snapshot-iframe"></iframe>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
