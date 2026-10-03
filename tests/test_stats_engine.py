@@ -11,18 +11,18 @@ try:
 except ImportError:
     pytest = None
 
-from engine.stats_engine import (
-    f_distribution_p_value,
-    normal_p_value_2sided,
-    calculate_kish_neff,
-    calculate_rim_weights,
-    test_pairwise_proportions,
-    test_vs_total_benchmark,
-    test_means_significance,
-    apply_fdr_benjamini_hochberg,
-    apply_fdr_benjamini_yekutieli,
-    rao_scott_second_order_mrcv
-)
+import engine.stats_engine as se
+
+f_distribution_p_value = se.f_distribution_p_value
+normal_p_value_2sided = se.normal_p_value_2sided
+calculate_kish_neff = se.calculate_kish_neff
+calculate_rim_weights = se.calculate_rim_weights
+z_test_pairwise_proportions = se.test_pairwise_proportions
+z_test_vs_total_benchmark = se.test_vs_total_benchmark
+welch_t_test_means = se.test_means_significance
+apply_fdr_benjamini_hochberg = se.apply_fdr_benjamini_hochberg
+apply_fdr_benjamini_yekutieli = se.apply_fdr_benjamini_yekutieli
+rao_scott_second_order_mrcv = se.rao_scott_second_order_mrcv
 from engine.driver_analysis import compute_johnsons_relative_weights
 
 
@@ -95,7 +95,7 @@ def test_benchmark_vs_rest_of_sample():
     """CS-014: Column vs rest-of-sample benchmark test eliminates part-whole overlap bias."""
     # Column: n=100, p=0.60. Total: N=400, p=0.45.
     # Rest of sample: n=300, p = (400*0.45 - 100*0.60) / 300 = (180 - 60)/300 = 120/300 = 0.40.
-    marker = test_vs_total_benchmark(p_col=0.60, p_total=0.45, n_col=100, n_total=400)
+    marker = z_test_vs_total_benchmark(p_col=0.60, p_total=0.45, n_col=100, n_total=400)
     # The true difference (0.60 vs 0.40) is highly significant
     assert marker == "++"
 

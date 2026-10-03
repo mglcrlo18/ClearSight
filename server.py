@@ -136,6 +136,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(content)))
+        self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self';")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
@@ -145,13 +146,12 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
     def serve_file(self, filepath: str, mime_type: str):
         """Serves file safely, strictly checking for path traversal."""
         real_filepath = os.path.realpath(filepath)
-        real_curr_dir = os.path.realpath(CURR_DIR)
+        real_static_dir = os.path.realpath(os.path.join(CURR_DIR, "static"))
 
-        # Enforce that served file is strictly within the project directory
-        if not real_filepath.startswith(real_curr_dir):
+        # Strictly confine to the static directory (CS-007 resolution)
+        if not (real_filepath == real_static_dir or real_filepath.startswith(real_static_dir + os.sep)):
             self.send_error(404, "Resource not found.")
             return
-
         if not os.path.isfile(real_filepath):
             self.send_error(404, "Resource not found.")
             return
@@ -162,6 +162,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", mime_type)
             self.send_header("Content-Length", str(len(content)))
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self';")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "SAMEORIGIN")
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
@@ -185,21 +186,69 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             mime, _ = mimetypes.guess_type(local_path)
             self.serve_file(local_path, mime or "application/octet-stream")
         elif path == "/preview-snapshot":
-            # Generate snapshot into temp directory
-            tmp_snapshot = os.path.join(tempfile.gettempdir(), "clearsight_snapshot_preview.html")
+            # Generate snapshot directly and stream (CS-N05 resolution)
             n = len(SESSION["df"]) if SESSION["df"] is not None else 412
             diag = SESSION["weight_diagnostics"] or {}
-            neff = diag.get("kish_n_eff", 389.2)
-            eff = diag.get("weighting_efficiency_pct", 94.5)
+            neff = diag.get("kish_n_eff", float(n))
+            eff = diag.get("weighting_efficiency_pct", 100.0)
+
+            # Compute actual CSAT if available
+            csat_val = "84.2%"
+            if SESSION["df"] is not None:
+                for c in SESSION["df"].columns:
+                    if any(k in c.lower() for k in ["csat", "satisfaction"]):
+                        s_vals = pd.to_numeric(SESSION["df"][c], errors="coerce").dropna()
+                        if len(s_vals) > 0 and s_vals.max() <= 5:
+                            csat_val = f"{(s_vals >= 4).mean() * 100:.1f}%"
+                        break
+
+            # Extract actual delights and frictions from NLP coding if available
+            findings = []
+            delights = []
+            frictions = []
+            if SESSION.get("open_feedback_analysis"):
+                cframe = SESSION["open_feedback_analysis"].get("codeframe", [])
+                for item in cframe:
+                    t_name = item.get("theme", "")
+                    quotes = item.get("evidence_samples", [])
+                    if quotes:
+                        q_text = quotes[0].get("quote", "")
+                        if any(w in t_name for w in ["Sulit", "Service", "Affordable", "Affinity"]):
+                            delights.append({"quote": q_text, "author": f"Respondent ({t_name.split('/')[0].strip()})"})
+                        else:
+                            frictions.append({"quote": q_text, "author": f"Respondent ({t_name.split('/')[0].strip()})"})
+
             data = {
-                "project_title": SESSION.get("filename", "Philippine Consumer Study"),
+                "project_title": SESSION.get("filename", "Customer Voice Analysis"),
                 "sample_n": n,
                 "eff_n": neff,
-                "csat_score": "84.2%",
-                "weighting_eff": f"{eff}%"
+                "csat_score": csat_val,
+                "weighting_eff": f"{eff}%",
+                "findings": findings if findings else None,
+                "delights": delights if delights else None,
+                "frictions": frictions if frictions else None
             }
-            generate_customer_voice_snapshot_html(tmp_snapshot, data)
-            self.serve_file(tmp_snapshot, "text/html; charset=utf-8")
+            with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp_f:
+                tmp_path = tmp_f.name
+            try:
+                generate_customer_voice_snapshot_html(tmp_path, data)
+                with open(tmp_path, "rb") as f:
+                    snap_bytes = f.read()
+            finally:
+                if os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except Exception:
+                        pass
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(snap_bytes)))
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-src 'self';")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+            self.end_headers()
+            self.wfile.write(snap_bytes)
         elif path == "/api/dataset-status":
             has_data = SESSION["df"] is not None
             resp = {
@@ -324,12 +373,45 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             df = SESSION["df"]
             banner_cols = req_data.get("banner_cols", ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"])
             stubs = req_data.get("stubs", ["Brand Preference"])
-            confidence = req_data.get("confidence", 95)
-            fdr_enabled = req_data.get("fdr_enabled", True)
+            confidence = int(req_data.get("confidence", 95))
+            fdr_enabled = bool(req_data.get("fdr_enabled", True))
+            metric = req_data.get("metric", "pct")
 
-            result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled)
+            result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric)
             SESSION["last_tabulation"] = result
             self.send_json_response({"status": "success", "table": result})
+
+        elif path == "/api/code-open-ends":
+            if SESSION["df"] is None:
+                load_bundled_sample()
+
+            df = SESSION["df"]
+            open_col = None
+            for col in df.columns:
+                if any(k in col.lower() for k in ["open", "feedback", "comment", "verbatim", "text"]):
+                    open_col = col
+                    break
+            if not open_col:
+                for col in df.columns:
+                    if df[col].dtype == object and df[col].dropna().astype(str).str.len().mean() > 15:
+                        open_col = col
+                        break
+
+            if not open_col:
+                self.send_json_response({"status": "error", "message": "No open-ended feedback column found in dataset."}, 400)
+                return
+
+            verbatims = df[open_col].dropna().astype(str).tolist()
+            coding_results = batch_code_open_ends(verbatims)
+            SESSION["open_feedback_analysis"] = coding_results
+
+            self.send_json_response({
+                "status": "success",
+                "column": open_col,
+                "total_analyzed": coding_results.get("total_analyzed", len(verbatims)),
+                "codeframe": coding_results.get("codeframe", []),
+                "records": coding_results.get("records", [])[:50]
+            })
 
         elif path in ["/api/export/save-to-downloads", "/api/export/save-snapshot-to-downloads", "/api/export/save-thesis-to-downloads"]:
             self.handle_save_to_downloads(path)
@@ -337,24 +419,32 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Endpoint not found.")
 
     def stream_export_file(self, filename: str, mime_type: str):
-        """Streams generated file from temporary directory to browser as attachment."""
-        tmp_path = os.path.join(tempfile.gettempdir(), filename)
-        if not os.path.exists(tmp_path):
-            # Generate it on demand
-            self.generate_export_artifacts(filename, tmp_path)
+        """Streams generated file fresh on demand, eliminating stale caching (CS-N03)."""
+        suffix = os.path.splitext(filename)[1]
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_f:
+            tmp_path = tmp_f.name
 
-        if os.path.exists(tmp_path):
-            with open(tmp_path, "rb") as f:
-                content = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", mime_type)
-            self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
-            self.send_header("Content-Length", str(len(content)))
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.end_headers()
-            self.wfile.write(content)
-        else:
-            self.send_error(500, f"Failed to generate export file: {filename}")
+        try:
+            self.generate_export_artifacts(filename, tmp_path)
+            if os.path.exists(tmp_path):
+                with open(tmp_path, "rb") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", mime_type)
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+                self.send_header("Content-Length", str(len(content)))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.end_headers()
+                self.wfile.write(content)
+            else:
+                self.send_error(500, f"Failed to generate export file: {filename}")
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
 
     def generate_export_artifacts(self, filename: str, target_path: str):
         """Generates export file from current session data."""
@@ -427,190 +517,41 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 "filename": "ClearSight_Thesis_Chapter_4_Package.html"
             })
 
-    def execute_tabulation(self, df, banner_cols, stubs, confidence, fdr_enabled):
-        """Computes cross-tabulation table with rigorous dual significance testing."""
-        from openpyxl.utils import get_column_letter
-        import zlib
+    def execute_tabulation(self, df, banner_cols, stubs, confidence=95, fdr_enabled=True, metric="pct"):
+        """Computes cross-tabulation table with rigorous dual significance testing on real microdata."""
+        from engine.tabulation_engine import build_crosstab_table
 
-        total_n = len(df) if df is not None else 412
+        conf_float = 0.95 if int(confidence) == 95 else (0.90 if int(confidence) == 90 else 0.99)
         weights = SESSION.get("weights")
-        total_neff = calculate_kish_neff(weights) if weights is not None else float(total_n)
 
-        col_letters = ["Total"]
-        for idx in range(1, len(banner_cols)):
-            col_letters.append(get_column_letter(idx))
-
-        # Build dynamic tables for all stubs and unlimited banner columns
         tables = []
         for stub_name in stubs:
-            t = {
-                "title": f"Tabulation: {stub_name}",
-                "banner_cols": banner_cols,
-                "col_letters": col_letters,
-                "unweighted_bases": [total_n] + [max(15, total_n // (len(banner_cols) - 1 or 1))] * (len(banner_cols) - 1),
-                "weighted_bases": [float(total_n)] + [float(total_n // (len(banner_cols) - 1 or 1))] * (len(banner_cols) - 1),
-                "effective_bases": [total_neff] + [float(total_neff // (len(banner_cols) - 1 or 1))] * (len(banner_cols) - 1),
-                "rows": []
-            }
-
-            stub_lower = stub_name.lower()
-            if "brand" in stub_lower:
-                row_items = [
-                    ("NET: Any Brand Mentioned", 0.942),
-                    ("Brand A (Premium Nanotech)", 0.425),
-                    ("Brand B (Standard Market)", 0.311),
-                    ("Brand C (Bio-Oil Formulation)", 0.264),
-                    ("Brand D (Local Artisan Batch)", 0.182)
-                ]
-            elif "csat" in stub_lower or "satisfaction" in stub_lower:
-                row_items = [
-                    ("NET: Top-2-Box (Satisfied/Very Satisfied)", 0.842),
-                    ("5 - Very Satisfied", 0.485),
-                    ("4 - Somewhat Satisfied", 0.357),
-                    ("3 - Neutral / Neither", 0.102),
-                    ("1-2 - Dissatisfied", 0.056)
-                ]
-            elif "repurchase" in stub_lower or "intent" in stub_lower:
-                row_items = [
-                    ("NET: High Repurchase Intent (Top-2-Box)", 0.785),
-                    ("Definitely Will Repurchase (5)", 0.442),
-                    ("Probably Will Repurchase (4)", 0.343),
-                    ("Might or Might Not (3)", 0.141),
-                    ("Unlikely to Repurchase (1-2)", 0.074)
-                ]
-            elif "age" in stub_lower:
-                row_items = [
-                    ("Generation Z (18–27)", 0.374),
-                    ("Millennials (28–43)", 0.408),
-                    ("Generation X (44–59)", 0.218)
-                ]
-            elif "region" in stub_lower:
-                row_items = [
-                    ("National Capital Region (NCR)", 0.291),
-                    ("Balance Luzon", 0.364),
-                    ("Visayas", 0.175),
-                    ("Mindanao", 0.170)
-                ]
-            elif "sec" in stub_lower or "income" in stub_lower:
-                row_items = [
-                    ("Class ABC (Upper to Upper-Middle)", 0.199),
-                    ("Class D (Middle to Lower-Middle)", 0.597),
-                    ("Class E (Low Income / Subsistence)", 0.204)
-                ]
-            else:
-                row_items = [
-                    (f"NET: Positive ({stub_name})", 0.765),
-                    ("High Rating / Favorable", 0.450),
-                    ("Moderate / Neutral", 0.315),
-                    ("Low / Unfavorable", 0.235)
-                ]
-
-            for label, base_rate in row_items:
-                vals = [f"{base_rate * 100.0:.1f}%"]
-                sig_lets = ["-"]
-                benchs = ["-"]
-                val_nums = [base_rate * 100.0]
-
-                for c_idx, col_name in enumerate(banner_cols[1:], start=1):
-                    clean_c = col_name.lower()
-                    delta = 0.0
-                    if "ncr" in clean_c or "manila" in clean_c:
-                        delta = 12.5 if "brand a" in label.lower() or "5" in label else -3.0
-                    elif "luzon" in clean_c:
-                        delta = -4.5 if "brand a" in label.lower() else 2.5
-                    elif "visayas" in clean_c:
-                        delta = 6.9 if "brand c" in label.lower() else -3.5
-                    elif "mindanao" in clean_c:
-                        delta = 1.2
-                    elif "gen z" in clean_c or "18" in clean_c:
-                        delta = 14.8 if "brand a" in label.lower() or "top-2-box" in label.lower() else -5.0
-                    elif "millennial" in clean_c:
-                        delta = 2.2
-                    elif "gen x" in clean_c:
-                        delta = -16.5 if "brand a" in label.lower() else 8.0
-                    elif "male" in clean_c:
-                        delta = 4.0 if "brand a" in label.lower() else -2.0
-                    elif "female" in clean_c:
-                        delta = -4.0 if "brand a" in label.lower() else 3.5
-                    elif "abc" in clean_c:
-                        delta = 16.0 if "brand a" in label.lower() or "top-2-box" in label.lower() else -7.0
-                    elif "d" in clean_c:
-                        delta = 1.5
-                    elif "e" in clean_c:
-                        delta = -11.0 if "brand a" in label.lower() else 6.5
-                    else:
-                        h = zlib.crc32((clean_c + label).encode('utf-8')) % 1000
-                        delta = (h / 1000.0 * 20.0) - 10.0
-
-                    v_num = max(1.0, min(99.0, (base_rate * 100.0) + delta))
-                    val_nums.append(v_num)
-                    vals.append(f"{v_num:.1f}%")
-
-                    diff = v_num - (base_rate * 100.0)
-                    bm = ""
-                    if diff >= 7.0: bm = "++"
-                    elif diff >= 3.5: bm = "+"
-                    elif diff <= -7.0: bm = "--"
-                    elif diff <= -3.5: bm = "-"
-                    benchs.append(bm)
-
-                for c_idx in range(1, len(banner_cols)):
-                    letters_won = []
-                    for o_idx in range(1, len(banner_cols)):
-                        if o_idx == c_idx: continue
-                        if val_nums[c_idx] - val_nums[o_idx] >= 7.0:
-                            letters_won.append(col_letters[o_idx])
-                    sig_lets.append(" ".join(letters_won))
-
-                t["rows"].append({
-                    "label": label,
-                    "values": vals,
-                    "sig_letters": sig_lets,
-                    "sig_benchmarks": benchs,
-                    "is_net": "NET" in label or "Top-2-Box" in label
-                })
-
+            t = build_crosstab_table(
+                df=df,
+                stub_name=stub_name,
+                banner_cols_input=banner_cols,
+                weights=weights,
+                confidence_level=conf_float,
+                fdr_enabled=fdr_enabled,
+                metric=metric
+            )
             tables.append(t)
         return tables
 
     def build_default_tables(self):
-        """Constructs default agency tables using current dataset metrics."""
-        diag = SESSION.get("weight_diagnostics") or {}
-        n = len(SESSION["df"]) if SESSION["df"] is not None else 412
-        neff = diag.get("kish_n_eff", 389.2)
+        """Constructs default agency tables using real dataset metrics."""
+        from engine.tabulation_engine import build_crosstab_table
+        df = SESSION.get("df")
+        if df is None:
+            load_bundled_sample()
+            df = SESSION.get("df")
+
+        weights = SESSION.get("weights")
+        banner_var = "Region" if "Region" in df.columns else (df.columns[1] if len(df.columns) > 1 else df.columns[0])
+        stub_var = "Brand_Preference" if "Brand_Preference" in df.columns else df.columns[0]
 
         return [
-            {
-                "title": "Q1: Brand Preference by Region",
-                "banner_cols": ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"],
-                "col_letters": ["Total", "A", "B", "C", "D"],
-                "unweighted_bases": [n, 120, 150, 72, 70],
-                "weighted_bases": [float(n), 57.7, 185.4, 82.4, 86.5],
-                "effective_bases": [neff, 54.1, 178.2, 78.0, 81.3],
-                "rows": [
-                    {
-                        "label": "Brand A (Premium Nanotech)",
-                        "values": ["42.5%", "55.0%", "38.0%", "36.1%", "40.2%"],
-                        "sig_letters": ["-", "B C D", "", "", ""],
-                        "sig_benchmarks": ["-", "++", "", "-", ""],
-                        "is_net": False
-                    },
-                    {
-                        "label": "Brand B (Standard Market)",
-                        "values": ["31.1%", "28.3%", "33.5%", "30.6%", "32.0%"],
-                        "sig_letters": ["-", "", "", "", ""],
-                        "sig_benchmarks": ["-", "", "", "", ""],
-                        "is_net": False
-                    },
-                    {
-                        "label": "Brand C (Bio-Oil Formulation)",
-                        "values": ["26.4%", "16.7%", "28.5%", "33.3%", "27.8%"],
-                        "sig_letters": ["-", "", "A", "A", ""],
-                        "sig_benchmarks": ["-", "--", "", "+", ""],
-                        "is_net": False
-                    }
-                ]
-            }
+            build_crosstab_table(df, stub_var, ["Total", banner_var], weights=weights)
         ]
 
 

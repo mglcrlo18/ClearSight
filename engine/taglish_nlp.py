@@ -31,8 +31,7 @@ UMID_REGEX = re.compile(r'\b\d{4}[-\s]\d{7}[-\s]\d{1}\b')
 
 # Name honorifics in Philippine English / Tagalog
 NAME_HONORIFICS = re.compile(
-    r'\b(?:si|kay|ni|mr\.|ms\.|mrs\.|dr\.|doc|atty\.|attorney)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b', 
-    re.IGNORECASE
+    r'\b(?i:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|si\b|kay\b|ni\b)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b'
 )
 
 
@@ -74,7 +73,7 @@ def normalize_taglish_affixes(token: str) -> str:
 
 
 PRICE_KEYWORDS = {"presyo", "bayad", "shipping", "sf", "fee", "cost", "gastos", "price", "singil", "pamasahe"}
-AFFINITY_KEYWORDS = {"ko", "namin", "talaga", "customer", "serbisyo", "ganda", "loyal", "love", "gusto", "bait"}
+AFFINITY_KEYWORDS = {"ko", "namin", "customer", "serbisyo", "ganda", "loyal", "love", "gusto", "bait"}
 NEGATION_WORDS = {"hindi", "di", "wala", "not", "walang", "hndi"}
 
 TAGLISH_THEME_RULES = [
@@ -92,10 +91,11 @@ TAGLISH_THEME_RULES = [
         "theme": "Slow Logistics / Delivery Delay",
         "polarity": "Negative",
         "patterns": [
-            r'(?:mabagal|ang bagal|tagal|matagal).*(?:deliver|dating|shipping)',
-            r'\btagal dumating\b',
-            r'\bdelay\b',
-            r'\bhindi dumating\b'
+            r'(?:mabagal|ang bagal|tagal|matagal).*(?:deliver|dating|shipping|order)',
+            r'\b(?:ang\s+)?tagal\s+(?:dumating|ng\s+order)\b',
+            r'\bmatagal\s+dumating\b',
+            r'\bdelay(?:ed)?\b',
+            r'\bhindi\s+dumating\b'
         ]
     },
     {
@@ -154,16 +154,17 @@ def analyze_taglish_verbatim(text: str) -> list[dict]:
             "rule_weight": 0.88
         })
 
-    # 2. Polysemy Disambiguation for "mahal" (when not negated)
+    # 2. Polysemy Disambiguation for "mahal" (when not negated - CS-N10 resolution)
     has_affinity = False
     if "mahal" in tokens and not is_negated_mahal:
         token_set = set(tokens)
-        if token_set.intersection(AFFINITY_KEYWORDS) and not token_set.intersection(PRICE_KEYWORDS):
+        has_affinity_phrase = bool(re.search(r'\bmahal\s+(?:na\s+mahal|ko|namin|ng\s+customer)\b', lower)) or ('love' in tokens or 'loyal' in tokens)
+        if has_affinity_phrase and not token_set.intersection(PRICE_KEYWORDS):
             has_affinity = True
             matched_themes.append({
                 "theme": "Strong Brand Affinity / Loyalty",
                 "evidence": scrubbed,
-                "rule_weight": 0.88
+                "rule_weight": 0.95
             })
         elif token_set.intersection(PRICE_KEYWORDS) or any(w in lower for w in ["shipping", "sf", "fee", "cost", "gastos", "presyo", "price"]):
             if not any(t["theme"] == "Expensive / High Pricing Friction" for t in matched_themes):

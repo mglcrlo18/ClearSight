@@ -24,8 +24,10 @@ SIG_COLOR_NEG = "B91C1C" # Crimson for -/--
 
 
 def sanitize_excel_cell(val):
-    """Prevents CSV/Excel formula injection for user-controlled strings."""
+    """Prevents CSV/Excel formula injection for user-controlled strings while preserving internal sig markers (CS-N08)."""
     if isinstance(val, str) and len(val) > 0:
+        if val in ('+', '++', '-', '--'):
+            return val
         if val[0] in ('=', '+', '-', '@', '\t', '\r'):
             return "'" + val
     return val
@@ -249,10 +251,10 @@ def generate_excel_banner_book(
                     s_cell.alignment = Alignment(horizontal="center", vertical="center")
             curr_row += 1
 
-            # Line 3: vs Total Benchmark (+/++, -/--) — Col B & C blank
+            # Line 3: vs Total Benchmark (+/++, -/--) — Col B & C blank (CS-N07 resolution)
             for c_idx, b_val in enumerate(sig_benchmarks, start=3):
                 b_clean = str(b_val).strip() if b_val is not None else ""
-                if c_idx > 3 and b_clean and b_clean != "-":
+                if c_idx > 3 and b_clean:
                     b_cell = ws.cell(row=curr_row, column=c_idx, value=sanitize_excel_cell(b_clean))
                     if "+" in b_clean:
                         b_cell.font = sig_pos_font

@@ -63,8 +63,8 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
                 apply_value_formats=True,
                 user_missing=True
             )
-            metadata["variable_labels"] = meta.column_labels_to_labels or {}
-            metadata["value_labels"] = meta.variable_value_labels or {}
+            metadata["variable_labels"] = getattr(meta, "column_names_to_labels", {}) or getattr(meta, "variable_to_label", {}) or {}
+            metadata["value_labels"] = getattr(meta, "variable_value_labels", {}) or {}
         else:
             raise ImportError(
                 "SPSS (.sav) file reading requires the 'pyreadstat' package. "
