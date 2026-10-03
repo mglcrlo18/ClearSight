@@ -204,26 +204,122 @@
                 <aside class="variable-drawer">
                     <div class="drawer-header">
                         <h4>Survey Variables</h4>
-                        <span class="badge-mini">Drag to Canvas</span>
+                        <span class="badge-mini">Click / Drag to Canvas</span>
                     </div>
                     <div class="variable-list" id="variable-list">
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Brand Preference (Multi-Select)" title="Click to add as Stub, or drag to Tray">
-                            <span class="pill-dot purple"></span> Brand Preference (Multi-Select)
+                        <!-- Region -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Region" title="Drag to Banner (expands all regions) or Stubs">
+                            <div class="var-card-header">
+                                <span class="var-card-title"><span class="pill-dot blue"></span> Region (Geography)</span>
+                                <div class="var-actions">
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Region')" title="Add all regions as banner columns">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Region')" title="Add as rows in table">+ Row</button>
+                                </div>
+                            </div>
+                            <div class="var-chips-row">
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('NCR')">NCR</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Balance Luzon')">Balance Luzon</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Visayas')">Visayas</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Mindanao')">Mindanao</span>
+                            </div>
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Overall CSAT (1-5 Likert)" title="Click to add as Stub, or drag to Tray">
-                            <span class="pill-dot green"></span> Overall CSAT (1-5 Likert)
+
+                        <!-- Age Generation -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Age Generation" title="Drag to Banner (expands all age groups) or Stubs">
+                            <div class="var-card-header">
+                                <span class="var-card-title"><span class="pill-dot blue"></span> Age Generation</span>
+                                <div class="var-actions">
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Age Generation')" title="Add all age generations as banner columns">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Age Generation')" title="Add as rows in table">+ Row</button>
+                                </div>
+                            </div>
+                            <div class="var-chips-row">
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Gen Z (18–27)')">Gen Z</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Millennials (28–43)')">Millennials</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Gen X (44–59)')">Gen X</span>
+                            </div>
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Repurchase Intent" title="Click to add as Stub, or drag to Tray">
-                            <span class="pill-dot green"></span> Repurchase Intent (1-5)
+
+                        <!-- Gender -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Gender" title="Drag to Banner (expands Male & Female) or Stubs">
+                            <div class="var-card-header">
+                                <span class="var-card-title"><span class="pill-dot blue"></span> Gender</span>
+                                <div class="var-actions">
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Gender')" title="Add Male & Female as banner columns">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Gender')" title="Add as rows in table">+ Row</button>
+                                </div>
+                            </div>
+                            <div class="var-chips-row">
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Male')">Male</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Female')">Female</span>
+                            </div>
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Region" title="Click to add as Stub, or drag to Tray">
-                            <span class="pill-dot blue"></span> Region (NCR, BL, Vis, Min)
+
+                        <!-- SEC -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Monthly Income Class" title="Drag to Banner (expands Class ABC, D, E) or Stubs">
+                            <div class="var-card-header">
+                                <span class="var-card-title"><span class="pill-dot blue"></span> Socioeconomic Class (SEC)</span>
+                                <div class="var-actions">
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Monthly Income Class')" title="Add Class ABC, D, E as banner columns">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Monthly Income Class')" title="Add as rows in table">+ Row</button>
+                                </div>
+                            </div>
+                            <div class="var-chips-row">
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Class ABC')">Class ABC</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Class D')">Class D</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Class E')">Class E</span>
+                            </div>
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Age Generation" title="Click to add as Stub, or drag to Tray">
-                            <span class="pill-dot blue"></span> Age (Gen Z, Millennial, Gen X)
+
+                        <!-- Brand Preference -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Brand Preference" title="Drag to Banner or Stubs">
+                            <div class="var-card-header">
+                                <span class="var-card-title"><span class="pill-dot purple"></span> Brand Preference</span>
+                                <div class="var-actions">
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Brand Preference')" title="Add all brands as banner columns">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Brand Preference')" title="Add as rows in table">+ Row</button>
+                                </div>
+                            </div>
+                            <div class="var-chips-row">
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand A (Premium Nanotech)')">Brand A</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand B (Standard Market)')">Brand B</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand C (Bio-Oil Formulation)')">Brand C</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand D (Local Artisan Batch)')">Brand D</span>
+                            </div>
                         </div>
-                        <div class="var-pill" draggable="true" ondragstart="drag(event)" onclick="addStubFromDrawer(this)" data-var="Monthly Income Class" title="Click to add as Stub, or drag to Tray">
-                            <span class="pill-dot blue"></span> SEC / Income (ABC, D, E)
+
+                        <!-- Overall CSAT -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Overall CSAT" title="Drag to Banner or Stubs">
+                            <div class="var-card-header">
+                                <span class="var-card-title"><span class="pill-dot green"></span> Overall CSAT (1-5 Likert)</span>
+                                <div class="var-actions">
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Overall CSAT')" title="Add CSAT ratings as banner columns">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Overall CSAT (T2B)')" title="Add as rows in table">+ Row</button>
+                                </div>
+                            </div>
+                            <div class="var-chips-row">
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('5 - Very Satisfied')">5 - Very Sat</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('4 - Somewhat Satisfied')">4 - Sat</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('3 - Neutral')">3 - Neutral</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('1-2 - Dissatisfied')">1-2 - Dissat</span>
+                            </div>
+                        </div>
+
+                        <!-- Repurchase Intent -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Repurchase Intent" title="Drag to Banner or Stubs">
+                            <div class="var-card-header">
+                                <span class="var-card-title"><span class="pill-dot green"></span> Repurchase Intent (1-5)</span>
+                                <div class="var-actions">
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Repurchase Intent')" title="Add Repurchase categories as banner columns">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Repurchase Intent')" title="Add as rows in table">+ Row</button>
+                                </div>
+                            </div>
+                            <div class="var-chips-row">
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Definitely Will (5)')">Definitely (5)</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Probably Will (4)')">Probably (4)</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Might or Might Not (3)')">Neutral (3)</span>
+                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Unlikely (1-2)')">Unlikely (1-2)</span>
+                            </div>
                         </div>
                     </div>
                 </aside>
@@ -232,28 +328,32 @@
                 <div class="table-canvas">
                     <div class="drop-tray-container">
                         <div class="tray-row">
-                            <span class="tray-label">Banner (Columns):</span>
+                            <div style="display: flex; flex-direction: column; width: 130px; gap: 4px;">
+                                <span class="tray-label">Banner (Columns):</span>
+                                <span class="col-count-badge" id="col-count-badge">5 Columns</span>
+                            </div>
                             <div style="flex: 1;">
                                 <div class="drop-tray" id="banner-tray" ondrop="dropBanner(event)" ondragover="allowDrop(event)">
-                                    <span class="tag-pill" data-name="Total">Total <span class="pill-remove" onclick="removeBannerPill(event, 'Total')">&times;</span></span>
-                                    <span class="tag-pill" data-name="NCR (A)">NCR (A) <span class="pill-remove" onclick="removeBannerPill(event, 'NCR (A)')">&times;</span></span>
-                                    <span class="tag-pill" data-name="Balance Luzon (B)">Balance Luzon (B) <span class="pill-remove" onclick="removeBannerPill(event, 'Balance Luzon (B)')">&times;</span></span>
-                                    <span class="tag-pill" data-name="Visayas (C)">Visayas (C) <span class="pill-remove" onclick="removeBannerPill(event, 'Visayas (C)')">&times;</span></span>
-                                    <span class="tag-pill" data-name="Mindanao (D)">Mindanao (D) <span class="pill-remove" onclick="removeBannerPill(event, 'Mindanao (D)')">&times;</span></span>
+                                    <span class="tag-pill" data-name="Total"><span class="pill-label">Total</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Total')">&times;</span></span>
+                                    <span class="tag-pill" data-name="NCR"><span class="pill-label">NCR (A)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'NCR')">&times;</span></span>
+                                    <span class="tag-pill" data-name="Balance Luzon"><span class="pill-label">Balance Luzon (B)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Balance Luzon')">&times;</span></span>
+                                    <span class="tag-pill" data-name="Visayas"><span class="pill-label">Visayas (C)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Visayas')">&times;</span></span>
+                                    <span class="tag-pill" data-name="Mindanao"><span class="pill-label">Mindanao (D)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Mindanao')">&times;</span></span>
                                 </div>
                                 <div class="tray-input-wrapper">
-                                    <input type="text" id="banner-input" class="tray-input" placeholder="+ Type banner column and press Enter (e.g. 'Gen Z', 'Metro Manila', 'Male')..." onkeydown="handleBannerInputKey(event)">
-                                    <button class="tray-add-btn" onclick="addBannerFromInput()">+ Add Column</button>
+                                    <input type="text" id="banner-input" class="tray-input" placeholder="+ Type banner category or column(s) (e.g. 'Age', 'Gender', 'SEC', 'Gen Z', 'Metro Manila')..." onkeydown="handleBannerInputKey(event)">
+                                    <button class="tray-add-btn" onclick="addBannerFromInput()">+ Add Column / Category</button>
                                 </div>
                             </div>
                         </div>
                         <div class="preset-pills-row">
                             <span class="preset-label">Quick Banners:</span>
-                            <button class="preset-btn" onclick="setBannerPreset('region')">Region (NCR, BL, Vis, Min)</button>
-                            <button class="preset-btn" onclick="setBannerPreset('age')">Age (Gen Z, Mill, Gen X)</button>
-                            <button class="preset-btn" onclick="setBannerPreset('gender')">Gender (Male, Female)</button>
-                            <button class="preset-btn" onclick="setBannerPreset('sec')">SEC (Class ABC, D, E)</button>
-                            <button class="preset-btn clear-btn" onclick="clearBanners()">Clear Columns</button>
+                            <button class="preset-btn" onclick="addBannerPreset('region')" title="Add/Append all 4 region columns">+ Region (NCR, BL, Vis, Min)</button>
+                            <button class="preset-btn" onclick="addBannerPreset('age')" title="Add/Append all 3 age groups">+ Age (Gen Z, Mill, Gen X)</button>
+                            <button class="preset-btn" onclick="addBannerPreset('gender')" title="Add/Append Male and Female">+ Gender (Male, Female)</button>
+                            <button class="preset-btn" onclick="addBannerPreset('sec')" title="Add/Append Class ABC, D, E">+ SEC (Class ABC, D, E)</button>
+                            <button class="preset-btn preset-btn-all" onclick="addAllDemographicsPreset()" title="Stack all 12 demographic columns side-by-side">⚡ All Demographics (12 Cols)</button>
+                            <button class="preset-btn clear-btn" onclick="clearBanners()" title="Reset columns to Total">Clear Columns</button>
                         </div>
 
                         <div class="tray-row" style="margin-top: 10px;">

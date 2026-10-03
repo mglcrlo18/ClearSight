@@ -1254,3 +1254,156 @@ body {
     }
 }
 
+/* Variable Drawer Cards & Sub-Chips */
+.var-card {
+    background: var(--carbon-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    cursor: grab;
+    transition: all 0.22s var(--spring-physics);
+}
+
+.var-card:hover {
+    border-color: var(--volt-yellow);
+    background: var(--carbon-elevated);
+    transform: translateX(3px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+
+.var-card:active {
+    cursor: grabbing;
+}
+
+.var-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.var-card-title {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--off-white);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.var-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.var-add-btn {
+    background: rgba(245, 243, 239, 0.08);
+    border: 1px solid var(--border-subtle);
+    color: var(--off-white-muted);
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.16s;
+}
+
+.var-add-btn:hover {
+    background: var(--launch-red);
+    color: #FFFFFF;
+    border-color: var(--launch-red);
+}
+
+.var-add-btn.var-add-col:hover {
+    background: var(--volt-yellow);
+    color: #111111;
+    border-color: var(--volt-yellow);
+}
+
+.var-chips-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.var-chip {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(245, 243, 239, 0.12);
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 1px 6px;
+    color: var(--off-white-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.var-chip:hover {
+    border-color: var(--volt-yellow);
+    color: var(--volt-yellow);
+    background: rgba(255, 212, 0, 0.1);
+}
+
+/* Active Column Counter Badge */
+.col-count-badge {
+    background: rgba(255, 212, 0, 0.15);
+    border: 1px solid rgba(255, 212, 0, 0.4);
+    color: var(--volt-yellow);
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 12px;
+    letter-spacing: 0.3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+
+.preset-btn-all {
+    background: rgba(255, 212, 0, 0.18) !important;
+    border-color: var(--volt-yellow) !important;
+    color: var(--volt-yellow) !important;
+    font-weight: 800 !important;
+}
+
+.preset-btn-all:hover {
+    background: var(--volt-yellow) !important;
+    color: #111111 !important;
+}
+
+/* Sticky First Column for Unlimited Columns */
+.table-scroll-wrapper {
+    overflow-x: auto;
+    position: relative;
+    max-width: 100%;
+}
+
+.agency-table th:first-child,
+.agency-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+    background: #181818;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.6);
+}
+
+.agency-table thead tr th:first-child {
+    background: var(--carbon-card);
+    z-index: 8;
+}
+
+.agency-table thead tr.meta-row td:first-child {
+    background: #1C1C1C;
+    z-index: 7;
+}
+
+.agency-table tbody tr.stub-group-header td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 6;
+}
+
+

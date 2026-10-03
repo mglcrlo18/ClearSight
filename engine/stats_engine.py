@@ -75,42 +75,50 @@ def regularized_incomplete_beta(a: float, b: float, x: float) -> float:
         return 1.0 - regularized_incomplete_beta(b, a, 1.0 - x)
 
     lbeta = math.lgamma(a) + math.lgamma(b) - math.lgamma(a + b)
-    front = math.exp(a * math.log(x) + b * math.log(1.0 - x) - lbeta) / a
+    front = math.exp(a * math.log(x) + b * math.log(1.0 - x) - lbeta)
 
-    f = 1.0
+    # Continued fraction (Abramowitz & Stegun 26.5.8)
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+
     c = 1.0
-    d = 0.0
-    tiny = 1e-30
+    d = 1.0 - qab * x / qap
+    fpmin = 1e-30
+    if abs(d) < fpmin:
+        d = fpmin
+    d = 1.0 / d
+    h = d
 
-    for m in range(1, 140):
+    for m in range(1, 201):
         m2 = 2 * m
-        # Even step
-        d_num = -(a + m) * (a + b + m) * x / ((a + m2) * (a + m2 + 1.0))
-        d = 1.0 + d_num * d
-        if abs(d) < tiny:
-            d = tiny
-        c = 1.0 + d_num / c
-        if abs(c) < tiny:
-            c = tiny
+        # Even step: d_{2m}
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < fpmin:
+            d = fpmin
+        c = 1.0 + aa / c
+        if abs(c) < fpmin:
+            c = fpmin
         d = 1.0 / d
-        f = f * c * d
+        h *= d * c
 
-        # Odd step
-        d_num = m * (b - m) * x / ((a + m2 - 1.0) * (a + m2))
-        d = 1.0 + d_num * d
-        if abs(d) < tiny:
-            d = tiny
-        c = 1.0 + d_num / c
-        if abs(c) < tiny:
-            c = tiny
+        # Odd step: d_{2m+1}
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < fpmin:
+            d = fpmin
+        c = 1.0 + aa / c
+        if abs(c) < fpmin:
+            c = fpmin
         d = 1.0 / d
-        delta = c * d
-        f = f * delta
+        del_val = d * c
+        h *= del_val
 
-        if abs(delta - 1.0) < 1e-12:
+        if abs(del_val - 1.0) < 1e-14:
             break
 
-    val = front * (f - 1.0)
+    val = front * h / a
     return max(0.0, min(1.0, val))
 
 

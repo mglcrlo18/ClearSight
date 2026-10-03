@@ -30,3 +30,5 @@ Sukat_Window
 *.xlsx
 snapshot_preview.html
 *.log
+*.pid
+

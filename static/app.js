@@ -118,6 +118,10 @@ function applyIngestedSummary(data) {
     if (sDisp) sDisp.innerText = scaleCount || 4;
     const oDisp = document.getElementById('detected-open');
     if (oDisp) oDisp.innerText = openCount || 2;
+
+    if (data.schema) {
+        updateVariableDrawerFromSchema(data.schema, data.columns);
+    }
 }
 
 // 3. Weighting Controls (Connected to Engine Raking)
@@ -166,16 +170,95 @@ function toggleHygiene() {
     showToast(`Hygiene rules updated: Straight-liners [${isStraight ? 'ON' : 'OFF'}], Speeders [${isSpeeder ? 'ON' : 'OFF'}]`);
 }
 
-// 4. Banner and Stub Tray Helper Functions
+// 4. Banner and Stub Tray Helper Functions with Unlimited Columns & Category Expansion
+
+function stripColumnLetter(name) {
+    if (!name) return '';
+    return name.replace(/\s*\([A-Z0-9]+\)\s*$/, '').trim();
+}
+
+function getColumnLetter(colIndex) {
+    // 1 -> A, 2 -> B, ... 26 -> Z, 27 -> AA, 28 -> AB, ...
+    let letter = '';
+    let temp = colIndex;
+    while (temp > 0) {
+        let rem = (temp - 1) % 26;
+        letter = String.fromCharCode(65 + rem) + letter;
+        temp = Math.floor((temp - 1) / 26);
+    }
+    return letter;
+}
+
+const KNOWN_BANNER_CATEGORIES = {
+    region: {
+        keys: ['region', 'geography', 'geographic', 'probinsya', 'luzon', 'visayas', 'mindanao', 'ncr'],
+        columns: ['NCR', 'Balance Luzon', 'Visayas', 'Mindanao']
+    },
+    age: {
+        keys: ['age', 'age generation', 'generation', 'edad', 'gen z', 'millennial', 'gen x'],
+        columns: ['Gen Z (18–27)', 'Millennials (28–43)', 'Gen X (44–59)']
+    },
+    gender: {
+        keys: ['gender', 'sex', 'kasarian', 'gender (male, female)', 'male', 'female'],
+        columns: ['Male', 'Female']
+    },
+    sec: {
+        keys: ['sec', 'income', 'socioeconomic', 'socioeconomic class', 'monthly income', 'monthly income class', 'class abc', 'class d', 'class e'],
+        columns: ['Class ABC', 'Class D', 'Class E']
+    },
+    brand: {
+        keys: ['brand', 'brand preference', 'brands', 'brand option'],
+        columns: ['Brand A (Premium Nanotech)', 'Brand B (Standard Market)', 'Brand C (Bio-Oil Formulation)', 'Brand D (Local Artisan Batch)']
+    },
+    csat: {
+        keys: ['csat', 'satisfaction', 'overall csat', 'customer satisfaction'],
+        columns: ['5 - Very Satisfied', '4 - Somewhat Satisfied', '3 - Neutral', '1-2 - Dissatisfied']
+    },
+    repurchase: {
+        keys: ['repurchase', 'repurchase intent', 'intent', 'intent to repurchase'],
+        columns: ['Definitely Will (5)', 'Probably Will (4)', 'Might or Might Not (3)', 'Unlikely (1-2)']
+    }
+};
+
+function resolveBannerCategory(text) {
+    if (!text) return [];
+    const clean = stripColumnLetter(text).trim();
+    const lower = clean.toLowerCase();
+
+    // Check if uploaded dataset schema defines discrete categories for this column
+    if (loadedDatasetInfo && loadedDatasetInfo.schema) {
+        for (const [colName, colMeta] of Object.entries(loadedDatasetInfo.schema)) {
+            const cleanCol = colName.toLowerCase().replace(/_/g, ' ');
+            if (colName.toLowerCase() === lower || cleanCol === lower) {
+                if (colMeta.type === 'single_select' && Array.isArray(colMeta.categories) && colMeta.categories.length > 0) {
+                    return colMeta.categories.slice(0, 25);
+                }
+                if (colMeta.type === 'multi_select' && Array.isArray(colMeta.options) && colMeta.options.length > 0) {
+                    return colMeta.options.slice(0, 25);
+                }
+            }
+        }
+    }
+
+    // Check predefined survey dictionary categories
+    for (const cat of Object.values(KNOWN_BANNER_CATEGORIES)) {
+        if (cat.keys.some(k => k === lower || lower.includes(k))) {
+            return [...cat.columns];
+        }
+    }
+
+    // Single custom item or specific column
+    return [clean];
+}
+
 function getActiveBannerColumns() {
     const bannerTray = document.getElementById('banner-tray');
-    if (!bannerTray) return ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"];
+    if (!bannerTray) return ["Total", "NCR", "Balance Luzon", "Visayas", "Mindanao"];
     const pills = Array.from(bannerTray.querySelectorAll('.tag-pill'));
     if (pills.length === 0) return ["Total"];
     return pills.map(p => {
-        const name = p.getAttribute('data-name');
-        if (name) return name.trim();
-        return p.childNodes[0].nodeValue ? p.childNodes[0].nodeValue.trim() : p.innerText.replace('×', '').trim();
+        const raw = p.getAttribute('data-name') || p.innerText.replace('×', '').trim();
+        return stripColumnLetter(raw);
     }).filter(Boolean);
 }
 
@@ -192,36 +275,75 @@ function getActiveStubs() {
 }
 
 function createPill(text, isStub = false) {
+    const cleanText = isStub ? text.trim() : stripColumnLetter(text.trim());
     const pill = document.createElement('span');
     pill.className = 'tag-pill';
-    pill.setAttribute('data-name', text);
+    pill.setAttribute('data-name', cleanText);
 
     const textSpan = document.createElement('span');
-    textSpan.textContent = text + " ";
+    textSpan.className = 'pill-label';
+    textSpan.textContent = cleanText + " ";
     pill.appendChild(textSpan);
 
     const removeBtn = document.createElement('span');
     removeBtn.className = 'pill-remove';
     removeBtn.textContent = '×';
     removeBtn.onclick = function(e) {
-        if (isStub) removeStubPill(e, text);
-        else removeBannerPill(e, text);
+        if (isStub) removeStubPill(e, cleanText);
+        else removeBannerPill(e, cleanText);
     };
     pill.appendChild(removeBtn);
     return pill;
 }
 
-function addBannerPill(text) {
-    if (!text || !text.trim()) return;
-    const cleanText = text.trim();
+function refreshBannerPillLabels() {
     const tray = document.getElementById('banner-tray');
     if (!tray) return;
+    const pills = Array.from(tray.querySelectorAll('.tag-pill'));
+    let colLetterIdx = 1;
 
-    const existing = Array.from(tray.querySelectorAll('.tag-pill')).map(p => p.getAttribute('data-name'));
-    if (existing.includes(cleanText)) return;
+    pills.forEach((p, idx) => {
+        const rawName = p.getAttribute('data-name') || p.innerText;
+        const cleanName = stripColumnLetter(rawName);
+        const labelSpan = p.querySelector('.pill-label');
+        if (cleanName.toLowerCase() === 'total' || idx === 0) {
+            p.setAttribute('data-name', 'Total');
+            if (labelSpan) labelSpan.textContent = 'Total';
+        } else {
+            const letter = getColumnLetter(colLetterIdx++);
+            p.setAttribute('data-name', cleanName);
+            if (labelSpan) labelSpan.textContent = `${cleanName} (${letter})`;
+        }
+    });
 
-    tray.appendChild(createPill(cleanText, false));
-    renderTable();
+    const badge = document.getElementById('col-count-badge');
+    if (badge) {
+        badge.textContent = `${pills.length} Column${pills.length === 1 ? '' : 's'}`;
+    }
+}
+
+function addBannerPill(text, shouldRender = true) {
+    if (!text || !text.trim()) return 0;
+    const rawText = text.trim();
+    const tray = document.getElementById('banner-tray');
+    if (!tray) return 0;
+
+    // Expand category into sub-items if matching
+    const items = resolveBannerCategory(rawText);
+    let addedCount = 0;
+
+    items.forEach(item => {
+        const cleanItem = stripColumnLetter(item);
+        const existing = Array.from(tray.querySelectorAll('.tag-pill')).map(p => stripColumnLetter(p.getAttribute('data-name') || p.innerText));
+        if (!existing.includes(cleanItem)) {
+            tray.appendChild(createPill(cleanItem, false));
+            addedCount++;
+        }
+    });
+
+    refreshBannerPillLabels();
+    if (shouldRender) renderTable();
+    return addedCount;
 }
 
 function addStubPill(text) {
@@ -241,13 +363,16 @@ function removeBannerPill(e, name) {
     if (e && e.stopPropagation) e.stopPropagation();
     const tray = document.getElementById('banner-tray');
     if (!tray) return;
+    const cleanTarget = stripColumnLetter(name);
     const pills = Array.from(tray.querySelectorAll('.tag-pill'));
     pills.forEach(p => {
-        if (p.getAttribute('data-name') === name) tray.removeChild(p);
+        const pName = stripColumnLetter(p.getAttribute('data-name') || p.innerText);
+        if (pName === cleanTarget) tray.removeChild(p);
     });
     if (tray.querySelectorAll('.tag-pill').length === 0) {
         tray.appendChild(createPill("Total", false));
     }
+    refreshBannerPillLabels();
     renderTable();
 }
 
@@ -268,9 +393,15 @@ function removeStubPill(e, name) {
 function addBannerFromInput() {
     const input = document.getElementById('banner-input');
     if (!input || !input.value.trim()) return;
-    input.value.split(',').forEach(p => addBannerPill(p.trim()));
+    const parts = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    let totalAdded = 0;
+    parts.forEach(part => {
+        totalAdded += addBannerPill(part, false);
+    });
     input.value = "";
-    showToast("✓ Added banner column(s)");
+    refreshBannerPillLabels();
+    renderTable();
+    showToast(`✓ Added ${totalAdded} banner column(s)`);
 }
 
 function handleBannerInputKey(e) {
@@ -303,23 +434,59 @@ function addStubFromDrawer(elem) {
     }
 }
 
+function addBannerPreset(type) {
+    const tray = document.getElementById('banner-tray');
+    if (!tray) return;
+
+    if (tray.querySelectorAll('.tag-pill').length === 0) {
+        tray.appendChild(createPill("Total", false));
+    }
+
+    let targetItems = [];
+    if (type === 'region') {
+        targetItems = ["NCR", "Balance Luzon", "Visayas", "Mindanao"];
+    } else if (type === 'age') {
+        targetItems = ["Gen Z (18–27)", "Millennials (28–43)", "Gen X (44–59)"];
+    } else if (type === 'gender') {
+        targetItems = ["Male", "Female"];
+    } else if (type === 'sec') {
+        targetItems = ["Class ABC", "Class D", "Class E"];
+    }
+
+    targetItems.forEach(item => {
+        const cleanItem = stripColumnLetter(item);
+        const existing = Array.from(tray.querySelectorAll('.tag-pill')).map(p => stripColumnLetter(p.getAttribute('data-name') || p.innerText));
+        if (!existing.includes(cleanItem)) {
+            tray.appendChild(createPill(cleanItem, false));
+        }
+    });
+
+    refreshBannerPillLabels();
+    renderTable();
+    showToast(`✓ Added ${type.toUpperCase()} banner columns`);
+}
+
 function setBannerPreset(type) {
+    addBannerPreset(type);
+}
+
+function addAllDemographicsPreset() {
     const tray = document.getElementById('banner-tray');
     if (!tray) return;
     tray.innerHTML = "";
     tray.appendChild(createPill("Total", false));
 
-    if (type === 'region') {
-        ["NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"].forEach(col => tray.appendChild(createPill(col, false)));
-    } else if (type === 'age') {
-        ["Gen Z (A)", "Millennial (B)", "Gen X (C)"].forEach(col => tray.appendChild(createPill(col, false)));
-    } else if (type === 'gender') {
-        ["Male (A)", "Female (B)"].forEach(col => tray.appendChild(createPill(col, false)));
-    } else if (type === 'sec') {
-        ["Class ABC (A)", "Class D (B)", "Class E (C)"].forEach(col => tray.appendChild(createPill(col, false)));
-    }
+    const allItems = [
+        "NCR", "Balance Luzon", "Visayas", "Mindanao",
+        "Gen Z (18–27)", "Millennials (28–43)", "Gen X (44–59)",
+        "Male", "Female",
+        "Class ABC", "Class D", "Class E"
+    ];
+
+    allItems.forEach(item => tray.appendChild(createPill(item, false)));
+    refreshBannerPillLabels();
     renderTable();
-    showToast(`✓ Applied ${type.toUpperCase()} banner preset`);
+    showToast("✓ Stacked all 12 Demographic Banner Columns!");
 }
 
 function clearBanners() {
@@ -327,6 +494,7 @@ function clearBanners() {
     if (!tray) return;
     tray.innerHTML = "";
     tray.appendChild(createPill("Total", false));
+    refreshBannerPillLabels();
     renderTable();
     showToast("Banners reset to Total");
 }
@@ -363,58 +531,58 @@ const SURVEY_DICTIONARY = {
     brand_preference: {
         title: "Q1: Brand Preference (Multi-Select)",
         categories: [
-            { label: "NET: Any Brand Mentioned", is_net: true, base_pct: 94.2, seed_delta: [3.3, -0.9, -2.5, -1.3] },
-            { label: "Brand A (Premium Nanotech)", is_net: false, base_pct: 42.5, seed_delta: [12.5, -4.5, -6.4, -2.3] },
-            { label: "Brand B (Standard Market)", is_net: false, base_pct: 31.1, seed_delta: [-2.8, 2.4, -0.5, 0.9] },
-            { label: "Brand C (Bio-Oil Formulation)", is_net: false, base_pct: 26.4, seed_delta: [-9.7, 2.1, 6.9, 1.4] },
-            { label: "Brand D (Local Artisan Batch)", is_net: false, base_pct: 18.2, seed_delta: [-3.2, 1.8, 4.2, -2.8] }
+            { label: "NET: Any Brand Mentioned", is_net: true, base_pct: 94.2 },
+            { label: "Brand A (Premium Nanotech)", is_net: false, base_pct: 42.5 },
+            { label: "Brand B (Standard Market)", is_net: false, base_pct: 31.1 },
+            { label: "Brand C (Bio-Oil Formulation)", is_net: false, base_pct: 26.4 },
+            { label: "Brand D (Local Artisan Batch)", is_net: false, base_pct: 18.2 }
         ]
     },
     csat: {
         title: "Q2: Overall Customer Satisfaction (CSAT)",
         categories: [
-            { label: "NET: Top-2-Box (Satisfied/Very Satisfied)", is_net: true, base_pct: 84.2, seed_delta: [7.5, -2.2, -3.7, 0.1] },
-            { label: "5 - Very Satisfied", is_net: false, base_pct: 48.5, seed_delta: [12.3, -2.5, -5.4, -1.4] },
-            { label: "4 - Somewhat Satisfied", is_net: false, base_pct: 35.7, seed_delta: [-4.8, 0.3, 1.7, 1.5] },
-            { label: "3 - Neutral / Neither", is_net: false, base_pct: 10.2, seed_delta: [-4.2, 1.1, 1.8, 1.3] },
-            { label: "1-2 - Dissatisfied", is_net: false, base_pct: 5.6, seed_delta: [-3.3, 1.1, 1.9, -1.4] },
-            { label: "Mean Rating (1-5 Scale)", is_net: true, base_mean: 4.12, seed_delta: [0.36, -0.07, -0.14, -0.02] }
+            { label: "NET: Top-2-Box (Satisfied/Very Satisfied)", is_net: true, base_pct: 84.2 },
+            { label: "5 - Very Satisfied", is_net: false, base_pct: 48.5 },
+            { label: "4 - Somewhat Satisfied", is_net: false, base_pct: 35.7 },
+            { label: "3 - Neutral / Neither", is_net: false, base_pct: 10.2 },
+            { label: "1-2 - Dissatisfied", is_net: false, base_pct: 5.6 },
+            { label: "Mean Rating (1-5 Scale)", is_net: true, base_mean: 4.12 }
         ]
     },
     repurchase: {
         title: "Q3: Repurchase Intent (1-5 Likert)",
         categories: [
-            { label: "NET: High Repurchase Intent (Top-2-Box)", is_net: true, base_pct: 78.5, seed_delta: [7.9, 0.7, -10.4, 1.8] },
-            { label: "Definitely Will Repurchase (5)", is_net: false, base_pct: 44.2, seed_delta: [10.8, -1.2, -8.6, -1.0] },
-            { label: "Probably Will Repurchase (4)", is_net: false, base_pct: 34.3, seed_delta: [-2.9, 1.9, -1.8, 2.8] },
-            { label: "Might or Might Not (3)", is_net: false, base_pct: 14.1, seed_delta: [-4.8, -0.4, 6.2, -1.0] },
-            { label: "Unlikely to Repurchase (1-2)", is_net: false, base_pct: 7.4, seed_delta: [-3.1, -0.3, 4.2, -0.8] },
-            { label: "Mean Intent Score (1-5 Scale)", is_net: true, base_mean: 4.02, seed_delta: [0.32, 0.02, -0.31, 0.01] }
+            { label: "NET: High Repurchase Intent (Top-2-Box)", is_net: true, base_pct: 78.5 },
+            { label: "Definitely Will Repurchase (5)", is_net: false, base_pct: 44.2 },
+            { label: "Probably Will Repurchase (4)", is_net: false, base_pct: 34.3 },
+            { label: "Might or Might Not (3)", is_net: false, base_pct: 14.1 },
+            { label: "Unlikely to Repurchase (1-2)", is_net: false, base_pct: 7.4 },
+            { label: "Mean Intent Score (1-5 Scale)", is_net: true, base_mean: 4.02 }
         ]
     },
     age: {
         title: "Demographics: Age Generation",
         categories: [
-            { label: "Generation Z (18–27)", is_net: false, base_pct: 37.4, seed_delta: [4.6, 2.6, -8.4, 1.2] },
-            { label: "Millennials (28–43)", is_net: false, base_pct: 40.8, seed_delta: [1.2, -0.8, 2.2, -2.6] },
-            { label: "Generation X (44–59)", is_net: false, base_pct: 21.8, seed_delta: [-5.8, -1.8, 6.2, 1.4] }
+            { label: "Generation Z (18–27)", is_net: false, base_pct: 37.4 },
+            { label: "Millennials (28–43)", is_net: false, base_pct: 40.8 },
+            { label: "Generation X (44–59)", is_net: false, base_pct: 21.8 }
         ]
     },
     region: {
         title: "Demographics: Geographic Region",
         categories: [
-            { label: "National Capital Region (NCR)", is_net: false, base_pct: 29.1, seed_delta: [100.0, -29.1, -29.1, -29.1] },
-            { label: "Balance Luzon", is_net: false, base_pct: 36.4, seed_delta: [-36.4, 100.0, -36.4, -36.4] },
-            { label: "Visayas", is_net: false, base_pct: 17.5, seed_delta: [-17.5, -17.5, 100.0, -17.5] },
-            { label: "Mindanao", is_net: false, base_pct: 17.0, seed_delta: [-17.0, -17.0, -17.0, 100.0] }
+            { label: "National Capital Region (NCR)", is_net: false, base_pct: 29.1 },
+            { label: "Balance Luzon", is_net: false, base_pct: 36.4 },
+            { label: "Visayas", is_net: false, base_pct: 17.5 },
+            { label: "Mindanao", is_net: false, base_pct: 17.0 }
         ]
     },
     sec: {
         title: "Demographics: Socioeconomic Class (SEC)",
         categories: [
-            { label: "Class ABC (Upper to Upper-Middle)", is_net: false, base_pct: 19.9, seed_delta: [12.1, -2.9, -6.9, -2.3] },
-            { label: "Class D (Middle to Lower-Middle)", is_net: false, base_pct: 59.7, seed_delta: [-4.7, 3.3, 1.3, 0.1] },
-            { label: "Class E (Low Income / Subsistence)", is_net: false, base_pct: 20.4, seed_delta: [-7.4, -0.4, 5.6, 2.2] }
+            { label: "Class ABC (Upper to Upper-Middle)", is_net: false, base_pct: 19.9 },
+            { label: "Class D (Middle to Lower-Middle)", is_net: false, base_pct: 59.7 },
+            { label: "Class E (Low Income / Subsistence)", is_net: false, base_pct: 20.4 }
         ]
     }
 };
@@ -431,41 +599,269 @@ function resolveStubToModel(stubText) {
     return {
         title: stubText,
         categories: [
-            { label: `NET: Positive (${stubText})`, is_net: true, base_pct: 76.5, seed_delta: [6.5, -2.1, -3.4, -1.0] },
-            { label: "High Rating / Favorable", is_net: false, base_pct: 45.0, seed_delta: [9.2, -1.5, -5.3, -2.4] },
-            { label: "Moderate / Neutral", is_net: false, base_pct: 31.5, seed_delta: [-2.7, 0.6, 1.9, 0.2] },
-            { label: "Low / Unfavorable", is_net: false, base_pct: 23.5, seed_delta: [-6.5, 0.9, 3.4, 2.2] }
+            { label: `NET: Positive (${stubText})`, is_net: true, base_pct: 76.5 },
+            { label: "High Rating / Favorable", is_net: false, base_pct: 45.0 },
+            { label: "Moderate / Neutral", is_net: false, base_pct: 31.5 },
+            { label: "Low / Unfavorable", is_net: false, base_pct: 23.5 }
         ]
     };
 }
 
+function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
+}
+
 function calculateColumnBases(columns) {
-    const totalN = loadedDatasetInfo ? loadedDatasetInfo.total_respondents : 412;
-    const numSubCols = columns.length - 1;
+    const totalN = loadedDatasetInfo ? (loadedDatasetInfo.total_respondents || 412) : 412;
+    const effRatio = 0.945;
+    const totalNeff = Math.round(totalN * effRatio * 10) / 10;
+    const numSubCols = Math.max(1, columns.length - 1);
 
     return columns.map((col, idx) => {
-        if (col.toLowerCase() === 'total' || idx === 0) {
-            return { n: totalN, neff: Math.round(totalN * 0.945 * 10) / 10 };
+        const clean = stripColumnLetter(col).toLowerCase();
+        if (clean === 'total' || idx === 0) {
+            return { n: totalN, neff: totalNeff };
         }
-        let baseShare = 1.0 / (numSubCols || 1);
-        const lower = col.toLowerCase();
-        if (lower.includes('ncr')) baseShare = 0.29;
-        else if (lower.includes('luzon')) baseShare = 0.36;
-        else if (lower.includes('visayas')) baseShare = 0.18;
-        else if (lower.includes('mindanao')) baseShare = 0.17;
-        else if (lower.includes('gen z')) baseShare = 0.37;
-        else if (lower.includes('millennial')) baseShare = 0.41;
-        else if (lower.includes('gen x')) baseShare = 0.22;
-        else if (lower.includes('male')) baseShare = 0.49;
-        else if (lower.includes('female')) baseShare = 0.51;
 
-        const n = Math.round(totalN * baseShare);
-        const neff = Math.round((n * 0.945) * 10) / 10;
+        let share = 0.25;
+        if (clean.includes('ncr') || clean.includes('manila')) share = 0.291;
+        else if (clean.includes('luzon')) share = 0.364;
+        else if (clean.includes('visayas')) share = 0.175;
+        else if (clean.includes('mindanao')) share = 0.170;
+        else if (clean.includes('gen z') || clean.includes('18–27') || clean.includes('18-27')) share = 0.374;
+        else if (clean.includes('millennial') || clean.includes('28–43') || clean.includes('28-43')) share = 0.408;
+        else if (clean.includes('gen x') || clean.includes('44–59') || clean.includes('44-59')) share = 0.218;
+        else if (clean === 'male' || clean.startsWith('male')) share = 0.490;
+        else if (clean === 'female' || clean.startsWith('female')) share = 0.510;
+        else if (clean.includes('class abc') || clean.includes('abc')) share = 0.199;
+        else if (clean.includes('class d') || clean === 'd') share = 0.597;
+        else if (clean.includes('class e') || clean === 'e') share = 0.204;
+        else if (clean.includes('brand a')) share = 0.425;
+        else if (clean.includes('brand b')) share = 0.311;
+        else if (clean.includes('brand c')) share = 0.264;
+        else if (clean.includes('brand d')) share = 0.182;
+        else if (clean.includes('5') || clean.includes('very satisfied') || clean.includes('definitely')) share = 0.485;
+        else if (clean.includes('4') || clean.includes('somewhat satisfied') || clean.includes('probably')) share = 0.357;
+        else if (clean.includes('3') || clean.includes('neutral') || clean.includes('might')) share = 0.141;
+        else if (clean.includes('1') || clean.includes('2') || clean.includes('dissatisfied') || clean.includes('unlikely')) share = 0.074;
+        else {
+            const h = Math.abs(hashString(clean)) % 100;
+            share = Math.max(0.08, Math.min(0.45, 1.0 / numSubCols + (h - 50) / 500.0));
+        }
+
+        const n = Math.max(15, Math.round(totalN * share));
+        const neff = Math.round(n * effRatio * 10) / 10;
         return { n, neff };
     });
 }
 
-// 6. Safe DOM-Based Table Rendering (Prevents XSS via textContent)
+function getColumnDelta(colName, categoryLabel, isMean) {
+    const col = stripColumnLetter(colName).toLowerCase();
+    const cat = categoryLabel.toLowerCase();
+
+    // Regional deltas
+    if (col.includes('ncr') || col.includes('manila')) {
+        if (cat.includes('brand a') || cat.includes('nanotech')) return isMean ? 0.38 : 12.5;
+        if (cat.includes('brand b')) return isMean ? -0.05 : -2.8;
+        if (cat.includes('brand c')) return isMean ? -0.25 : -9.7;
+        if (cat.includes('brand d')) return isMean ? -0.10 : -3.2;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? 0.35 : 7.5;
+        return isMean ? 0.15 : 4.0;
+    }
+    if (col.includes('luzon')) {
+        if (cat.includes('brand a')) return isMean ? -0.12 : -4.5;
+        if (cat.includes('brand b')) return isMean ? 0.08 : 2.4;
+        if (cat.includes('brand c')) return isMean ? 0.06 : 2.1;
+        if (cat.includes('brand d')) return isMean ? 0.05 : 1.8;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? -0.06 : -2.2;
+        return isMean ? -0.05 : -1.5;
+    }
+    if (col.includes('visayas')) {
+        if (cat.includes('brand a')) return isMean ? -0.18 : -6.4;
+        if (cat.includes('brand b')) return isMean ? -0.02 : -0.5;
+        if (cat.includes('brand c')) return isMean ? 0.22 : 6.9;
+        if (cat.includes('brand d')) return isMean ? 0.12 : 4.2;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? -0.12 : -3.7;
+        return isMean ? 0.08 : 2.5;
+    }
+    if (col.includes('mindanao')) {
+        if (cat.includes('brand a')) return isMean ? -0.08 : -2.3;
+        if (cat.includes('brand b')) return isMean ? 0.03 : 0.9;
+        if (cat.includes('brand c')) return isMean ? 0.04 : 1.4;
+        if (cat.includes('brand d')) return isMean ? -0.09 : -2.8;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? 0.02 : 0.5;
+        return isMean ? -0.02 : -0.8;
+    }
+
+    // Age Groups
+    if (col.includes('gen z') || col.includes('18–27') || col.includes('18-27')) {
+        if (cat.includes('brand a') || cat.includes('nanotech')) return isMean ? 0.42 : 14.8;
+        if (cat.includes('brand b')) return isMean ? -0.15 : -5.4;
+        if (cat.includes('brand c')) return isMean ? -0.12 : -4.2;
+        if (cat.includes('brand d')) return isMean ? 0.25 : 8.6;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? 0.28 : 8.5;
+        return isMean ? 0.20 : 6.5;
+    }
+    if (col.includes('millennial') || col.includes('28–43') || col.includes('28-43')) {
+        if (cat.includes('brand a')) return isMean ? 0.06 : 2.2;
+        if (cat.includes('brand b')) return isMean ? 0.10 : 3.5;
+        if (cat.includes('brand c')) return isMean ? 0.05 : 1.8;
+        if (cat.includes('brand d')) return isMean ? -0.04 : -1.5;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? 0.05 : 1.8;
+        return isMean ? 0.03 : 1.0;
+    }
+    if (col.includes('gen x') || col.includes('44–59') || col.includes('44-59')) {
+        if (cat.includes('brand a')) return isMean ? -0.45 : -16.5;
+        if (cat.includes('brand b')) return isMean ? 0.24 : 8.5;
+        if (cat.includes('brand c')) return isMean ? 0.20 : 7.2;
+        if (cat.includes('brand d')) return isMean ? -0.14 : -5.0;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? -0.24 : -8.2;
+        return isMean ? -0.18 : -6.0;
+    }
+
+    // Gender Groups
+    if (col === 'male' || col.startsWith('male')) {
+        if (cat.includes('brand a')) return isMean ? 0.12 : 4.5;
+        if (cat.includes('brand b')) return isMean ? 0.06 : 2.0;
+        if (cat.includes('brand c')) return isMean ? -0.10 : -3.6;
+        if (cat.includes('brand d')) return isMean ? 0.04 : 1.5;
+        return isMean ? 0.04 : 1.5;
+    }
+    if (col === 'female' || col.startsWith('female')) {
+        if (cat.includes('brand a')) return isMean ? -0.11 : -4.2;
+        if (cat.includes('brand b')) return isMean ? -0.06 : -1.8;
+        if (cat.includes('brand c')) return isMean ? 0.11 : 3.9;
+        if (cat.includes('brand d')) return isMean ? -0.04 : -1.2;
+        return isMean ? -0.04 : -1.4;
+    }
+
+    // Socioeconomic Class (SEC)
+    if (col.includes('class abc') || col.includes('abc')) {
+        if (cat.includes('brand a') || cat.includes('nanotech')) return isMean ? 0.45 : 16.2;
+        if (cat.includes('brand b')) return isMean ? -0.22 : -7.8;
+        if (cat.includes('brand c')) return isMean ? 0.09 : 3.2;
+        if (cat.includes('brand d')) return isMean ? -0.08 : -2.8;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? 0.32 : 11.2;
+        return isMean ? 0.25 : 8.0;
+    }
+    if (col.includes('class d') || col === 'd') {
+        if (cat.includes('brand a')) return isMean ? -0.06 : -2.4;
+        if (cat.includes('brand b')) return isMean ? 0.12 : 4.2;
+        if (cat.includes('brand c')) return isMean ? 0.03 : 1.1;
+        if (cat.includes('brand d')) return isMean ? 0.04 : 1.4;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? -0.04 : -1.5;
+        return isMean ? 0.01 : 0.5;
+    }
+    if (col.includes('class e') || col === 'e') {
+        if (cat.includes('brand a')) return isMean ? -0.32 : -11.5;
+        if (cat.includes('brand b')) return isMean ? 0.18 : 6.5;
+        if (cat.includes('brand c')) return isMean ? -0.08 : -3.0;
+        if (cat.includes('brand d')) return isMean ? 0.14 : 5.0;
+        if (cat.includes('top-2-box') || cat.includes('satisfied') || cat.includes('repurchase')) return isMean ? -0.22 : -7.8;
+        return isMean ? -0.15 : -5.5;
+    }
+
+    // Stable deterministic pseudo-random variance for any custom or external columns
+    const hash = Math.abs(hashString(col + '_' + cat));
+    const normalized = (hash % 1000) / 1000.0;
+    if (isMean) {
+        return (normalized * 0.5) - 0.25;
+    } else {
+        return (normalized * 22.0) - 11.0;
+    }
+}
+
+let tabulationDebounceTimer = null;
+function syncWithBackendTabulation(bannerCols, stubs) {
+    if (tabulationDebounceTimer) clearTimeout(tabulationDebounceTimer);
+    tabulationDebounceTimer = setTimeout(() => {
+        fetch('/api/tabulate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                banner_cols: bannerCols,
+                stubs: stubs,
+                confidence: currentConfidence,
+                fdr_enabled: isFDREnabled
+            })
+        }).catch(() => {});
+    }, 300);
+}
+
+function updateVariableDrawerFromSchema(schema, columns) {
+    const listContainer = document.getElementById('variable-list');
+    if (!listContainer || !schema || Object.keys(schema).length === 0) return;
+
+    listContainer.innerHTML = '';
+
+    Object.entries(schema).forEach(([colName, info]) => {
+        if (info.type === 'empty' || colName.startsWith('__')) return;
+
+        const card = document.createElement('div');
+        card.className = 'var-card';
+        card.setAttribute('draggable', 'true');
+        card.setAttribute('data-var', colName);
+        card.ondragstart = drag;
+
+        let dotColor = 'blue';
+        if (info.type === 'rating_scale') dotColor = 'green';
+        else if (info.type === 'multi_select') dotColor = 'purple';
+        else if (info.type === 'open_ended') dotColor = 'orange';
+
+        const header = document.createElement('div');
+        header.className = 'var-card-header';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'var-card-title';
+        titleSpan.innerHTML = `<span class="pill-dot ${dotColor}"></span> ${colName}`;
+        header.appendChild(titleSpan);
+
+        const actions = document.createElement('div');
+        actions.className = 'var-actions';
+
+        const btnCol = document.createElement('button');
+        btnCol.type = 'button';
+        btnCol.className = 'var-add-btn var-add-col';
+        btnCol.textContent = '+ Col';
+        btnCol.title = `Add all ${colName} categories to Banners`;
+        btnCol.onclick = (e) => { e.stopPropagation(); addBannerPill(colName); };
+        actions.appendChild(btnCol);
+
+        const btnRow = document.createElement('button');
+        btnRow.type = 'button';
+        btnRow.className = 'var-add-btn var-add-row';
+        btnRow.textContent = '+ Row';
+        btnRow.title = `Add ${colName} as table Stub (Row)`;
+        btnRow.onclick = (e) => { e.stopPropagation(); addStubPill(colName); };
+        actions.appendChild(btnRow);
+
+        header.appendChild(actions);
+        card.appendChild(header);
+
+        const categories = info.categories || info.sample || [];
+        if (categories.length > 0) {
+            const chipsRow = document.createElement('div');
+            chipsRow.className = 'var-chips-row';
+            categories.slice(0, 5).forEach(cat => {
+                const chip = document.createElement('span');
+                chip.className = 'var-chip';
+                chip.textContent = String(cat).substring(0, 22);
+                chip.onclick = (e) => { e.stopPropagation(); addBannerPill(String(cat)); };
+                chipsRow.appendChild(chip);
+            });
+            card.appendChild(chipsRow);
+        }
+
+        listContainer.appendChild(card);
+    });
+}
+
+// 6. Safe DOM-Based Table Rendering (Unlimited Columns & Collision-Free Dual Sig)
 function renderTable() {
     const table = document.getElementById('crosstab-table');
     if (!table) return;
@@ -474,36 +870,32 @@ function renderTable() {
     const stubs = getActiveStubs();
     const colBases = calculateColumnBases(bannerCols);
 
-    // Build Headers
+    // Build Headers with sequential collision-free letters
     const thead = table.querySelector('thead');
     if (thead) {
-        thead.innerHTML = "";
+        thead.innerHTML = '';
 
         const trHeader = document.createElement('tr');
         const thStub = document.createElement('th');
         thStub.className = 'stub-header';
-        thStub.textContent = stubs.length === 1 ? stubs[0] : "Category / Survey Variables";
+        thStub.textContent = stubs.length === 1 ? stubs[0] : 'Category / Survey Variables';
         trHeader.appendChild(thStub);
 
-        let letterCharCode = 65;
+        let colLetterIdx = 1;
         const colLetters = [];
 
         bannerCols.forEach((col, idx) => {
             const th = document.createElement('th');
-            let displayName = col;
-            let letter = "";
-            if (col.toLowerCase() === 'total' || idx === 0) {
-                displayName = "Total";
-                letter = "Total";
+            const cleanName = stripColumnLetter(col);
+            let displayName = cleanName;
+            let letter = '';
+
+            if (cleanName.toLowerCase() === 'total' || idx === 0) {
+                displayName = 'Total';
+                letter = 'Total';
             } else {
-                const match = col.match(/\(([A-Z])\)/);
-                if (match) {
-                    letter = match[1];
-                } else {
-                    letter = String.fromCharCode(letterCharCode);
-                    letterCharCode++;
-                    displayName = `${col} (${letter})`;
-                }
+                letter = getColumnLetter(colLetterIdx++);
+                displayName = `${cleanName} (${letter})`;
             }
             colLetters.push(letter);
             th.textContent = displayName;
@@ -536,7 +928,7 @@ function renderTable() {
     // Build Body
     const tbody = document.getElementById('table-body');
     if (!tbody) return;
-    tbody.innerHTML = "";
+    tbody.innerHTML = '';
 
     stubs.forEach(stubText => {
         const model = resolveStubToModel(stubText);
@@ -571,11 +963,11 @@ function renderTable() {
                 const isTotal = (col.toLowerCase() === 'total' || cIdx === 0);
 
                 if (cat.base_mean !== undefined) {
-                    const delta = isTotal ? 0 : (cat.seed_delta[(cIdx - 1) % cat.seed_delta.length] || 0.1);
+                    const delta = isTotal ? 0 : getColumnDelta(col, cat.label, true);
                     valNum = Math.max(1.0, Math.min(5.0, cat.base_mean + delta));
                     valStr = valNum.toFixed(2);
                 } else {
-                    const delta = isTotal ? 0 : (cat.seed_delta[(cIdx - 1) % cat.seed_delta.length] || 0);
+                    const delta = isTotal ? 0 : getColumnDelta(col, cat.label, false);
                     valNum = Math.max(1.0, Math.min(99.0, cat.base_pct + delta));
                     valStr = `${valNum.toFixed(1)}%`;
                 }
@@ -584,7 +976,6 @@ function renderTable() {
 
             // Benchmark and Column Comparisons with FDR check
             const totalVal = cellValues[0].valNum;
-            const pValuesToFDR = [];
 
             cellValues.forEach((item, cIdx) => {
                 if (item.isTotal) {
@@ -602,7 +993,7 @@ function renderTable() {
                 else if (diff <= -3.5) bm = "-";
                 benchMarkers.push(bm);
 
-                // Column comparisons
+                // Column comparisons against every other column
                 const lettersWon = [];
                 cellValues.forEach((other, oIdx) => {
                     if (oIdx === 0 || oIdx === cIdx) return;
@@ -689,6 +1080,8 @@ function renderTable() {
             }
         });
     });
+
+    syncWithBackendTabulation(bannerCols, stubs);
 }
 
 function createTdText(text) {
@@ -777,15 +1170,27 @@ function executePromptToTable() {
             addStubPill(input);
         }
 
-        // Banners matching (English + Taglish)
+        // Banners matching (English + Taglish) - Allows multi-banner stacking
+        let addedAnyBanner = false;
         if (lower.includes('age') || lower.includes('gen z') || lower.includes('millennial') || lower.includes('edad')) {
-            setBannerPreset('age');
-        } else if (lower.includes('region') || lower.includes('luzon') || lower.includes('visayas') || lower.includes('mindanao') || lower.includes('probinsya')) {
-            setBannerPreset('region');
-        } else if (lower.includes('gender') || lower.includes('sex') || lower.includes('kasarian') || lower.includes('male') || lower.includes('female') || lower.includes('babae') || lower.includes('lalaki')) {
-            setBannerPreset('gender');
-        } else if (lower.includes('income') || lower.includes('sec') || lower.includes('class abc')) {
-            setBannerPreset('sec');
+            addBannerPill('Age Generation', false);
+            addedAnyBanner = true;
+        }
+        if (lower.includes('region') || lower.includes('luzon') || lower.includes('visayas') || lower.includes('mindanao') || lower.includes('probinsya')) {
+            addBannerPill('Region', false);
+            addedAnyBanner = true;
+        }
+        if (lower.includes('gender') || lower.includes('sex') || lower.includes('kasarian') || lower.includes('male') || lower.includes('female') || lower.includes('babae') || lower.includes('lalaki')) {
+            addBannerPill('Gender', false);
+            addedAnyBanner = true;
+        }
+        if (lower.includes('income') || lower.includes('sec') || lower.includes('class abc')) {
+            addBannerPill('Monthly Income Class', false);
+            addedAnyBanner = true;
+        }
+        if (lower.includes('brand') || lower.includes('tatak')) {
+            addBannerPill('Brand Preference', false);
+            addedAnyBanner = true;
         }
 
         renderTable();
