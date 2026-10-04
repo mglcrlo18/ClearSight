@@ -183,10 +183,32 @@ function executeWeighting() {
     if (effDisp) effDisp.innerText = "Computing IPF...";
     if (neffDisp) neffDisp.innerText = "...";
 
+    const schema = (loadedDatasetInfo && loadedDatasetInfo.schema) || {};
+    const payload = { trim_percentile: trimVal };
+
+    // If dataset has no 'Region', look for categorical demographics like Gender or Distribution Site (CS-N04)
+    if (!schema['Region']) {
+        const fallbackCol = Object.keys(schema).find(c => 
+            !c.startsWith('__') && 
+            schema[c].type === 'single_select' && 
+            schema[c].categories && 
+            schema[c].categories.length >= 2 && 
+            schema[c].categories.length <= 10
+        );
+        if (fallbackCol) {
+            const targets = {};
+            const cats = schema[fallbackCol].categories;
+            const equalShare = parseFloat((1.0 / cats.length).toFixed(4));
+            targets[fallbackCol] = {};
+            cats.forEach(c => targets[fallbackCol][c] = equalShare);
+            payload.targets = targets;
+        }
+    }
+
     fetch('/api/weight', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trim_percentile: trimVal })
+        body: JSON.stringify(payload)
     })
     .then(res => res.json())
     .then(data => {
@@ -1391,6 +1413,40 @@ function toggleLock() {
         btn.style.background = "rgba(255, 212, 0, 0.15)";
         btn.style.color = "var(--volt-yellow)";
         showToast("🔓 Codeframe unlocked for reviewer calibration.");
+    }
+}
+
+async function handleCodeframeUpload(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+
+    try {
+        const text = await file.text();
+        let codeframe = JSON.parse(text);
+        if (!Array.isArray(codeframe) && codeframe.codeframe) {
+            codeframe = codeframe.codeframe;
+        }
+        if (!Array.isArray(codeframe)) {
+            showToast("Invalid codeframe format: Expected a JSON array of category definitions.", true);
+            return;
+        }
+
+        const res = await fetch('/api/set-codeframe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ codeframe: codeframe })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            showToast(data.message || ('Custom codeframe loaded with ' + codeframe.length + ' categories.'));
+            loadTaglishCoding();
+        } else {
+            showToast('Codeframe upload failed: ' + (data.message || 'Unknown error'), true);
+        }
+    } catch (err) {
+        showToast('Failed to parse codeframe JSON: ' + err.message, true);
+    } finally {
+        event.target.value = '';
     }
 }
 

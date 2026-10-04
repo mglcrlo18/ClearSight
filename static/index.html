@@ -457,6 +457,8 @@
                     </div>
                     <div class="lock-status">
                         <span id="agreement-score">Heuristic Qualitative Coder (Preview)</span>
+                        <input type="file" id="codeframe-file-input" accept=".json" style="display:none;" onchange="handleCodeframeUpload(event)">
+                        <button class="lock-btn" id="upload-codeframe-btn" onclick="document.getElementById('codeframe-file-input').click()" style="margin-right: 8px;">📂 Custom Codeframe</button>
                         <button class="lock-btn" id="lock-btn" onclick="toggleLock()">🔒 Lock Codeframe</button>
                     </div>
                 </div>

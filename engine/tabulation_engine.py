@@ -562,7 +562,12 @@ def build_crosstab_table(
                     row_c.append(float(matched_cnt))
                 mention_table.append(row_c)
             mention_arr = np.array(mention_table)
-            rs_f, rs_df1, rs_p = rao_scott_second_order_mrcv(mention_arr, n_eff=float(effective_bases[0]))
+            # Pass respondent_matrix to activate the true eigenvalue design-effect adjustment (CS-005)
+            rs_f, rs_df1, rs_p = rao_scott_second_order_mrcv(
+                mention_arr,
+                n_eff=float(effective_bases[0]),
+                respondent_matrix=ind_df.to_numpy()
+            )
             mrcv_info = {
                 "f_stat": float(round(rs_f, 4)),
                 "df1": float(round(rs_df1, 4)),

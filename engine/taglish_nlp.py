@@ -77,7 +77,7 @@ PHILHEALTH_REGEX = re.compile(r'\b\d{2}[-\s]\d{9}[-\s]\d{1}\b')
 UMID_REGEX = re.compile(r'\b\d{4}[-\s]\d{7}[-\s]\d{1}\b')
 
 TITLES_AND_MARKERS = r'(?:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|engr\.|gng\.|bb\.|g\.|si|kay|ni|ate|kuya|tita|tito|mang|aling|manang|manong)'
-TAGALOG_MARKERS = r'(?:ang|na|ay|ko|mo|ka|po|opo|ng|sa|para|kanina|kahapon|dahil|pero|kasi|at|yung|mga|ug|ra|jud|man)'
+TAGALOG_MARKERS = r'(?:ang|na|ay|ko|mo|ka|po|opo|ng|sa|para|kanina|kahapon|dahil|pero|kasi|at|yung|mga|ug|ra|jud|man|barato|lami|nindot|mahal|ayos|masyado|sobra|hindi|wala|may|meron)'
 
 # Name honorifics in Philippine English / Tagalog (including kinship terms & ALL-CAPS names, lowercase & compound prepositions CS-023)
 NAME_HONORIFICS = re.compile(
@@ -87,8 +87,8 @@ NAME_HONORIFICS = re.compile(
     # Capitalized name: 1 to 3 words
     r'(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[A-Z][a-z]+){0,2}'
     r'|'
-    # Lowercase name: at least 2 words (e.g. maria santos)
-    r'[a-z]+(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[a-z]+){1,2}'
+    # Lowercase names: 1 to 3 words, excluding Tagalog markers and regional predicate adjectives (CS-023)
+    r'(?!' + TAGALOG_MARKERS + r'\b)[a-z]+(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[a-z]+){0,2}'
     r'))\b'
 )
 
@@ -690,8 +690,10 @@ def analyze_taglish_verbatim(
             if has_affinity and entry["code_id"] == 120:
                 continue
 
-            for pat in entry["patterns"]:
-                mm = re.search(pat, clause_augmented)
+            patterns = entry.get("patterns") or entry.get("keywords") or []
+            for pat in patterns:
+                pat_regex = pat if (pat.startswith(r'\b') or '\\' in pat) else rf'\b{re.escape(pat)}\b'
+                mm = re.search(pat_regex, clause_augmented, re.IGNORECASE)
                 if mm:
                     # Check for preceding negator in the last 3 tokens
                     toks_before = re.findall(r'\w+', clause_lower[:mm.start()])[-3:]
@@ -765,7 +767,8 @@ def analyze_taglish_verbatim(
 def batch_code_open_ends(
     verbatims: list[str],
     category: Optional[str] = None,
-    apply_lumping: bool = False
+    apply_lumping: bool = False,
+    codeframe: Optional[list[dict]] = None
 ) -> dict:
     """
     Codes an entire battery of open-ended answers, generating a standardized
@@ -784,7 +787,7 @@ def batch_code_open_ends(
     coded_records = []
 
     for idx, raw_text in enumerate(verbatims):
-        matches = analyze_taglish_verbatim(raw_text, category=category, apply_lumping=apply_lumping)
+        matches = analyze_taglish_verbatim(raw_text, category=category, apply_lumping=apply_lumping, codeframe=codeframe)
         record = {
             "response_id": idx + 1,
             "raw_text": scrub_pii(raw_text),

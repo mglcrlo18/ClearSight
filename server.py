@@ -60,6 +60,8 @@ SESSION = {
     "weight_diagnostics": None,
     "hygiene_audit": [],
     "last_tabulation": None,
+    "open_feedback_analysis": None,
+    "custom_codeframe": None,
     "quarantine_straight_liners": True,
     "quarantine_speeders": True
 }
@@ -357,6 +359,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 SESSION["hygiene_audit"] = audit_log
                 SESSION["last_tabulation"] = None
                 SESSION["open_feedback_analysis"] = None
+                SESSION["custom_codeframe"] = None
 
                 self.send_json_response({
                     "status": "success",
@@ -443,12 +446,13 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             if not custom_codeframe or not isinstance(custom_codeframe, list):
                 self.send_json_response({"status": "error", "message": "Codeframe must be a non-empty list of category definitions."}, 400)
                 return
-            from engine.taglish_nlp import set_custom_codeframe
-            try:
-                set_custom_codeframe(custom_codeframe)
-                self.send_json_response({"status": "success", "message": f"Registered custom codeframe with {len(custom_codeframe)} categories."})
-            except Exception as e:
-                self.send_json_response({"status": "error", "message": str(e)}, 400)
+            with SESSION_LOCK:
+                SESSION["custom_codeframe"] = custom_codeframe
+            self.send_json_response({
+                "status": "success", 
+                "message": f"Registered custom codeframe with {len(custom_codeframe)} categories.",
+                "categories_count": len(custom_codeframe)
+            })
 
         elif path == "/api/tabulate":
             if SESSION["df"] is None:
@@ -524,11 +528,14 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     self.send_json_response({"status": "empty", "message": "No open-ended feedback column found in dataset."})
                     return
 
+                with SESSION_LOCK:
+                    custom_codeframe = SESSION.get("custom_codeframe")
                 verbatims = df[open_col].dropna().astype(str).tolist()
                 coding_results = batch_code_open_ends(
                     verbatims,
                     category=req_data.get("category"),
-                    apply_lumping=bool(req_data.get("apply_lumping", req_data.get("lump", False)))
+                    apply_lumping=bool(req_data.get("apply_lumping", req_data.get("lump", False))),
+                    codeframe=custom_codeframe
                 )
                 SESSION["open_feedback_analysis"] = coding_results
 
@@ -665,6 +672,21 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
         conf_float = 0.95 if int(confidence) == 95 else (0.90 if int(confidence) == 90 else 0.99)
         weights = SESSION.get("weights")
+
+        # Apply active hygiene quarantine filters to analytical sample (CS-045)
+        flag_col = "__is_flagged" if df is not None and "__is_flagged" in df.columns else ("_is_flagged" if df is not None and "_is_flagged" in df.columns else None)
+        reason_col = "__flag_reasons" if df is not None and "__flag_reasons" in df.columns else ("_flag_reasons" if df is not None and "_flag_reasons" in df.columns else None)
+
+        if df is not None and flag_col and reason_col:
+            cond = pd.Series(True, index=df.index)
+            if SESSION.get("quarantine_straight_liners", True):
+                cond &= ~df[reason_col].str.contains("Straight-liner", na=False)
+            if SESSION.get("quarantine_speeders", True):
+                cond &= ~df[reason_col].str.contains("Speeder", na=False)
+            if not cond.all():
+                df = df[cond].copy()
+                if weights is not None:
+                    weights = weights[cond.to_numpy()]
 
         tables = []
         for stub_name in stubs:

@@ -565,7 +565,7 @@ def rao_scott_second_order_mrcv(
         p_marg = np.mean(Y, axis=0)
         V_0 = np.diag(p_marg) - np.outer(p_marg, p_marg)
 
-        eigvals = np.linalg.eigvals(np.linalg.pinv(V_0) @ cov_hat)
+        eigvals = np.real(np.linalg.eigvals(np.linalg.pinv(V_0) @ cov_hat))
         eigvals = eigvals[eigvals > 0]
         if len(eigvals) > 0:
             delta_bar = float(np.mean(eigvals))
