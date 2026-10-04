@@ -78,6 +78,7 @@ function uploadDataFile(file) {
             if (data.status === 'success') {
                 loadedDatasetInfo = data;
                 applyIngestedSummary(data);
+                resetTraysForDataset(data);
                 showToast(`✓ Ingested ${data.total_respondents} records from "${data.filename}"`);
                 renderTable();
             } else {
@@ -89,6 +90,29 @@ function uploadDataFile(file) {
         });
     };
     reader.readAsArrayBuffer(file);
+}
+
+// P5-06: after an upload, replace the demo stub/banners (Q1: Brand Preference, NCR, Balance Luzon...)
+// with columns that exist in the new file, so the first table is real instead of "Column not found".
+function resetTraysForDataset(data) {
+    const schema = (data && data.schema) || {};
+    const cols = Object.keys(schema).filter(c => !c.startsWith('__'));
+    const stub = cols.find(c => schema[c].type === 'rating_scale') ||
+                 cols.find(c => schema[c].type === 'single_select');
+    const banner = cols.find(c => c !== stub && schema[c].type === 'single_select' &&
+                 Array.isArray(schema[c].categories) && schema[c].categories.length >= 2 && schema[c].categories.length <= 6);
+    const stubTray = document.getElementById('stub-tray');
+    if (stubTray && stub) {
+        stubTray.replaceChildren(createPill(stub, true));
+    }
+    const bannerTray = document.getElementById('banner-tray');
+    if (bannerTray) {
+        bannerTray.replaceChildren(createPill('Total', false));
+        if (banner) {
+            schema[banner].categories.forEach(cat => bannerTray.appendChild(createPill(String(cat), false)));
+        }
+        refreshBannerPillLabels();
+    }
 }
 
 function loadSampleDataset() {
@@ -1094,7 +1118,10 @@ function renderTableFromData(tables) {
         table.parentNode.insertBefore(anovaFootnote, table.nextSibling);
     }
     if (t.anova) {
-        anovaFootnote.textContent = `One-way ANOVA F(${t.anova.df1}, ${t.anova.df2}) = ${t.anova.f_stat}, p = ${t.anova.p_val}`;
+        // P5-14: p is rounded to 4 dp server-side, so tiny p-values arrived as 0 and printed "p = 0".
+        const pTxt = (Number(t.anova.p_val) < 0.0001) ? 'p < 0.0001' : `p = ${t.anova.p_val}`;
+        const anovaKind = t.anova.weighted ? 'Weighted one-way ANOVA' : 'One-way ANOVA';
+        anovaFootnote.textContent = `${anovaKind} F(${t.anova.df1}, ${t.anova.df2}) = ${t.anova.f_stat}, ${pTxt}`;
         anovaFootnote.style.display = 'block';
     } else {
         anovaFootnote.style.display = 'none';
@@ -1122,7 +1149,7 @@ async function loadTaglishCoding() {
         }
     } catch (err) {
         console.error("Taglish coding error:", err);
-        grid.innerHTML = `<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: #dc2626;">Error loading qualitative analysis: ${err.message}</div>`;
+        grid.innerHTML = `<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: #dc2626;">Error loading qualitative analysis: ${escapeHtml(err.message)}</div>`;
     }
 }
 
@@ -1349,8 +1376,12 @@ function downloadExcel() {
             if (btn) { btn.textContent = origText; btn.disabled = false; }
             if (data.status === 'success') {
                 showToast("✓ Saved directly to Downloads folder!");
+                triggerFileDownload('/api/export/excel', 'ClearSight_Agency_Banner_Book.xlsx');
+                return;
             }
-            triggerFileDownload('/api/export/excel', 'ClearSight_Agency_Banner_Book.xlsx');
+            // P4-09: show the server's reason (e.g. "Build at least one table first.") instead of
+            // downloading the HTML error page under an .xlsx name.
+            showToast(data.message || 'Export failed.', true);
         })
         .catch(err => {
             if (btn) { btn.textContent = origText; btn.disabled = false; }

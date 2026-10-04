@@ -37,24 +37,39 @@ import numpy as np
 # 1. PII Redaction Pipeline (P3-09, CS-023, CS-N12)
 # ---------------------------------------------------------------------------
 
-# Philippine Mobile numbers: standard 09xx, DITO 0895-0898, +63 9xx, +63 89x
+# Philippine Mobile numbers: 09xx, 08xx (Smart 0813, Globe 0817, DITO 0895-0898), +63 9xx, +63 8xx (P5-07)
 PHONE_REGEX = re.compile(
-    r'(?<!\d)(?:\+?63[\s.-]?\(?(?:9\d{2}|89[5-8])\)?|\(?0(?:9\d{2}|89[5-8])\)?|0(?:9\d{2}|89[5-8]))[\s.-]?(?:\d[\s.-]?){6}\d(?!\d)'
+    r'(?<!\d)(?:\+?63[\s.-]?\(?(?:9\d{2}|8[1-9]\d)\)?|\(?0(?:9\d{2}|8[1-9]\d)\)?)[\s.-]?(?:\d[\s.-]?){6}\d(?!\d)'
 )
 
 # Philippine Landlines: (02) 8123 4567, 02-8123-4567 (with lookaround to avoid masking order numbers like #2024)
-LANDLINE_REGEX = re.compile(r'(?<![\d#])(?:\(0\d{1,2}\)|0\d{1,2})[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)')
+LANDLINE_REGEX = re.compile(
+    r'(?<![\d#])(?:\(0\d{1,2}\)|0\d{1,2}|\+63[\s.-]?\(?\d{1,2}\)?)[\s.-]?\d{3,4}[\s.-]?\d{4}(?!\d)'
+    r'|(?<![\d#.,])8[\s.-]\d{3}[\s.-]\d{4}(?![\d])'  # Metro Manila 8-digit without area code (P5-07)
+)
 
 EMAIL_REGEX = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
-CARD_REGEX = re.compile(r'(?<!\d)(?:4\d{3}|5[1-5]\d{2}|6011|3[47]\d{2})[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}(?!\d)')
-PHILSYS_REGEX = re.compile(
-    r'(?<![\d#])(?:'
-    r'\d{4}-\d{4}-\d{4}(?:-\d{4})?'
-    r'|'
-    r'(?i:philsys|national\s*id|pcn|psn)[\s:]*\d{4}\s\d{4}\s\d{4}'
-    r'|'
-    r'(?i:(?:philsys|national\s*id|pcn|id)(?:[^\d\n]{1,20}))\d{4}\s\d{4}\s\d{4}\s\d{4}'
-    r')(?!\d)'
+# Payment cards: any 13-19 digit run (spaces/hyphens allowed) that passes the Luhn check (P5-07).
+CARD_CANDIDATE_REGEX = re.compile(r'(?<![\d#])\d(?:[\s-]?\d){12,18}(?!\d)')
+
+
+def _luhn_ok(candidate: str) -> bool:
+    digits = [int(c) for c in re.sub(r'\D', '', candidate)][::-1]
+    total = 0
+    for i, d in enumerate(digits):
+        if i % 2 == 1:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return len(digits) >= 13 and total % 10 == 0
+
+
+# PhilSys PSN (12 digits) / PCN (16 digits): hyphenated anywhere, or space-separated when a PhilSys keyword
+# appears up to 30 characters earlier in the sentence. The keyword itself is kept (P5-07).
+PHILSYS_REGEX = re.compile(r'(?<![\d#])\d{4}-\d{4}-\d{4}(?:-\d{4})?(?![\d-])')
+PHILSYS_KEYWORD_REGEX = re.compile(
+    r'(\b(?i:philsys|phil\s*id|national\s*id|psn|pcn)\b[^\d\n]{0,30})(\d{4}\s\d{4}\s\d{4}(?:\s\d{4})?)(?!\d)'
 )
 TIN_REGEX = re.compile(r'\b\d{3}[-\s]\d{3}[-\s]\d{3}(?:[-\s]\d{3})?\b')
 SSS_REGEX = re.compile(r'\b\d{2}[-\s]\d{7}[-\s]\d{1}\b')
@@ -63,8 +78,8 @@ UMID_REGEX = re.compile(r'\b\d{4}[-\s]\d{7}[-\s]\d{1}\b')
 
 # Name honorifics in Philippine English / Tagalog (including kinship terms & ALL-CAPS names)
 NAME_HONORIFICS = re.compile(
-    r'\b(?i:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|si|kay|ni|ate|kuya|tita|tito|mang|aling|manang|manong)\s+'
-    r'((?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,})){0,2})\b'
+    r'\b(?i:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|engr\.|gng\.|bb\.|g\.|si|kay|ni|ate|kuya|tita|tito|mang|aling|manang|manong)\s+'
+    r'((?:(?:Gng|Bb|G|Dr|Atty|Engr|Mr|Mrs|Ms)\.\s*)?(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,})){0,2})\b'
 )
 
 BRAND_ALLOWLIST = {'mang inasal', 'gcash', 'paymaya', 'shopee', 'lazada', 'grab', 'angkas'}
@@ -76,11 +91,13 @@ def scrub_pii(text: Optional[str]) -> str:
         return ""
     text_str = str(text)
 
-    scrubbed = PHONE_REGEX.sub("[PHONE_REDACTED]", text_str)
-    scrubbed = LANDLINE_REGEX.sub("[PHONE_REDACTED]", scrubbed)
-    scrubbed = CARD_REGEX.sub("[CARD_REDACTED]", scrubbed)
-    scrubbed = EMAIL_REGEX.sub("[EMAIL_REDACTED]", scrubbed)
+    # Cards first: a Luhn-valid 16-digit run can contain a "09xx"/"08xx" group the phone pattern would split.
+    scrubbed = CARD_CANDIDATE_REGEX.sub(lambda m: "[CARD_REDACTED]" if _luhn_ok(m.group(0)) else m.group(0), text_str)
+    scrubbed = PHILSYS_KEYWORD_REGEX.sub(lambda m: m.group(1) + "[PHILSYS_REDACTED]", scrubbed)
     scrubbed = PHILSYS_REGEX.sub("[PHILSYS_REDACTED]", scrubbed)
+    scrubbed = PHONE_REGEX.sub("[PHONE_REDACTED]", scrubbed)
+    scrubbed = LANDLINE_REGEX.sub("[PHONE_REDACTED]", scrubbed)
+    scrubbed = EMAIL_REGEX.sub("[EMAIL_REDACTED]", scrubbed)
     scrubbed = TIN_REGEX.sub("[TIN_REDACTED]", scrubbed)
     scrubbed = SSS_REGEX.sub("[SSS_REDACTED]", scrubbed)
     scrubbed = PHILHEALTH_REGEX.sub("[PHILHEALTH_REDACTED]", scrubbed)

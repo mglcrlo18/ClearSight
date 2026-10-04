@@ -164,7 +164,12 @@ def calculate_rim_weights(
             continue
         
         raw_sum = sum(targets.values())
-        if raw_sum > 101.0 and all(v >= 1.0 for v in targets.values()):
+        if any(float(v) < 0 for v in targets.values()) or raw_sum <= 0:
+            raise ValueError(f"Targets for {var} must be non-negative and sum to more than 0")
+        is_counts = all(float(v).is_integer() for v in targets.values()) and len(targets) > 1
+        # P5-05: integer population counts are valid whatever their total (e.g. {20, 30} or census counts);
+        # only fractional targets must look like proportions (1.0) or percentages (100).
+        if (raw_sum > 101.0 and all(v >= 1.0 for v in targets.values())) or (is_counts and not 99.0 <= raw_sum <= 101.0):
             norm_factor = raw_sum
         elif 99.0 <= raw_sum <= 101.0:
             norm_factor = 100.0

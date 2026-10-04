@@ -40,7 +40,8 @@ def test_server_csat_and_snapshot():
     snap = build_snapshot_data()
     assert snap["project_title"] == "sample_survey.csv"
     assert snap["sample_n"] == len(df)
-    assert snap["csat_score"] == csat
+    # P5-15: the snapshot CSAT is weighted when the session has weights
+    assert snap["csat_score"] == compute_csat(df, SESSION.get("weights"))
     assert "findings" in snap
 
 

@@ -51,12 +51,22 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
     }
 
     if ext == ".csv":
-        encodings = ["utf-8", "utf-8-sig", "latin-1", "cp1252"]
+        # cp1252 before latin-1: latin-1 accepts every byte, so cp1252 was unreachable and Windows
+        # smart quotes / ellipses (0x91-0x97) became control characters (P5-12).
+        encodings = ["utf-8", "utf-8-sig", "cp1252", "latin-1"]
         df = None
         for enc in encodings:
             try:
                 # P3-20: Read as string first to preserve leading zeros in codes/stubs
                 df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc, dtype=str, keep_default_na=False, na_values=[''])
+                # P5-11: semicolon/tab-delimited exports (Excel in comma-decimal locales) arrive as one column.
+                if df.shape[1] == 1:
+                    header = str(df.columns[0])
+                    for alt in (";", "\t", "|"):
+                        if alt in header:
+                            df = pd.read_csv(io.BytesIO(file_bytes), encoding=enc, dtype=str, keep_default_na=False, na_values=[''], sep=alt)
+                            metadata["delimiter"] = alt
+                            break
                 metadata["encoding"] = enc
                 break
             except (UnicodeDecodeError, pd.errors.ParserError):
@@ -259,7 +269,7 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
                     "mean": float(round(numeric_series.mean(), 2)),
                     "sample": sample_vals
                 }
-            elif (series.astype(str).str.match(r'^0\d+$').mean() > 0.3 or re.search(r'(?i)_(?:code|stub|no)$', str(col))) and uniques <= 500:
+            elif (series.astype(str).str.match(r'^0\d+$').mean() > 0.3 or re.search(r'(?i)_(?:code|stub)$', str(col))) and uniques <= 500:
                 schema[col] = {
                     "type": "single_select",
                     "categories": [str(x) for x in series.unique()[:20]],
@@ -328,7 +338,8 @@ def run_hygiene_audit(
     audit_log = []
     df = df.copy()
     if log_filepath is None:
-        log_filepath = DEFAULT_LOG_FILEPATH
+        # P4-11: allow users/IT to switch the on-disk cleaning log off entirely.
+        log_filepath = False if os.environ.get("CLEARSIGHT_NO_AUDIT_LOG") else DEFAULT_LOG_FILEPATH
 
     # Initialize helper columns
     df["__is_flagged"] = False

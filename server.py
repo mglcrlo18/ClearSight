@@ -12,6 +12,7 @@ import logging
 import mimetypes
 import tempfile
 import subprocess
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -43,6 +44,9 @@ from engine.export_engine import (
 
 PORT = 8540
 ALLOWED_HOSTS = {"127.0.0.1:8540", "localhost:8540", "127.0.0.1", "localhost"}
+# CWE-400 / CS-N15: cap request bodies (uploads) and idle connections.
+MAX_BODY_BYTES = int(float(os.environ.get("CLEARSIGHT_MAX_UPLOAD_MB", "200")) * 1024 * 1024)
+REQUEST_TIMEOUT_SECONDS = 60
 
 # In-Memory Active Survey Session State
 SESSION = {
@@ -109,15 +113,22 @@ def load_bundled_sample():
 
 
 
-def compute_csat(df):
-    """Extracts true Top-2-Box satisfaction percentage from dataset if available."""
+def compute_csat(df, weights=None):
+    """Top-2-Box satisfaction for the snapshot: weighted when weights exist, DK/refused (97/98/99)
+    excluded from the base, top two points of the scale (P5-15)."""
     if df is None:
         return None
+    w_all = np.ones(len(df)) if weights is None else np.asarray(weights, dtype=float)
     for c in df.columns:
         if any(k in c.lower() for k in ["csat", "satisfaction"]):
-            s_vals = pd.to_numeric(df[c], errors="coerce").dropna()
+            vals = pd.to_numeric(df[c], errors="coerce")
+            keep = (vals.notna() & ~vals.isin([97, 98, 99])).to_numpy()
+            s_vals = vals[keep]
             if len(s_vals) > 0 and s_vals.max() <= 5:
-                return f"{(s_vals >= 4).mean() * 100:.1f}%"
+                w = w_all[keep]
+                if w.sum() <= 0:
+                    return None
+                return f"{float(w[(s_vals >= 4).to_numpy()].sum() / w.sum()) * 100:.1f}%"
     return None
 
 
@@ -128,7 +139,7 @@ def build_snapshot_data():
     diag = SESSION.get("weight_diagnostics") or {}
     neff = diag.get("kish_n_eff", float(n))
     eff = diag.get("weighting_efficiency_pct", 100.0)
-    csat_val = compute_csat(df) or "n/a"
+    csat_val = compute_csat(df, SESSION.get("weights")) or "n/a"
 
     delights = []
     frictions = []
@@ -159,6 +170,9 @@ def build_snapshot_data():
 
 class ClearSightRequestHandler(BaseHTTPRequestHandler):
     server_version = "ClearSight/1.0"
+    # socketserver applies this to every accepted connection (settimeout), so a client that
+    # announces a large Content-Length and never sends it no longer pins a thread forever.
+    timeout = REQUEST_TIMEOUT_SECONDS
 
     def log_message(self, format, *args):
         # Clean production logging
@@ -176,11 +190,13 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         """Validates Origin/Referer header on state-changing endpoints to prevent CSRF."""
         origin = self.headers.get("Origin", "")
         referer = self.headers.get("Referer", "")
-        allowed = ("http://127.0.0.1:8540", "http://localhost:8540")
-        if origin and not any(origin.startswith(a) for a in allowed):
+        allowed = {f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}"}
+        # Exact origin match: a prefix test also accepted e.g. "http://127.0.0.1:85401" (P5-09).
+        if origin and origin.rstrip("/") not in allowed:
             self.send_error(403, "Forbidden: Invalid cross-origin request.")
             return False
-        if not origin and referer and not any(referer.startswith(a) for a in allowed):
+        ref = urlparse(referer) if referer else None
+        if not origin and referer and f"{ref.scheme}://{ref.netloc}" not in allowed:
             self.send_error(403, "Forbidden: Invalid cross-origin referer.")
             return False
         return True
@@ -295,7 +311,13 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
         try:
             content_length = int(self.headers.get("Content-Length", 0))
+            if content_length > MAX_BODY_BYTES:
+                self.close_connection = True
+                self.send_json_response({"status": "error", "message": f"Request too large: limit is {MAX_BODY_BYTES // (1024 * 1024)} MB."}, 413)
+                return
             body_bytes = self.rfile.read(content_length) if content_length > 0 else b""
+            if len(body_bytes) < content_length:
+                raise ValueError("Truncated request body.")
         except Exception:
             self.send_json_response({"status": "error", "message": "Failed to read request body."}, 400)
             return
@@ -390,15 +412,33 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 req_data = {}
 
             df = SESSION["df"]
+            # CS-088: validate request types and never drop the connection on bad input.
             banner_cols = req_data.get("banner_cols", ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"])
             stubs = req_data.get("stubs", ["Brand Preference"])
-            confidence = int(req_data.get("confidence", 95))
-            fdr_enabled = bool(req_data.get("fdr_enabled", True))
             metric = req_data.get("metric", "pct")
+            try:
+                confidence = int(req_data.get("confidence", 95))
+            except (TypeError, ValueError):
+                confidence = None
+            fdr_raw = req_data.get("fdr_enabled", True)
+            if (not isinstance(banner_cols, list) or not all(isinstance(b, str) for b in banner_cols)
+                    or not isinstance(stubs, list) or not stubs or not all(isinstance(x, str) for x in stubs)
+                    or confidence not in (90, 95, 99) or metric not in ("pct", "mean", "t2b")
+                    or not isinstance(fdr_raw, bool)):
+                self.send_json_response({"status": "error", "message": "Invalid tabulation request: banner_cols/stubs must be lists of strings, confidence 90/95/99, fdr_enabled true/false, metric pct/mean/t2b."}, 400)
+                return
+            fdr_enabled = fdr_raw
 
-            result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric)
-            SESSION["last_tabulation"] = result
-            SESSION["fdr_enabled"] = fdr_enabled
+            try:
+                result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric)
+            except Exception as e:
+                logging.exception(f"Tabulation error: {e}")
+                self.send_json_response({"status": "error", "message": f"Tabulation failed: {e}"}, 500)
+                return
+            # P4-09: tables that only carry an error (e.g. the UI's placeholder stub) do not count as built.
+            if any(not t.get("error") for t in result):
+                SESSION["last_tabulation"] = [t for t in result if not t.get("error")]
+                SESSION["fdr_enabled"] = fdr_enabled
             self.send_json_response({"status": "success", "table": result})
 
         elif path == "/api/code-open-ends":
@@ -423,12 +463,15 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 else:
                     for col in df.columns:
                         c_low = col.lower()
-                        if re.search(r'\b(?:open|feedback|comment|verbatim)\b', c_low) or (df[col].dtype == object and df[col].dropna().astype(str).str.len().mean() > 20):
+                        # P5-13: pandas >= 3 stores text as the "str" dtype, so `dtype == object` never matched.
+                        is_text = df[col].dtype == object or pd.api.types.is_string_dtype(df[col])
+                        if re.search(r'\b(?:open|feedback|comment|verbatim)\b', c_low) or (is_text and df[col].dropna().astype(str).str.len().mean() > 20):
                             open_col = col
                             break
 
                 if not open_col:
-                    self.send_json_response({"status": "error", "message": "No open-ended feedback column found in dataset."}, 400)
+                    # Not an error: many files have no open-ends. A 400 here printed a console error in the UI (P5-10).
+                    self.send_json_response({"status": "empty", "message": "No open-ended feedback column found in dataset."})
                     return
 
                 verbatims = df[open_col].dropna().astype(str).tolist()
