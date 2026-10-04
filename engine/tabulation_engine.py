@@ -44,6 +44,14 @@ def resolve_column(df: pd.DataFrame, name: str) -> Optional[str]:
         if re.sub(r'[^a-zA-Z0-9]', '', str(col)).lower() == clean_name:
             return col
 
+    # Check if stripping leading question numbering (e.g. "Q1: ", "Q1. ", "1. ") matches
+    stripped = re.sub(r'^(?:q\d+[\s:.-]*|\d+[\s:.-]+|question\s*\d+[\s:.-]*)', '', str(name), flags=re.IGNORECASE).strip()
+    if stripped and stripped != str(name):
+        clean_stripped = re.sub(r'[^a-zA-Z0-9]', '', stripped).lower()
+        for col in df.columns:
+            if re.sub(r'[^a-zA-Z0-9]', '', str(col)).lower() == clean_stripped:
+                return col
+
     return None
 
 

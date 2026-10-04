@@ -123,6 +123,7 @@ function loadSampleDataset() {
             if (data.status === 'success') {
                 loadedDatasetInfo = data;
                 applyIngestedSummary(data);
+                resetTraysForDataset(data);
                 showToast("✓ Loaded sample survey (n = 412) into local memory");
                 renderTable();
             } else {
@@ -307,9 +308,9 @@ function getActiveBannerColumns() {
 
 function getActiveStubs() {
     const stubTray = document.getElementById('stub-tray');
-    if (!stubTray) return ["Q1: Brand Preference"];
+    if (!stubTray) return [];
     const pills = Array.from(stubTray.querySelectorAll('.tag-pill'));
-    if (pills.length === 0) return ["Q1: Brand Preference"];
+    if (pills.length === 0) return [];
     return pills.map(p => {
         const name = p.getAttribute('data-name');
         if (name) return name.trim();
@@ -427,9 +428,6 @@ function removeStubPill(e, name) {
     pills.forEach(p => {
         if (p.getAttribute('data-name') === name) tray.removeChild(p);
     });
-    if (tray.querySelectorAll('.tag-pill').length === 0) {
-        tray.appendChild(createPill("Q1: Brand Preference", true));
-    }
     renderTable();
 }
 
@@ -564,9 +562,8 @@ function clearStubs() {
     const tray = document.getElementById('stub-tray');
     if (!tray) return;
     tray.innerHTML = "";
-    tray.appendChild(createPill("Overall CSAT (T2B)", true));
     renderTable();
-    showToast("Stubs reset");
+    showToast("Stubs cleared");
 }
 
 // 5. Survey Dictionary Models
@@ -918,6 +915,22 @@ async function renderTable() {
     const bannerCols = getActiveBannerColumns();
     const stubs = getActiveStubs();
 
+    if (!stubs || stubs.length === 0) {
+        currentTableData = null;
+        const thead = table.querySelector('thead');
+        if (thead) thead.innerHTML = '';
+        const tbody = document.getElementById('table-body');
+        if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="99" style="text-align:center; padding: 3.5rem 1.5rem; color: #64748B;">
+                <div style="font-weight: 600; font-size: 1.05rem; margin-bottom: 0.5rem; color: #334155;">No Row Variable (Stub) Selected</div>
+                <div style="font-size: 0.875rem; color: #64748B;">Click or drag a question from the Survey Variables drawer below, or type a stub name above.</div>
+            </td></tr>`;
+        }
+        const anovaFootnote = document.getElementById('table-anova-note');
+        if (anovaFootnote) anovaFootnote.style.display = 'none';
+        return;
+    }
+
     try {
         const response = await fetch('/api/tabulate', {
             method: 'POST',
@@ -948,10 +961,17 @@ function renderTableFromData(tables) {
 
     const t = tables[0];
     if (t.error) {
+        const thead = table.querySelector('thead');
+        if (thead) thead.innerHTML = '';
         const tbody = document.getElementById('table-body');
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="99" style="text-align:center; padding: 2rem; color: #dc2626; font-weight: 500;">⚠ ${escapeHtml(t.error)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="99" style="text-align:center; padding: 2.5rem 1.5rem; color: #dc2626; font-weight: 500;">
+                <div style="font-size: 1.05rem; margin-bottom: 0.35rem;">⚠ ${escapeHtml(t.error)}</div>
+                <div style="font-size: 0.85rem; color: #64748B; font-weight: normal;">Please choose a variable from the Survey Variables drawer or check the spelling.</div>
+            </td></tr>`;
         }
+        const anovaFootnote = document.getElementById('table-anova-note');
+        if (anovaFootnote) anovaFootnote.style.display = 'none';
         return;
     }
     const bannerCols = t.banner_cols || ['Total'];

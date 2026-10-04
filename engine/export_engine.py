@@ -129,7 +129,11 @@ def generate_excel_banner_book(
 
     existing_sheet_names = {"Methodology & Legend"}
 
-    for t_idx, t_data in enumerate(tables_data, start=1):
+    valid_tables = [t for t in tables_data if not t.get("error") and len(t.get("rows", [])) > 0]
+    if not valid_tables:
+        raise ValueError("Build at least one valid table first.")
+
+    for t_idx, t_data in enumerate(valid_tables, start=1):
         clean_title = t_data.get("title", f"Table_{t_idx}")
         safe_sheet_name = sanitize_sheet_name(clean_title, t_idx, existing_sheet_names)
         ws = wb.create_sheet(title=safe_sheet_name)
