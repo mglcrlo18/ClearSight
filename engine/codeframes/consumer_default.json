@@ -1,0 +1,1180 @@
+{
+ "schema_version": 1,
+ "id": "consumer_default",
+ "name": "Default consumer / personal-care codeframe (generic; written for ClearSight, no client codes or verbatims)",
+ "domain": "consumer",
+ "includes": [
+  "common_price.json"
+ ],
+ "sentiment_overrides": {
+  "matapang": -1,
+  "tapang": -1,
+  "malamig": 1,
+  "lamig": 1,
+  "mainit": -1,
+  "matagal": 1,
+  "tagal": 1,
+  "kaunti": -1,
+  "konti": -1,
+  "maliit": -1,
+  "malaki": 1,
+  "marami": 1,
+  "mabula": 1,
+  "bula": 1,
+  "protekta": 1,
+  "proteksyon": 1,
+  "protection": 1,
+  "sikat": 1,
+  "available": 1,
+  "high": 1,
+  "mataas": 1
+ },
+ "special_codes": {
+  "other": {
+   "code_id": 900,
+   "label": "General Feedback / Other"
+  },
+  "none": {
+   "code_id": 999,
+   "label": "None / No Particular Reason"
+  },
+  "dont_know": {
+   "code_id": 996,
+   "label": "Don't Know / Not Sure"
+  },
+  "neutral": {
+   "code_id": 901,
+   "label": "General / Neutral Feedback"
+  },
+  "needs_review": {
+   "code_id": 995,
+   "label": "Needs Review"
+  },
+  "general_pos": {
+   "code_id": 980,
+   "label": "General Favorable Comment"
+  },
+  "general_neg": {
+   "code_id": 981,
+   "label": "General Unfavorable Comment"
+  }
+ },
+ "topics": [
+  {
+   "id": "scent",
+   "net": "Product Experience",
+   "subnet": "Scent / Fragrance",
+   "keywords": [
+    "amoy",
+    "bango",
+    "scent",
+    "smell",
+    "fragrance",
+    "halimuyak",
+    "mahalimuyak",
+    "aroma",
+    "baho"
+   ],
+   "pos_keywords": [
+    "mabango",
+    "bango",
+    "mahalimuyak",
+    "fragrant",
+    "smells good",
+    "matagal ang bango",
+    "long-lasting scent"
+   ],
+   "neg_keywords": [
+    "mabaho",
+    "baho",
+    "matapang ang amoy",
+    "masangsang",
+    "walang amoy",
+    "amoy kemikal",
+    "amoy panglinis",
+    "no scent"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 210,
+     "label": "Long-Lasting Pleasant Fragrance / Scent"
+    },
+    "neg": {
+     "code_id": 215,
+     "label": "Unpleasant / Weak / Too Strong Scent"
+    }
+   },
+   "exemplars": [
+    "mabango at matagal ang amoy",
+    "ayoko ng amoy, masyadong matapang"
+   ]
+  },
+  {
+   "id": "freshness",
+   "net": "Product Experience",
+   "subnet": "Freshness / Cooling",
+   "keywords": [
+    "presko",
+    "fresh",
+    "freshness",
+    "lamig",
+    "malamig",
+    "cooling",
+    "minty",
+    "mint",
+    "menthol",
+    "hininga",
+    "breath",
+    "refreshing",
+    "ginhawa",
+    "guminhawa"
+   ],
+   "pos_keywords": [
+    "presko",
+    "fresh",
+    "refreshing",
+    "malamig sa bibig",
+    "fresh breath",
+    "mabango ang hininga",
+    "nakakapresko"
+   ],
+   "neg_keywords": [
+    "mabaho ang hininga",
+    "bad breath",
+    "kulang ang lamig",
+    "walang lamig"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 220,
+     "label": "Freshness / Cooling Sensation"
+    },
+    "neg": {
+     "code_id": 225,
+     "label": "Weak Freshness / Cooling"
+    }
+   },
+   "exemplars": [
+    "presko sa pakiramdam buong araw",
+    "malamig sa bibig at fresh ang hininga"
+   ]
+  },
+  {
+   "id": "cleaning",
+   "net": "Product Efficacy",
+   "subnet": "Cleaning / Germ Protection",
+   "keywords": [
+    "linis",
+    "malinis",
+    "clean",
+    "cleans",
+    "dumi",
+    "germ",
+    "germs",
+    "bacteria",
+    "mikrobyo",
+    "antibacterial",
+    "anti-bacterial",
+    "kagaw",
+    "plaque",
+    "tartar",
+    "libag",
+    "mantika",
+    "grasa",
+    "tanggal dumi"
+   ],
+   "pos_keywords": [
+    "malinis",
+    "nakakalinis",
+    "cleans well",
+    "pumapatay ng mikrobyo",
+    "kills germs",
+    "antibacterial"
+   ],
+   "neg_keywords": [
+    "hindi nakakalinis",
+    "marumi pa rin",
+    "doesn't clean"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 230,
+     "label": "Cleans Well / Germ Protection"
+    },
+    "neg": {
+     "code_id": 235,
+     "label": "Does Not Clean Well"
+    }
+   },
+   "exemplars": [
+    "malinis talaga ang pakiramdam",
+    "nakakatanggal ng germs"
+   ]
+  },
+  {
+   "id": "teeth",
+   "net": "Product Efficacy",
+   "subnet": "Teeth / Oral Care Benefits",
+   "keywords": [
+    "ngipin",
+    "ipin",
+    "teeth",
+    "tooth",
+    "gilagid",
+    "gums",
+    "gum",
+    "cavity",
+    "cavities",
+    "sira ng ngipin",
+    "bulok",
+    "plaque",
+    "enamel",
+    "fluoride",
+    "flouride",
+    "ngilo",
+    "sensitivity",
+    "sensitive",
+    "dentist",
+    "dental",
+    "whitening",
+    "naninilaw",
+    "dilaw",
+    "mantsa",
+    "stain",
+    "stains",
+    "singaw",
+    "mouth sore",
+    "sugat sa bibig"
+   ],
+   "pos_keywords": [
+    "pumuputi",
+    "maputi",
+    "nakakaputi",
+    "whitens",
+    "whiter",
+    "matibay ang ngipin",
+    "iwas cavity",
+    "cavity protection",
+    "proteksyon sa ngipin",
+    "nawala ang ngilo"
+   ],
+   "neg_keywords": [
+    "nangingilo",
+    "ngilo",
+    "dumudugo",
+    "nagsusugat",
+    "naninilaw",
+    "hindi pumuputi",
+    "nagkasingaw",
+    "nagka singaw",
+    "nagkaroon ng singaw"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 240,
+     "label": "Teeth / Oral Care Benefits"
+    },
+    "neg": {
+     "code_id": 245,
+     "label": "Oral Care Problems / No Benefit"
+    }
+   },
+   "exemplars": [
+    "pumuputi ang ngipin ko",
+    "nangingilo ang ngipin pag ginamit"
+   ]
+  },
+  {
+   "id": "skin",
+   "net": "Product Efficacy",
+   "subnet": "Skin Benefits / Suitability",
+   "keywords": [
+    "balat",
+    "skin",
+    "mukha",
+    "face",
+    "katawan",
+    "body",
+    "kutis",
+    "pekas",
+    "freckles",
+    "pimple",
+    "tigyawat",
+    "acne",
+    "moisturizer",
+    "moisturize",
+    "moisture",
+    "dry skin",
+    "itim",
+    "kili-kili",
+    "kilikili",
+    "underarm",
+    "pawis",
+    "sweat",
+    "sunscreen",
+    "araw",
+    "hiyang",
+    "kati",
+    "allergy",
+    "pantal",
+    "rashes",
+    "rash",
+    "sensitive skin"
+   ],
+   "pos_keywords": [
+    "makinis",
+    "kinis",
+    "smooth",
+    "soft",
+    "malambot",
+    "moisturized",
+    "pumuputi",
+    "maputi",
+    "hiyang",
+    "hindi nangangati",
+    "nawala ang pekas",
+    "suitable"
+   ],
+   "neg_keywords": [
+    "makati",
+    "kati",
+    "allergy",
+    "nagka-allergy",
+    "pantal",
+    "rashes",
+    "tigyawat",
+    "nakakatigyawat",
+    "nangingitim",
+    "umitim",
+    "dry",
+    "tuyo",
+    "hapdi",
+    "irritation",
+    "hindi hiyang"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 250,
+     "label": "Skin Benefits / Suitability (Hiyang)"
+    },
+    "neg": {
+     "code_id": 255,
+     "label": "Skin Irritation / Not Suitable"
+    }
+   },
+   "exemplars": [
+    "kuminis ang balat ko",
+    "nangati ang balat ng anak ko"
+   ]
+  },
+  {
+   "id": "hair",
+   "net": "Product Efficacy",
+   "subnet": "Hair / Scalp Benefits",
+   "keywords": [
+    "buhok",
+    "hair",
+    "anit",
+    "scalp",
+    "balakubak",
+    "dandruff",
+    "kuto",
+    "lagas",
+    "hair fall",
+    "hairfall",
+    "split ends",
+    "kulot",
+    "frizz",
+    "kintab",
+    "shiny",
+    "makapal",
+    "rebond"
+   ],
+   "pos_keywords": [
+    "makintab",
+    "shiny",
+    "malambot ang buhok",
+    "soft hair",
+    "nawala ang balakubak",
+    "iwas lagas",
+    "makapal"
+   ],
+   "neg_keywords": [
+    "nalalagas",
+    "lagas",
+    "hair fall",
+    "balakubak",
+    "dry hair",
+    "buhaghag",
+    "nanigas"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 260,
+     "label": "Hair / Scalp Benefits"
+    },
+    "neg": {
+     "code_id": 265,
+     "label": "Hair / Scalp Problems"
+    }
+   },
+   "exemplars": [
+    "lumambot at kuminang ang buhok",
+    "nalalagas ang buhok ko"
+   ]
+  },
+  {
+   "id": "taste",
+   "net": "Product Experience",
+   "subnet": "Taste / Flavor",
+   "keywords": [
+    "lasa",
+    "taste",
+    "flavor",
+    "flavour",
+    "tamis",
+    "matamis",
+    "anghang",
+    "maanghang",
+    "spicy",
+    "alat",
+    "maalat",
+    "pait",
+    "mapait",
+    "aftertaste",
+    "after taste",
+    "lami",
+    "sarap"
+   ],
+   "pos_keywords": [
+    "masarap",
+    "sarap",
+    "lami",
+    "refreshing taste",
+    "masarap ang lasa",
+    "walang aftertaste",
+    "hindi mapait"
+   ],
+   "neg_keywords": [
+    "mapait",
+    "maalat",
+    "masyadong maanghang",
+    "matapang ang lasa",
+    "aftertaste",
+    "pangit ang lasa"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 270,
+     "label": "Good Taste / Flavor"
+    },
+    "neg": {
+     "code_id": 275,
+     "label": "Unpleasant Taste / Flavor"
+    }
+   },
+   "exemplars": [
+    "masarap ang lasa ng mint",
+    "mapait at maalat ang lasa"
+   ]
+  },
+  {
+   "id": "texture",
+   "net": "Product Experience",
+   "subnet": "Texture / Lather / Feel",
+   "keywords": [
+    "bula",
+    "foam",
+    "lather",
+    "malagkit",
+    "lagkit",
+    "sticky",
+    "texture",
+    "tekstura",
+    "matigas",
+    "malambot",
+    "banlaw",
+    "rinse",
+    "madulas",
+    "creamy",
+    "malapot",
+    "matunaw",
+    "natutunaw",
+    "dissolve",
+    "pakiramdam",
+    "feel"
+   ],
+   "pos_keywords": [
+    "mabula",
+    "foamy",
+    "madaling banlawan",
+    "easy to rinse",
+    "hindi malagkit",
+    "creamy",
+    "matagal matunaw"
+   ],
+   "neg_keywords": [
+    "malagkit",
+    "sticky",
+    "hindi mabula",
+    "matigas",
+    "madaling matunaw",
+    "magaspang",
+    "nakakatuyo"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 280,
+     "label": "Good Texture / Lather / Feel"
+    },
+    "neg": {
+     "code_id": 285,
+     "label": "Poor Texture / Sticky / Low Lather"
+    }
+   },
+   "exemplars": [
+    "mabula at madaling banlawan",
+    "malagkit sa katawan"
+   ]
+  },
+  {
+   "id": "efficacy_general",
+   "net": "Product Efficacy",
+   "subnet": "Effective / Works Well",
+   "keywords": [
+    "effective",
+    "epektibo",
+    "tumatalab",
+    "gumagana",
+    "works",
+    "result",
+    "resulta",
+    "epekto",
+    "bisa",
+    "mabisa",
+    "tanggal",
+    "proteksyon",
+    "protection",
+    "protektado",
+    "iwas",
+    "pang-iwas",
+    "lunas",
+    "gamot"
+   ],
+   "pos_keywords": [
+    "effective",
+    "epektibo",
+    "mabisa",
+    "tumatalab",
+    "nakakatanggal",
+    "may resulta",
+    "protektado"
+   ],
+   "neg_keywords": [
+    "hindi effective",
+    "walang epekto",
+    "walang resulta",
+    "hindi tumatalab"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 290,
+     "label": "Effective / Works Well"
+    },
+    "neg": {
+     "code_id": 295,
+     "label": "Not Effective / No Visible Result"
+    }
+   },
+   "exemplars": [
+    "effective talaga, kita agad ang resulta",
+    "walang epekto kahit matagal ko nang gamit"
+   ]
+  },
+  {
+   "id": "long_lasting",
+   "net": "Product Experience",
+   "subnet": "Long-Lasting / Economical Use",
+   "keywords": [
+    "tagal",
+    "matagal",
+    "tumatagal",
+    "long lasting",
+    "long-lasting",
+    "hours",
+    "oras",
+    "araw",
+    "buwan",
+    "month",
+    "linggo",
+    "days",
+    "konting gamit",
+    "kaunting gamit",
+    "nagtatagal"
+   ],
+   "pos_keywords": [
+    "matagal",
+    "tumatagal",
+    "long lasting",
+    "long-lasting",
+    "nagtatagal",
+    "matagal maubos",
+    "konting gamit lang"
+   ],
+   "neg_keywords": [
+    "madaling maubos",
+    "mabilis maubos",
+    "hindi nagtatagal",
+    "mabilis mawala"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 300,
+     "label": "Long-Lasting / Economical to Use"
+    },
+    "neg": {
+     "code_id": 305,
+     "label": "Runs Out Quickly / Effect Does Not Last"
+    }
+   },
+   "exemplars": [
+    "tumatagal ng ilang oras ang epekto",
+    "mabilis maubos ang laman"
+   ]
+  },
+  {
+   "id": "availability",
+   "net": "Purchase & Access",
+   "subnet": "Availability / Where to Buy",
+   "keywords": [
+    "available",
+    "availability",
+    "stock",
+    "tindahan",
+    "sari-sari",
+    "grocery",
+    "supermarket",
+    "palengke",
+    "mall",
+    "mabili",
+    "mabibili",
+    "bilihan",
+    "binibilhan",
+    "binibilhan",
+    "dealer",
+    "ahente",
+    "reseller",
+    "seller",
+    "online",
+    "shopee",
+    "lazada",
+    "makita",
+    "nakikita",
+    "madaling hanapin",
+    "convenient",
+    "convinient",
+    "handy"
+   ],
+   "pos_keywords": [
+    "available",
+    "laging may stock",
+    "madaling mabili",
+    "madaling makita",
+    "mabibili kahit saan",
+    "maraming stock",
+    "easy to buy",
+    "madaling hanapin",
+    "convenient",
+    "convinient"
+   ],
+   "neg_keywords": [
+    "walang stock",
+    "out of stock",
+    "wala sa tindahan",
+    "hindi available",
+    "mahirap hanapin",
+    "walang dala",
+    "hindi dinadalhan",
+    "unavailable"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 310,
+     "label": "Widely Available / Easy to Buy"
+    },
+    "neg": {
+     "code_id": 315,
+     "label": "Not Available / Out of Stock"
+    }
+   },
+   "exemplars": [
+    "madaling mabili sa sari-sari store",
+    "laging walang stock sa grocery"
+   ]
+  },
+  {
+   "id": "pack_size",
+   "net": "Purchase & Access",
+   "subnet": "Pack Size / Format",
+   "keywords": [
+    "sachet",
+    "sache",
+    "tingi",
+    "tingi-tingi",
+    "pack",
+    "tube",
+    "bote",
+    "bottle",
+    "size",
+    "laki",
+    "malaki",
+    "maliit",
+    "ml",
+    "grams",
+    "gramo",
+    "twin pack",
+    "refill",
+    "pouch",
+    "bar",
+    "laman",
+    "content"
+   ],
+   "pos_keywords": [
+    "may sachet",
+    "malaki",
+    "bigger",
+    "may twin pack",
+    "maraming laman",
+    "tamang laki"
+   ],
+   "neg_keywords": [
+    "maliit",
+    "kumonti ang laman",
+    "lumiit",
+    "konti ang laman",
+    "walang sachet",
+    "less content"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 130,
+     "label": "Sachet / Tingi-Tingi Availability"
+    },
+    "neg": {
+     "code_id": 135,
+     "label": "Pack Size / Content Complaint"
+    }
+   },
+   "exemplars": [
+    "may sachet kaya pwedeng tingi-tingi",
+    "kumonti ang laman ng bagong pack"
+   ]
+  },
+  {
+   "id": "packaging",
+   "net": "Purchase & Access",
+   "subnet": "Packaging Condition",
+   "keywords": [
+    "packaging",
+    "package",
+    "balot",
+    "kahon",
+    "box",
+    "takip",
+    "cap",
+    "seal",
+    "lalagyan",
+    "container"
+   ],
+   "pos_keywords": [
+    "maganda ang packaging",
+    "matibay ang lalagyan",
+    "secure packaging"
+   ],
+   "neg_keywords": [
+    "sira ang packaging",
+    "damaged",
+    "basag",
+    "yupi",
+    "tagas",
+    "tumatagas",
+    "leak",
+    "leaking",
+    "sira ang takip",
+    "madaling masira ang takip",
+    "bukas na"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 335,
+     "label": "Good / Attractive Packaging"
+    },
+    "neg": {
+     "code_id": 330,
+     "label": "Damaged / Defective Packaging"
+    }
+   },
+   "exemplars": [
+    "sira ang takip pagdating",
+    "tumatagas ang bote sa bag"
+   ]
+  },
+  {
+   "id": "delivery",
+   "net": "Purchase & Access",
+   "subnet": "Delivery / Logistics",
+   "keywords": [
+    "deliver",
+    "delivery",
+    "dumating",
+    "darating",
+    "padala",
+    "shipping",
+    "courier",
+    "rider",
+    "order",
+    "inorder",
+    "parcel"
+   ],
+   "pos_keywords": [
+    "mabilis dumating",
+    "fast delivery",
+    "on time",
+    "agad dumating"
+   ],
+   "neg_keywords": [
+    "matagal dumating",
+    "late",
+    "delayed",
+    "delay",
+    "hindi dumating",
+    "antala",
+    "mabagal ang delivery",
+    "slow delivery"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 325,
+     "label": "Fast / Reliable Delivery"
+    },
+    "neg": {
+     "code_id": 320,
+     "label": "Slow Logistics / Delivery Delay"
+    }
+   },
+   "exemplars": [
+    "matagal dumating ang order ko",
+    "mabilis ang delivery"
+   ]
+  },
+  {
+   "id": "recommendation",
+   "net": "Brand & Influence",
+   "subnet": "Recommended / Word of Mouth",
+   "keywords": [
+    "recommend",
+    "recommended",
+    "nirecommend",
+    "irekomenda",
+    "rekomenda",
+    "sabi",
+    "kaibigan",
+    "kapitbahay",
+    "nanay",
+    "kapatid",
+    "dentista",
+    "dentist",
+    "doktor",
+    "doctor",
+    "derma",
+    "dermatologist",
+    "endorser",
+    "commercial",
+    "patalastas",
+    "ads",
+    "advertisement",
+    "nakita sa tv",
+    "tv"
+   ],
+   "pos_keywords": [
+    "recommended",
+    "nirecommend",
+    "inirekomenda",
+    "recommended ng dentista"
+   ],
+   "neg_keywords": [
+    "hindi recommended",
+    "walang nagrecommend"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 345,
+     "label": "Recommended by Others / Experts / Ads"
+    },
+    "neg": {
+     "code_id": 346,
+     "label": "Not Recommended / Not Heard Of"
+    }
+   },
+   "exemplars": [
+    "nirecommend ng dentista ko",
+    "nakita sa commercial"
+   ]
+  },
+  {
+   "id": "brand_loyalty",
+   "net": "Brand & Influence",
+   "subnet": "Brand Trust / Habit / Loyalty",
+   "keywords": [
+    "brand",
+    "tatak",
+    "loyal",
+    "nakasanayan",
+    "sanay",
+    "nasanay",
+    "noon pa",
+    "matagal ko nang",
+    "dati pa",
+    "family",
+    "pamilya",
+    "trusted",
+    "tiwala",
+    "kilala",
+    "sikat",
+    "subok",
+    "subok na",
+    "palagi",
+    "lagi"
+   ],
+   "pos_keywords": [
+    "loyal",
+    "nakasanayan",
+    "subok na",
+    "trusted",
+    "kilalang brand",
+    "sikat",
+    "paborito",
+    "favorite",
+    "tiwala"
+   ],
+   "neg_keywords": [
+    "hindi kilala",
+    "hindi sikat",
+    "not well known",
+    "hindi ko kilala"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 340,
+     "label": "Strong Brand Affinity / Loyalty"
+    },
+    "neg": {
+     "code_id": 341,
+     "label": "Unknown / Untrusted Brand"
+    }
+   },
+   "exemplars": [
+    "nakasanayan na namin ng pamilya",
+    "hindi ko kilala ang brand"
+   ]
+  },
+  {
+   "id": "switching",
+   "net": "Brand & Influence",
+   "subnet": "Trial / Switching / Variety",
+   "keywords": [
+    "subukan",
+    "try",
+    "trial",
+    "sumubok",
+    "magtry",
+    "palit",
+    "magpalit",
+    "lumipat",
+    "switch",
+    "ibang brand",
+    "other brand",
+    "variant",
+    "iba naman",
+    "sawa",
+    "nagsawa",
+    "alternate",
+    "pamalit",
+    "substitute"
+   ],
+   "pos_keywords": [
+    "gusto kong subukan",
+    "try lang",
+    "bagong variant"
+   ],
+   "neg_keywords": [
+    "nagsawa",
+    "sawa na",
+    "ayaw magpalit",
+    "ayoko sumubok",
+    "lumipat sa iba",
+    "mas gusto ang iba"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 350,
+     "label": "Wanted to Try / Variety Seeking"
+    },
+    "neg": {
+     "code_id": 355,
+     "label": "Switched / Prefers Other Brand / Bored"
+    }
+   },
+   "exemplars": [
+    "gusto ko lang subukan ang bago",
+    "nagsawa na ako kaya lumipat sa iba"
+   ]
+  },
+  {
+   "id": "family_kids",
+   "net": "Product Experience",
+   "subnet": "Suitable for Family / Kids",
+   "keywords": [
+    "anak",
+    "bata",
+    "kids",
+    "children",
+    "baby",
+    "pamilya",
+    "lahat ng edad",
+    "all ages",
+    "matanda",
+    "senior",
+    "buong pamilya"
+   ],
+   "pos_keywords": [
+    "gusto ng anak ko",
+    "pambata",
+    "pwede sa lahat",
+    "suitable for all ages",
+    "safe for kids"
+   ],
+   "neg_keywords": [
+    "ayaw ng anak ko",
+    "ayaw ng anak",
+    "hindi pwede sa bata"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 360,
+     "label": "Liked by / Suitable for Family & Kids"
+    },
+    "neg": {
+     "code_id": 365,
+     "label": "Not Liked by / Not Suitable for Kids"
+    }
+   },
+   "exemplars": [
+    "gusto ng mga anak ko kaya ito binibili",
+    "ayaw ng anak ko ang lasa"
+   ]
+  },
+  {
+   "id": "service",
+   "net": "Customer Experience",
+   "subnet": "Customer Service",
+   "keywords": [
+    "customer service",
+    "serbisyo",
+    "service",
+    "staff",
+    "agent",
+    "seller",
+    "tindera",
+    "tindero",
+    "sumagot",
+    "reply",
+    "inquiry"
+   ],
+   "pos_keywords": [
+    "mabait ang seller",
+    "maayos ang serbisyo",
+    "responsive",
+    "mabilis sumagot"
+   ],
+   "neg_keywords": [
+    "hindi sumasagot",
+    "bastos",
+    "pangit ang serbisyo",
+    "walang reply",
+    "unresponsive"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 370,
+     "label": "Responsive Customer Service"
+    },
+    "neg": {
+     "code_id": 375,
+     "label": "Unresponsive / Poor Customer Service"
+    }
+   },
+   "exemplars": [
+    "mabilis sumagot ang seller",
+    "walang reply sa inquiry ko"
+   ]
+  },
+  {
+   "id": "ingredients_variety",
+   "net": "Product Experience",
+   "subnet": "Ingredients / Variants",
+   "keywords": [
+    "baking soda",
+    "salt",
+    "asin",
+    "fluoride",
+    "ingredient",
+    "ingredients",
+    "sangkap",
+    "natural",
+    "herbal",
+    "organic",
+    "charcoal",
+    "variant",
+    "variants",
+    "flavor",
+    "flavors",
+    "flavour",
+    "pagpilian",
+    "variety",
+    "klase",
+    "kulay",
+    "olive oil",
+    "coconut oil",
+    "aloe vera",
+    "vitamin e",
+    "oil"
+   ],
+   "pos_keywords": [
+    "maraming variants",
+    "maraming pagpilian",
+    "natural ingredients",
+    "may baking soda"
+   ],
+   "neg_keywords": [
+    "kaunti ang variants",
+    "harsh ingredients",
+    "matapang ang kemikal"
+   ],
+   "codes": {
+    "pos": {
+     "code_id": 380,
+     "label": "Good Ingredients / Wide Choice of Variants"
+    },
+    "neg": {
+     "code_id": 385,
+     "label": "Disliked Ingredients / Limited Variants"
+    }
+   },
+   "exemplars": [
+    "gusto ko kasi may natural na sangkap",
+    "maraming flavor na pwedeng pagpilian"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,339 @@
+{
+ "schema_version": 1,
+ "id": "legacy_v1",
+ "name": "Coder v1 themes ported to the v2 codeframe format (for ablation and back-compat)",
+ "domain": "consumer",
+ "options": {
+  "comparative_flip": false
+ },
+ "topics": [
+  {
+   "id": "v1_110",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Pricing & Value Perception",
+   "codes": {
+    "pos": {
+     "code_id": 110,
+     "label": "Affordable / High Value (Sulit)"
+    },
+    "neg": {
+     "code_id": 120,
+     "label": "Expensive / High Pricing Friction"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "barato",
+    "barato ra",
+    "di mahal",
+    "discount",
+    "hindi mahal",
+    "kayang kaya sa bulsa",
+    "matipid",
+    "mura",
+    "pang masa",
+    "sulit",
+    "tipid",
+    "value for money"
+   ]
+  },
+  {
+   "id": "v1_120",
+   "net": "Negative / Unfavorable Comment",
+   "subnet": "Pricing & Value Perception",
+   "codes": {
+    "neg": {
+     "code_id": 120,
+     "label": "Expensive / High Pricing Friction"
+    }
+   },
+   "keywords": [],
+   "neg_keywords": [
+    "di sulit",
+    "dili barato",
+    "gastos",
+    "hindi sulit",
+    "lugi",
+    "mahal kaayo",
+    "medyo mahal",
+    "overpriced",
+    "pricey",
+    "sobrang mahal",
+    "tumataas ang presyo"
+   ]
+  },
+  {
+   "id": "v1_130",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Pack Size & Sachet Format",
+   "codes": {
+    "pos": {
+     "code_id": 130,
+     "label": "Sachet / Tingi-Tingi Availability"
+    },
+    "neg": {
+     "code_id": 135,
+     "label": "No Sachet / Pack Format Unavailable"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "maliit na pack",
+    "pang isahang gamit",
+    "sachet",
+    "tingi",
+    "tingi tingi"
+   ]
+  },
+  {
+   "id": "v1_210",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Fragrance & Freshness",
+   "codes": {
+    "pos": {
+     "code_id": 210,
+     "label": "Long-Lasting Pleasant Fragrance / Scent"
+    },
+    "neg": {
+     "code_id": 230,
+     "label": "Musty Odor / Amoy Kulob Defect"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "bango",
+    "fresh scent",
+    "humahalimuyak",
+    "kapit ang amoy",
+    "mabango",
+    "hindi agad nawawala ang bango",
+    "mild scent",
+    "parang pabango"
+   ]
+  },
+  {
+   "id": "v1_220",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Fragrance & Freshness",
+   "codes": {
+    "pos": {
+     "code_id": 220,
+     "label": "Odor Protection / Anti-Kulob (Iwas-Kulob)"
+    },
+    "neg": {
+     "code_id": 230,
+     "label": "Musty Odor / Amoy Kulob Defect"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "anti kulob",
+    "iwas amoy araw",
+    "iwas kulob",
+    "kahit hindi naarawan",
+    "kahit maulan",
+    "kahit walang araw",
+    "pang tanggal kulob",
+    "walang amoy kulob"
+   ]
+  },
+  {
+   "id": "v1_230",
+   "net": "Negative / Unfavorable Comment",
+   "subnet": "Fragrance & Freshness",
+   "codes": {
+    "neg": {
+     "code_id": 230,
+     "label": "Musty Odor / Amoy Kulob Defect"
+    }
+   },
+   "keywords": [],
+   "neg_keywords": [
+    "amoy araw",
+    "amoy kulob",
+    "masakit sa ilong",
+    "matapang ang amoy",
+    "nagkukulob"
+   ]
+  },
+  {
+   "id": "v1_240",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Fabric Feel & Garment Care",
+   "codes": {
+    "pos": {
+     "code_id": 240,
+     "label": "Fabric Softness / Easy Ironing"
+    },
+    "neg": {
+     "code_id": 245,
+     "label": "Rough / Difficult to Iron Fabric"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "hindi na kailangan plantsahin",
+    "iwas gusot",
+    "lambot",
+    "madaling plantsahin",
+    "malambot",
+    "plantsa",
+    "plinancha",
+    "ready to wear"
+   ]
+  },
+  {
+   "id": "v1_250",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Dermatological Compatibility",
+   "codes": {
+    "pos": {
+     "code_id": 250,
+     "label": "Skin Suitability / Hiyang"
+    },
+    "neg": {
+     "code_id": 255,
+     "label": "Skin Irritation / Hindi Hiyang"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "di makati",
+    "good for sensitive skin",
+    "hindi makati",
+    "hiyang",
+    "ligtas sa balat"
+   ]
+  },
+  {
+   "id": "v1_310",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Customer Experience & Service",
+   "codes": {
+    "pos": {
+     "code_id": 310,
+     "label": "Responsive Customer Service"
+    },
+    "neg": {
+     "code_id": 315,
+     "label": "Unresponsive / Poor Customer Service"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "accommodating",
+    "helpful",
+    "maayos makipag usap",
+    "mababait",
+    "mabilis mag reply",
+    "responsive"
+   ]
+  },
+  {
+   "id": "v1_320",
+   "net": "Negative / Unfavorable Comment",
+   "subnet": "Delivery & Fulfillment",
+   "codes": {
+    "neg": {
+     "code_id": 320,
+     "label": "Slow Logistics / Delivery Delay"
+    }
+   },
+   "keywords": [],
+   "neg_keywords": [
+    "delay",
+    "delayed",
+    "hindi dumating"
+   ]
+  },
+  {
+   "id": "v1_340",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Brand Sentiment",
+   "codes": {
+    "pos": {
+     "code_id": 340,
+     "label": "Strong Brand Affinity / Loyalty"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "favorite",
+    "go to choice",
+    "lami",
+    "loyal customer",
+    "maayo",
+    "mahal ko",
+    "mahal na mahal",
+    "mahal namin",
+    "mahal ng customer",
+    "nindot",
+    "paborito"
+   ]
+  },
+  {
+   "id": "v1_410",
+   "net": "Positive / Favorable Comment",
+   "subnet": "Social Welfare & Assistance",
+   "codes": {
+    "pos": {
+     "code_id": 410,
+     "label": "Government Assistance / Ayuda / 4Ps"
+    },
+    "neg": {
+     "code_id": 415,
+     "label": "Government Aid Not Received / Delayed Distribution"
+    }
+   },
+   "keywords": [],
+   "pos_keywords": [
+    "4ps",
+    "ayuda",
+    "financial assistance",
+    "pamahagi ng bigas",
+    "sap",
+    "tulong pinansyal"
+   ]
+  },
+  {
+   "id": "v1_420",
+   "net": "Negative / Unfavorable Comment",
+   "subnet": "Infrastructure & Public Works",
+   "codes": {
+    "neg": {
+     "code_id": 420,
+     "label": "Damaged / Incomplete Roads & Drainage"
+    }
+   },
+   "keywords": [],
+   "neg_keywords": [
+    "bahaing kalsada",
+    "baradong kanal",
+    "hindi natapos na kalsada",
+    "lubak lubak",
+    "sira sirang kalsada",
+    "walang drainage"
+   ]
+  },
+  {
+   "id": "v1_430",
+   "net": "Negative / Unfavorable Comment",
+   "subnet": "Peace, Order & Local Enforcement",
+   "codes": {
+    "neg": {
+     "code_id": 430,
+     "label": "Ineffective Local Enforcement / Loitering"
+    }
+   },
+   "keywords": [],
+   "neg_keywords": [
+    "kulang sa tanod",
+    "magulong paligid",
+    "maingay sa gabi",
+    "mga nag iinuman sa kalsada",
+    "tambay",
+    "walang nagpapatrolya"
+   ]
+  }
+ ]
+}

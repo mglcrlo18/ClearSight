@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy pandas scipy openpyxl xlrd pytest hypothesis
+          pip install pyreadstat || echo "pyreadstat unavailable on this Python; SPSS tests will skip"
+      - name: Syntax check frontend
+        run: node --check static/app.js
+      - name: Tests (includes the coder gate on the synthetic set)
+        env:
+          CLEARSIGHT_DATA: ${{ runner.temp }}/clearsight
+          CLEARSIGHT_CODER_TELEMETRY: "0"
+        run: python -m pytest -q
+      - name: Coder gate report (synthetic set)
+        env:
+          CLEARSIGHT_DATA: ${{ runner.temp }}/clearsight
+          CLEARSIGHT_CODER_TELEMETRY: "0"
+        run: python scripts/eval_coder_gate.py --split all --steps S0,S5 --out coder_gate_synthetic.json
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.13'
+        with:
+          name: coder-gate-synthetic
+          path: coder_gate_synthetic.json
+# The client-labelled test set is never committed. To gate on it, run on a self-hosted runner that
+# has the file and set CLEARSIGHT_CODER_TESTSET (and CLEARSIGHT_CODER_STRICT_GATE=1 for the full gate).

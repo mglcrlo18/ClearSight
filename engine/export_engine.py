@@ -38,11 +38,15 @@ def sanitize_sheet_name(title: str, index: int, existing_names: set) -> str:
     """Sanitizes sheet names by stripping illegal characters []:*?/\\ and ensuring uniqueness."""
     clean = re.sub(r'[\[\]:*?/\\]', '_', str(title)).strip()
     clean = clean.replace(" ", "_")
-    base_name = f"T{index}_{clean[:20]}"
+    prefix = f"T{index}_"
+    max_len = 31 - len(prefix)
+    base_name = f"{prefix}{clean[:max_len]}"
     name = base_name
     counter = 1
     while name in existing_names:
-        name = f"{base_name[:18]}_{counter}"
+        suffix = f"_{counter}"
+        avail = 31 - len(prefix) - len(suffix)
+        name = f"{prefix}{clean[:avail]}{suffix}"
         counter += 1
     existing_names.add(name)
     return name

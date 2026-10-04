@@ -7,7 +7,7 @@ class CustomWebView: WKWebView {
     }
 }
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKDownloadDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
     var window: NSWindow!
     var webView: CustomWebView!
 
@@ -41,6 +41,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         let config = WKWebViewConfiguration()
         webView = CustomWebView(frame: window.contentView!.bounds, configuration: config)
         webView.navigationDelegate = self
+        webView.uiDelegate = self  // <-- Connect WKUIDelegate (CS-101)
         webView.autoresizingMask = [.width, .height]
         window.contentView?.addSubview(webView)
 
@@ -91,6 +92,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         let fileURL = downloadsDirectory.appendingPathComponent("ClearSight_Agency_Banner_Book.xlsx")
         if FileManager.default.fileExists(atPath: fileURL.path) {
             NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        }
+    }
+
+    // MARK: - Native WebKit Open Panel (File Picker) Handling (CS-101)
+    func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = false
+        openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
+        if #available(macOS 11.0, *) {
+            openPanel.allowedContentTypes = [.json]
+        } else {
+            openPanel.allowedFileTypes = ["json"]
+        }
+        openPanel.beginSheetModal(for: self.window) { response in
+            if response == .OK {
+                completionHandler(openPanel.urls)
+            } else {
+                completionHandler(nil)
+            }
         }
     }
 

@@ -1201,6 +1201,9 @@ async function loadTaglishCoding() {
         const data = await res.json();
         if (data.status === 'success' && data.codeframe) {
             renderTaglishCodeframe(data);
+            if (data.coder === 'v2') {
+                loadReviewQueue();
+            }
         } else {
             grid.innerHTML = '<div style="grid-column: 1/-1; padding: 2rem; text-align: center; color: #64748B;">No open-ended responses found to code.</div>';
         }
@@ -1255,6 +1258,85 @@ function renderTaglishCodeframe(data) {
 
         grid.appendChild(card);
     });
+}
+
+// ---------------------------------------------------------------------------
+// Coder v2 Needs-review queue. All server text is rendered with textContent /
+// option.text (never innerHTML), so verbatims cannot inject markup (CWE-79).
+// ---------------------------------------------------------------------------
+async function loadReviewQueue() {
+    const box = document.getElementById('coder-review');
+    if (!box) return;
+    try {
+        const res = await fetch('/api/coder/review-queue');
+        if (!res.ok) { box.hidden = true; return; }
+        const data = await res.json();
+        renderReviewQueue(box, data);
+    } catch (err) {
+        box.hidden = true;
+    }
+}
+
+function renderReviewQueue(box, data) {
+    box.replaceChildren();
+    const items = (data && data.items) || [];
+    if (!items.length) { box.hidden = true; return; }
+    box.hidden = false;
+    const head = document.createElement('div');
+    head.className = 'coder-review-head';
+    head.textContent = `Needs review: ${data.count} answer(s). Pick the right theme and sentiment; corrections stay on this computer and teach the coder.`;
+    box.appendChild(head);
+    const options = data.options || [];
+    items.slice(0, 20).forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'coder-review-row';
+        const q = document.createElement('div');
+        q.className = 'coder-review-text';
+        q.textContent = `#${item.response_id}: "${item.text}"`;
+        const meta = document.createElement('div');
+        meta.className = 'coder-review-meta';
+        meta.textContent = `Coder: ${(item.themes || []).join(', ')} | sentiment ${item.sentiment} | confidence ${item.confidence}`;
+        const sel = document.createElement('select');
+        sel.className = 'coder-review-theme';
+        sel.setAttribute('aria-label', 'Correct theme');
+        sel.add(new Option('Theme…', ''));
+        options.forEach(o => sel.add(new Option(`${o.code_id} ${o.label}`, String(o.code_id))));
+        const sent = document.createElement('select');
+        sent.className = 'coder-review-sent';
+        sent.setAttribute('aria-label', 'Correct sentiment');
+        [['', 'Sentiment…'], ['pos', 'Positive'], ['neg', 'Negative'], ['neutral', 'Neutral'], ['mixed', 'Mixed']]
+            .forEach(([v, t]) => sent.add(new Option(t, v)));
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'coder-review-save';
+        btn.textContent = 'Save correction';
+        btn.addEventListener('click', () => submitCoderCorrection(item.response_id, sel.value, sent.value, row));
+        row.append(q, meta, sel, sent, btn);
+        box.appendChild(row);
+    });
+}
+
+async function submitCoderCorrection(responseId, codeId, sentiment, row) {
+    const body = { response_id: responseId };
+    if (codeId) body.code_ids = [codeId];
+    if (sentiment) body.sentiment = sentiment;
+    if (!body.code_ids && !body.sentiment) { showToast('Pick a theme or a sentiment first.'); return; }
+    try {
+        const res = await fetch('/api/coder/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'success') {
+            row.remove();
+            showToast(`✓ Correction saved (${data.corrections} stored locally)`);
+        } else {
+            showToast(`Correction not saved: ${data.message || res.status}`);
+        }
+    } catch (err) {
+        showToast('Correction not saved.');
+    }
 }
 
 function createTdText(text) {
@@ -1426,8 +1508,8 @@ async function handleCodeframeUpload(event) {
         if (!Array.isArray(codeframe) && codeframe.codeframe) {
             codeframe = codeframe.codeframe;
         }
-        if (!Array.isArray(codeframe)) {
-            showToast("Invalid codeframe format: Expected a JSON array of category definitions.", true);
+        if (!Array.isArray(codeframe) && !codeframe.topics) {
+            showToast("Invalid codeframe format: Expected a JSON array or object with category definitions.", true);
             return;
         }
 
@@ -1438,7 +1520,10 @@ async function handleCodeframeUpload(event) {
         });
         const data = await res.json();
         if (data.status === 'success') {
-            showToast(data.message || ('Custom codeframe loaded with ' + codeframe.length + ' categories.'));
+            const count = Array.isArray(codeframe) ? codeframe.length : (codeframe.topics ? codeframe.topics.length : 'Custom');
+            const lbl = document.getElementById('active-codeframe-label');
+            if (lbl) lbl.textContent = `Active: Custom Codeframe (${count} Categories)`;
+            showToast(data.message || ('Custom codeframe loaded with ' + count + ' categories.'));
             loadTaglishCoding();
         } else {
             showToast('Codeframe upload failed: ' + (data.message || 'Unknown error'), true);
@@ -1448,6 +1533,10 @@ async function handleCodeframeUpload(event) {
     } finally {
         event.target.value = '';
     }
+}
+
+function uploadProjectCodeframe(event) {
+    handleCodeframeUpload(event);
 }
 
 // 10. Reliable Desktop Downloads (Direct to ~/Downloads & Fallback Stream)

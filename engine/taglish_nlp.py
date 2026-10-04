@@ -93,6 +93,15 @@ NAME_HONORIFICS = re.compile(
 )
 
 BRAND_ALLOWLIST = {'mang inasal', 'gcash', 'paymaya', 'shopee', 'lazada', 'grab', 'angkas'}
+PUBLIC_FIGURES_ALLOWLIST = {
+    'marcos', 'bongbong', 'bbm', 'duterte', 'sara', 'digong', 'prrd', 'villar',
+    'erap', 'estrada', 'pacquiao', 'pacman', 'manny', 'leni', 'robredo', 'isko',
+    'moreno', 'sotto', 'tito sotto', 'cayetano', 'alan cayetano', 'grace poe', 'poe',
+    'chiz', 'escudero', 'ping lacson', 'lacson', 'gordon', 'kiko pangilinan', 'binay',
+    'noynoy', 'pnoy', 'aquino', 'cory', 'gma', 'arroyo', 'ramos', 'fvr', 'miriam',
+    'santiago', 'rizal', 'bonifacio', 'trillanes', 'obama', 'trump', 'putin'
+}
+NAME_ALLOWLIST = BRAND_ALLOWLIST | PUBLIC_FIGURES_ALLOWLIST
 
 
 def scrub_pii(text: Optional[str]) -> str:
@@ -116,7 +125,7 @@ def scrub_pii(text: Optional[str]) -> str:
     def replace_name(match):
         full_match = match.group(0)
         name_part = match.group(1).lower()
-        if any(b in full_match.lower() for b in BRAND_ALLOWLIST) or any(b in name_part for b in BRAND_ALLOWLIST):
+        if any(b in full_match.lower() for b in NAME_ALLOWLIST) or any(b in name_part for b in NAME_ALLOWLIST):
             return full_match
         prefix = full_match[:match.start(1) - match.start(0)]
         return prefix + "[NAME_REDACTED]"

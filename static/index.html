@@ -455,13 +455,19 @@
                         <h4>Taglish Qualitative Verbatim Analysis (Preview / Experimental)</h4>
                         <div class="qual-sub">Automatic morphosyntax disambiguation with Human Lock-Step verification.</div>
                     </div>
-                    <div class="lock-status">
+                    <div class="lock-status" style="display: flex; gap: 0.75rem; align-items: center;">
                         <span id="agreement-score">Heuristic Qualitative Coder (Preview)</span>
-                        <input type="file" id="codeframe-file-input" accept=".json" style="display:none;" onchange="handleCodeframeUpload(event)">
-                        <button class="lock-btn" id="upload-codeframe-btn" onclick="document.getElementById('codeframe-file-input').click()" style="margin-right: 8px;">📂 Custom Codeframe</button>
+                        <label for="codeframe-file-input" class="lock-btn" id="upload-codeframe-label" style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; user-select: none; margin-right: 4px;">
+                            📁 Import Project Codeframe (.json)
+                        </label>
+                        <input type="file" id="codeframe-file-input" accept=".json,application/json" style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;" onchange="uploadProjectCodeframe(event)">
+                        <span id="active-codeframe-label" style="font-size: 0.85rem; color: #64748B; margin-right: 8px;">Active: Default FMCG Taxonomy (16 Themes)</span>
                         <button class="lock-btn" id="lock-btn" onclick="toggleLock()">🔒 Lock Codeframe</button>
                     </div>
                 </div>
+
+                <!-- Coder v2: Needs-review queue (analyst corrections are stored locally) -->
+                <div id="coder-review" class="coder-review" hidden></div>
 
                 <div class="codeframe-grid" id="codeframe-grid">
                     <div class="code-item">

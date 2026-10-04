@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "id": "common_price",
+  "name": "Shared price / cost topic (included by the default codeframes)",
+  "topics": [
+    {
+      "id": "price",
+      "net": "Pricing & Value",
+      "subnet": "Price / Affordability",
+      "keywords": ["presyo", "price", "prices", "halaga", "bayad", "bayarin", "singil", "gastos", "gastusin", "cost", "budget", "badyet", "piso", "pesos", "peso", "php", "bilihin", "pamasahe", "fare", "bills", "bill", "buwis", "tax", "taxes", "inflation", "implasyon", "bulsa", "afford", "promo", "discount", "sale", "bawas presyo"],
+      "pos_keywords": ["mura", "murang", "sulit", "tipid", "matipid", "nakakatipid", "affordable", "cheap", "cheaper", "abot-kaya", "kaya ng budget", "kaya sa bulsa", "pang-masa", "value for money", "barato", "bumaba ang presyo", "binaba", "ibaba ang presyo", "lower price", "discount", "promo", "libre", "free"],
+      "neg_keywords": ["mahal", "expensive", "pricey", "overpriced", "tumaas", "taas presyo", "mataas ang presyo", "mataas na presyo", "pagtaas", "high price", "high prices", "rising prices", "magastos", "costly", "hindi afford", "hindi kaya ng budget", "walang pambili", "walang pera"],
+      "codes": {
+        "pos": {"code_id": 110, "label": "Affordable / High Value (Sulit)"},
+        "neg": {"code_id": 120, "label": "Expensive / High Pricing Friction"}
+      },
+      "exemplars": ["mura lang at sulit sa bulsa", "ang mahal na ng presyo ngayon", "affordable for the family budget", "tumaas na naman ang bilihin"]
+    }
+  ]
+}

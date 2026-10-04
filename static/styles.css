@@ -72,7 +72,7 @@ body {
 
 .toast-success {
     background: var(--launch-red);
-    color: var(--off-white);
+    color: #FFFFFF;
     border: 1px solid var(--volt-yellow);
     box-shadow: 0 0 30px var(--launch-red-glow);
 }
@@ -313,7 +313,7 @@ body {
 /* Primary Tactile Buttons */
 .primary-btn, .action-btn-green, .download-btn {
     background: var(--launch-red);
-    color: var(--off-white);
+    color: #FFFFFF;
     border: none;
     padding: 12px 24px;
     border-radius: 10px;
@@ -547,7 +547,7 @@ body {
 
 .prompt-btn {
     background: var(--launch-red);
-    color: var(--off-white);
+    color: #FFFFFF;
     border: 1px solid var(--volt-yellow);
     padding: 8px 18px;
     border-radius: 8px;
@@ -1016,7 +1016,7 @@ body {
 
 .tray-add-btn:hover {
     background: var(--launch-red);
-    color: var(--off-white);
+    color: #FFFFFF;
     border-color: var(--launch-red);
 }
 
@@ -1176,8 +1176,8 @@ body {
     background-color: #FFFFFF;
 }
 
-/* WCAG Contrast Fixes (CS-098: 4.97:1 contrast on #E10600) */
-.primary-btn, .download-btn, .step-btn.active, .prompt-btn, .tab-btn.active, .btn-primary {
+/* WCAG Contrast Fixes (CS-098: 4.97:1 contrast on #E10600 / #E15554) */
+.primary-btn, .download-btn, .step-btn.active, .prompt-btn, .tab-btn.active, .btn-primary, .pill-toggle, .pill-active, .sub-btn.active, .modal-btn-primary {
     color: #FFFFFF !important;
 }
 
@@ -1407,3 +1407,10 @@ body {
 }
 
 
+
+/* Coder v2 Needs-review queue */
+.coder-review { margin: 0 0 1rem; padding: 0.75rem 1rem; border: 1px solid #FCD34D; background: #FFFBEB; border-radius: 8px; font-size: 0.85rem; }
+.coder-review-head { font-weight: 600; margin-bottom: 0.5rem; color: #92400E; }
+.coder-review-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 0.4rem; align-items: center; padding: 0.4rem 0; border-top: 1px solid #FDE68A; }
+.coder-review-text { grid-column: 1 / -1; }
+.coder-review-meta { color: #78716C; font-size: 0.78rem; }

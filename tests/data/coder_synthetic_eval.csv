@@ -1,0 +1,52 @@
+# Synthetic coder evaluation set: every sentence was invented for this repo (no client data).
+id,verbatim,language_mix,domain,sentiment,expected_theme
+s01,Sobrang sulit kasi mura pero ang dami ng laman,Tagalog,consumer,pos,Affordable / High Value (Sulit)
+s02,Ang mahal na ng presyo ngayon hindi na kaya ng budget,Tagalog,consumer,neg,Expensive / High Pricing Friction
+s03,Hindi naman mahal kaya bumibili pa rin ako,Tagalog,consumer,pos,Affordable / High Value (Sulit)
+s04,Matagal dumating yung order ko halos dalawang linggo,Tagalog,consumer,neg,Slow Logistics / Delivery Delay
+s05,Sira yung takip pagdating tumapon pa yung laman,Tagalog,consumer,neg,Damaged / Defective Packaging
+s06,Affordable siya and long lasting yung bango,Taglish,consumer,pos,Affordable / High Value (Sulit)
+s07,Too expensive for what you get,English,consumer,neg,Expensive / High Pricing Friction
+s08,Mabango pero medyo pricey,Taglish,consumer,mixed,
+s09,Hindi mabango ang amoy niya,Tagalog,consumer,neg,
+s10,Hindi ko masasabing hindi maganda,Tagalog,consumer,pos,
+s11,Walang kapantay ang linis ng ngipin ko,Tagalog,consumer,pos,
+s12,Ang bango talaga tumatagal buong araw,Tagalog,consumer,pos,
+s13,Nangangati ang anit ko pagkatapos gamitin,Tagalog,consumer,neg,
+s14,Lami kaayo ang lasa,Bisaya,consumer,pos,
+s15,Dili nindot ang baho,Bisaya,consumer,neg,
+s16,Gusto ko kasi malambot sa balat,Tagalog,consumer,pos,
+s17,Mabilis maubos hindi tumatagal,Tagalog,consumer,neg,
+s18,It cleans really well and smells fresh,English,consumer,pos,
+s19,Hindi ko alam,Tagalog,consumer,neutral,
+s20,Wala naman,Tagalog,consumer,neutral,
+s21,Okay lang,Tagalog,consumer,neutral,
+s22,Maganda ang packaging pero mahal ang shipping,Taglish,consumer,mixed,
+s23,Laging walang stock sa tindahan namin,Tagalog,consumer,neg,
+s24,Madaling mabili kahit saan,Tagalog,consumer,pos,
+s25,Ang tapang ng amoy masakit sa ilong,Tagalog,consumer,neg,
+s26,Matulungin siya sa mga mahihirap,Tagalog,governance,pos,
+s27,Kurakot at magnanakaw ng pondo,Tagalog,governance,neg,
+s28,Walang nagawa sa bayan namin,Tagalog,governance,neg,
+s29,Maraming proyekto ang natapos niya,Tagalog,governance,pos,
+s30,Matalino at may karanasan sa pamamahala,Tagalog,governance,pos,
+s31,Puro pangako lang walang tinutupad,Tagalog,governance,neg,
+s32,Sira-sira pa rin ang kalsada sa amin,Tagalog,governance,neg,
+s33,Ligtas na ang lugar dahil sa mga pulis,Tagalog,governance,pos,
+s34,Laging baha tuwing umuulan,Tagalog,governance,neg,
+s35,Nagbibigay ng scholarship sa mga estudyante,Tagalog,governance,pos,
+s36,Honest and hardworking leader,English,governance,pos,
+s37,He is corrupt and arrogant,English,governance,neg,
+s38,Mabait siya pero walang alam sa trabaho,Tagalog,governance,mixed,
+s39,Hindi siya corrupt,Tagalog,governance,pos,
+s40,Walang ayuda na dumating sa amin,Tagalog,governance,neg,
+s41,May libreng gamot sa health center,Tagalog,governance,pos,
+s42,Talamak pa rin ang droga dito,Tagalog,governance,neg,
+s43,Gusto ko ng pagbabago kaya bago naman,Tagalog,governance,pos,
+s44,Buotan siya ug matinabangon,Bisaya,governance,pos,
+s45,Ayaw ko sa dinastiya nila,Tagalog,governance,neg,
+s46,Maraming trabaho ang nabuksan,Tagalog,governance,pos,
+s47,Mataas ang bilihin at mababa ang sahod,Tagalog,governance,neg,
+s48,Ewan ko,Tagalog,governance,neutral,
+s49,No comment,English,governance,neutral,
+s50,Hindi lang mabait kundi magaling pa,Tagalog,governance,pos,

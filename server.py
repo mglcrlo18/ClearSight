@@ -38,6 +38,32 @@ from engine.stats_engine import (
 )
 from engine.driver_analysis import compute_johnsons_relative_weights
 from engine.taglish_nlp import batch_code_open_ends, scrub_pii
+from engine.codeframe_loader import CodeframeError, list_codeframes, load_codeframe, load_codeframe_from_dict, validate_codeframe
+
+# Coder feature flag: "v2" (default; beat v1 on the held-out client test set, see
+# Coder_Improvement_Plan.md) or "v1" (legacy rule coder). Per request: {"coder": "v1"|"v2"}.
+CODER_DEFAULT = os.environ.get("CLEARSIGHT_CODER", "v2").strip().lower()
+if CODER_DEFAULT not in ("v1", "v2"):
+    CODER_DEFAULT = "v2"
+_FEEDBACK_STORE = None
+
+
+def get_feedback_store():
+    """Local analyst-correction store (/coder_corrections.json); created lazily."""
+    global _FEEDBACK_STORE
+    if _FEEDBACK_STORE is None:
+        from engine.coder_feedback import FeedbackStore
+        _FEEDBACK_STORE = FeedbackStore()
+    return _FEEDBACK_STORE
+
+
+def pick_codeframe(req_data: dict) -> str:
+    """Codeframe by *name* only (no paths: CWE-22); falls back to the category hint."""
+    name = req_data.get("codeframe")
+    if isinstance(name, str) and name:
+        return name
+    cat = str(req_data.get("category") or "").lower()
+    return "governance_default" if any(w in cat for w in ("govern", "public", "politic", "election")) else "consumer_default"
 from engine.export_engine import (
     generate_excel_banner_book,
     generate_customer_voice_snapshot_html,
@@ -300,6 +326,14 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 "diagnostics": SESSION["weight_diagnostics"]
             }
             self.send_json_response(resp)
+        elif path == "/api/coder/review-queue":
+            self.coder_review_queue()
+        elif path == "/api/coder/codeframes":
+            self.send_json_response({"status": "success", "default_coder": CODER_DEFAULT, "codeframes": list_codeframes()})
+        elif path == "/api/coder/telemetry":
+            from engine.coder_v2 import telemetry_snapshot
+            store = get_feedback_store()
+            self.send_json_response({"status": "success", "local_only": True, "counters": telemetry_snapshot(), "feedback": store.stats()})
         elif path == "/api/export/excel":
             self.stream_export_file("ClearSight_Agency_Banner_Book.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         elif path == "/api/export/snapshot-download":
@@ -528,32 +562,146 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     self.send_json_response({"status": "empty", "message": "No open-ended feedback column found in dataset."})
                     return
 
+                verbatims = df[open_col].dropna().astype(str).tolist()
+                coder = str(req_data.get("coder") or CODER_DEFAULT).lower()
+                if coder not in ("v1", "v2"):
+                    self.send_json_response({"status": "error", "message": "coder must be 'v1' or 'v2'."}, 400)
+                    return
+
                 with SESSION_LOCK:
                     custom_codeframe = SESSION.get("custom_codeframe")
-                verbatims = df[open_col].dropna().astype(str).tolist()
-                coding_results = batch_code_open_ends(
-                    verbatims,
-                    category=req_data.get("category"),
-                    apply_lumping=bool(req_data.get("apply_lumping", req_data.get("lump", False))),
-                    codeframe=custom_codeframe
-                )
-                SESSION["open_feedback_analysis"] = coding_results
+
+                if coder == "v2":
+                    from engine.coder_v2 import Coder, CoderConfig, batch_code_v2
+                    try:
+                        if custom_codeframe and isinstance(custom_codeframe, list):
+                            from engine.codeframe_loader import validate_codeframe
+                            cf = validate_codeframe({"schema_version": 1, "id": "custom", "name": "Custom Uploaded Codeframe", "topics": custom_codeframe})
+                        elif custom_codeframe and isinstance(custom_codeframe, dict):
+                            from engine.codeframe_loader import load_codeframe_from_dict
+                            cf = load_codeframe_from_dict(custom_codeframe)
+                        else:
+                            cf = load_codeframe(pick_codeframe(req_data))
+                    except CodeframeError as e:
+                        self.send_json_response({"status": "error", "message": f"Invalid codeframe: {e}"}, 400)
+                        return
+                    coding_results = batch_code_v2(verbatims, coder=Coder(cf, CoderConfig(feedback=get_feedback_store())))
+                else:
+                    coding_results = batch_code_open_ends(
+                        verbatims,
+                        category=req_data.get("category"),
+                        apply_lumping=bool(req_data.get("apply_lumping", req_data.get("lump", False))),
+                        codeframe=custom_codeframe
+                    )
+                    coding_results["coder_version"] = "1"
+
+                with SESSION_LOCK:
+                    SESSION["open_feedback_analysis"] = coding_results
 
                 self.send_json_response({
                     "status": "success",
                     "column": open_col,
+                    "coder": coder,
+                    "coder_version": coding_results.get("coder_version"),
+                    "codeframe_id": coding_results.get("codeframe_id"),
                     "total_analyzed": coding_results.get("total_analyzed", len(verbatims)),
                     "codeframe": coding_results.get("codeframe", []),
-                    "records": coding_results.get("records", [])[:50]
+                    "records": coding_results.get("records", [])[:50],
+                    "review_queue_count": len(coding_results.get("review_queue", [])),
+                    "sentiment_counts": coding_results.get("sentiment_counts", {}),
                 })
             except Exception as e:
                 logging.exception(f"Error coding open ends: {e}")
                 self.send_json_response({"status": "error", "message": str(e)}, 500)
 
+        elif path == "/api/coder/feedback":
+            self.handle_coder_feedback(body_bytes)
         elif path in ["/api/export/save-to-downloads", "/api/export/save-snapshot-to-downloads", "/api/export/save-thesis-to-downloads"]:
             self.handle_save_to_downloads(path)
         else:
             self.send_error(404, "Endpoint not found.")
+
+    # ---------------------------------------------------------------- coder v2
+    def handle_coder_feedback(self, body_bytes: bytes):
+        """Analyst correction: {"response_id": int} (from the last coding run) or {"text": str},
+        plus "sentiment" (pos/neg/neutral/mixed) and/or "code_ids" (list). Stored locally only."""
+        try:
+            req = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+        except Exception:
+            req = None
+        if not isinstance(req, dict):
+            self.send_json_response({"status": "error", "message": "Body must be a JSON object."}, 400)
+            return
+        analysis = SESSION.get("open_feedback_analysis") or {}
+        rec = None
+        text = req.get("text")
+        rid = req.get("response_id")
+        if rid is not None:
+            if not isinstance(rid, int) or isinstance(rid, bool):
+                self.send_json_response({"status": "error", "message": "response_id must be an integer."}, 400)
+                return
+            rec = next((r for r in analysis.get("records", []) if r.get("response_id") == rid), None)
+            if rec is None:
+                self.send_json_response({"status": "error", "message": "Unknown response_id."}, 404)
+                return
+            text = rec.get("raw_text", "")
+        if not isinstance(text, str) or not text.strip() or len(text) > 5000:
+            self.send_json_response({"status": "error", "message": "text must be a non-empty string (max 5000 chars)."}, 400)
+            return
+        sentiment = req.get("sentiment")
+        code_ids = req.get("code_ids", [])
+        if sentiment is not None and sentiment not in ("pos", "neg", "neutral", "mixed"):
+            self.send_json_response({"status": "error", "message": "sentiment must be pos, neg, neutral or mixed."}, 400)
+            return
+        if not isinstance(code_ids, list) or len(code_ids) > 10 or not all(isinstance(c, (int, str)) and not isinstance(c, bool) for c in code_ids):
+            self.send_json_response({"status": "error", "message": "code_ids must be a list (max 10) of ids."}, 400)
+            return
+        if sentiment is None and not code_ids:
+            self.send_json_response({"status": "error", "message": "Give a sentiment and/or code_ids."}, 400)
+            return
+        cf_id = analysis.get("codeframe_id") or pick_codeframe(req)
+        themes = []
+        if code_ids:
+            try:
+                cf = load_codeframe(cf_id)
+            except CodeframeError as e:
+                self.send_json_response({"status": "error", "message": f"Invalid codeframe: {e}"}, 400)
+                return
+            labels = {str(c["code_id"]): c["label"] for t in cf["topics"] for c in t["codes"].values()}
+            labels.update({str(c["code_id"]): c["label"] for c in cf["special"].values()})
+            unknown = [c for c in code_ids if str(c) not in labels]
+            if unknown:
+                self.send_json_response({"status": "error", "message": "Unknown code_ids for this codeframe."}, 400)
+                return
+            themes = [labels[str(c)] for c in code_ids]
+        try:
+            saved = get_feedback_store().add(text, sentiment=sentiment, code_ids=code_ids, themes=themes, codeframe=cf_id)
+        except (ValueError, OSError) as e:
+            self.send_json_response({"status": "error", "message": str(e)}, 400)
+            return
+        if rec is not None:
+            rec.update(assigned_themes=themes or rec.get("assigned_themes"), assigned_codes=code_ids or rec.get("assigned_codes"),
+                       sentiment=sentiment or rec.get("sentiment"), needs_review=False, corrected=True)
+            if rid in analysis.get("review_queue", []):
+                analysis["review_queue"].remove(rid)
+        self.send_json_response({"status": "success", "saved": saved, "corrections": len(get_feedback_store())})
+
+    def coder_review_queue(self):
+        analysis = SESSION.get("open_feedback_analysis") or {}
+        queue = set(analysis.get("review_queue", []))
+        items = [{"response_id": r["response_id"], "text": r.get("raw_text", ""), "themes": r.get("assigned_themes", []),
+                  "sentiment": r.get("sentiment"), "confidence": r.get("confidence"), "reasons": r.get("reasons", [])}
+                 for r in analysis.get("records", []) if r.get("response_id") in queue][:200]
+        options = []
+        cf_id = analysis.get("codeframe_id")
+        if cf_id:
+            try:
+                cf = load_codeframe(cf_id)
+                options = [{"code_id": c["code_id"], "label": c["label"], "subnet": t["subnet"]}
+                           for t in cf["topics"] for c in t["codes"].values()]
+            except CodeframeError:
+                options = []
+        self.send_json_response({"status": "success", "codeframe_id": cf_id, "count": len(queue), "items": items, "options": options})
 
     def stream_export_file(self, filename: str, mime_type: str):
         """Streams generated file fresh on demand, eliminating stale caching (CS-N03)."""
