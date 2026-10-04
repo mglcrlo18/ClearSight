@@ -17,6 +17,9 @@ import pandas as pd
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import threading
+
+SESSION_LOCK = threading.Lock()
 
 # Add current directory to path
 CURR_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -56,7 +59,9 @@ SESSION = {
     "weights": None,
     "weight_diagnostics": None,
     "hygiene_audit": [],
-    "last_tabulation": None
+    "last_tabulation": None,
+    "quarantine_straight_liners": True,
+    "quarantine_speeders": True
 }
 
 
@@ -377,15 +382,22 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             trim_pct = req_data.get("trim_percentile", 95.0)
 
             if not targets:
-                # Default demographic benchmarks
-                targets = {
-                    "Region": {
-                        "National Capital Region (NCR)": 0.14,
-                        "Balance Luzon": 0.45,
-                        "Visayas": 0.20,
-                        "Mindanao": 0.21
+                # Identify if default demographic columns exist (CS-N04)
+                if SESSION.get("df") is not None and "Region" in SESSION["df"].columns:
+                    targets = {
+                        "Region": {
+                            "National Capital Region (NCR)": 0.14,
+                            "Balance Luzon": 0.45,
+                            "Visayas": 0.20,
+                            "Mindanao": 0.21
+                        }
                     }
-                }
+                else:
+                    self.send_json_response({
+                        "status": "error",
+                        "message": "No 'Region' column found. Please provide explicit weighting targets for dataset columns."
+                    }, 400)
+                    return
 
             try:
                 weights, diagnostics = calculate_rim_weights(
@@ -402,6 +414,42 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 400)
 
+        elif path == "/api/hygiene-filter":
+            try:
+                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+            except Exception:
+                req_data = {}
+            with SESSION_LOCK:
+                SESSION["quarantine_straight_liners"] = bool(req_data.get("filter_straight_liners", True))
+                SESSION["quarantine_speeders"] = bool(req_data.get("filter_speeders", True))
+                df = SESSION.get("df")
+                total_n = len(df) if df is not None else 0
+                active_n = total_n
+                if df is not None and "__is_flagged" in df.columns:
+                    cond = pd.Series(True, index=df.index)
+                    if SESSION["quarantine_straight_liners"]:
+                        cond &= ~df["__flag_reasons"].str.contains("Straight-liner", na=False)
+                    if SESSION["quarantine_speeders"]:
+                        cond &= ~df["__flag_reasons"].str.contains("Speeder", na=False)
+                    active_n = int(cond.sum())
+            self.send_json_response({"status": "success", "active_respondents": active_n, "total_respondents": total_n})
+
+        elif path == "/api/set-codeframe":
+            try:
+                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+            except Exception:
+                req_data = {}
+            custom_codeframe = req_data.get("codeframe")
+            if not custom_codeframe or not isinstance(custom_codeframe, list):
+                self.send_json_response({"status": "error", "message": "Codeframe must be a non-empty list of category definitions."}, 400)
+                return
+            from engine.taglish_nlp import set_custom_codeframe
+            try:
+                set_custom_codeframe(custom_codeframe)
+                self.send_json_response({"status": "success", "message": f"Registered custom codeframe with {len(custom_codeframe)} categories."})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 400)
+
         elif path == "/api/tabulate":
             if SESSION["df"] is None:
                 load_bundled_sample()
@@ -411,7 +459,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 req_data = {}
 
-            df = SESSION["df"]
+            with SESSION_LOCK:
+                df = SESSION["df"]
             # CS-088: validate request types and never drop the connection on bad input.
             banner_cols = req_data.get("banner_cols", ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"])
             stubs = req_data.get("stubs", ["Brand Preference"])
@@ -436,9 +485,10 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": f"Tabulation failed: {e}"}, 500)
                 return
             # P4-09: tables that only carry an error (e.g. the UI's placeholder stub) do not count as built.
-            if any(not t.get("error") for t in result):
-                SESSION["last_tabulation"] = [t for t in result if not t.get("error")]
-                SESSION["fdr_enabled"] = fdr_enabled
+            with SESSION_LOCK:
+                if any(not t.get("error") for t in result):
+                    SESSION["last_tabulation"] = [t for t in result if not t.get("error")]
+                    SESSION["fdr_enabled"] = fdr_enabled
             self.send_json_response({"status": "success", "table": result})
 
         elif path == "/api/code-open-ends":

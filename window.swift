@@ -74,8 +74,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
         let downloadsDirectory = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
-        let destinationURL = downloadsDirectory.appendingPathComponent(suggestedFilename)
-        try? FileManager.default.removeItem(at: destinationURL)
+        var destinationURL = downloadsDirectory.appendingPathComponent(suggestedFilename)
+        var counter = 1
+        let baseName = (suggestedFilename as NSString).deletingPathExtension
+        let ext = (suggestedFilename as NSString).pathExtension
+        while FileManager.default.fileExists(atPath: destinationURL.path) {
+            let newName = "\(baseName)_\(counter).\(ext)"
+            destinationURL = downloadsDirectory.appendingPathComponent(newName)
+            counter += 1
+        }
         completionHandler(destinationURL)
     }
 

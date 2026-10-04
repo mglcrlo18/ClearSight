@@ -176,7 +176,7 @@ body {
 
 .step-btn.active {
     background: var(--launch-red);
-    color: var(--off-white);
+    color: #FFFFFF;
     box-shadow: 0 4px 14px var(--launch-red-glow);
 }
 
@@ -1176,8 +1176,8 @@ body {
     background-color: #FFFFFF;
 }
 
-/* WCAG Contrast Fixes */
-.primary-btn, .download-btn, .step-btn.active {
+/* WCAG Contrast Fixes (CS-098: 4.97:1 contrast on #E10600) */
+.primary-btn, .download-btn, .step-btn.active, .prompt-btn, .tab-btn.active, .btn-primary {
     color: #FFFFFF !important;
 }
 

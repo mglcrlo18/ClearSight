@@ -211,7 +211,22 @@ function executeWeighting() {
 function toggleHygiene() {
     const isStraight = document.getElementById('check-straight')?.checked;
     const isSpeeder = document.getElementById('check-speeder')?.checked;
-    showToast(`Hygiene rules updated: Straight-liners [${isStraight ? 'ON' : 'OFF'}], Speeders [${isSpeeder ? 'ON' : 'OFF'}]`);
+    fetch('/api/hygiene-filter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            filter_straight_liners: isStraight,
+            filter_speeders: isSpeeder
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        showToast(`Active sample: ${data.active_respondents} of ${data.total_respondents} records.`);
+        renderTable();
+    })
+    .catch(() => {
+        showToast(`Hygiene rules updated: Straight-liners [${isStraight ? 'ON' : 'OFF'}], Speeders [${isSpeeder ? 'ON' : 'OFF'}]`);
+    });
 }
 
 // 4. Banner and Stub Tray Helper Functions with Unlimited Columns & Category Expansion
@@ -1268,6 +1283,16 @@ function toggleFDR() {
 }
 
 // 8. Conversational Prompt-to-Table
+function findBestColumnMatch(keywords, schema) {
+    if (!schema) return null;
+    const cols = Object.keys(schema).filter(c => !c.startsWith('__'));
+    for (const kw of keywords) {
+        const found = cols.find(c => c.toLowerCase().includes(kw));
+        if (found) return found;
+    }
+    return null;
+}
+
 function executePromptToTable() {
     const btn = document.querySelector('.prompt-btn');
     const inputElem = document.getElementById('prompt-input');
@@ -1283,25 +1308,31 @@ function executePromptToTable() {
     setTimeout(() => {
         const lower = input.toLowerCase();
 
-        // Stubs matching (English + Taglish)
+        const schema = (loadedDatasetInfo && loadedDatasetInfo.schema) || {};
+
+        // Stubs matching (English + Taglish, schema-driven CS-042)
         if (lower.includes('satisfaction') || lower.includes('csat') || lower.includes('tuwa') || lower.includes('happy')) {
+            const targetCol = findBestColumnMatch(['overall', 'satisfaction', 'sat', 'csat'], schema) || "Overall CSAT (T2B)";
             const tray = document.getElementById('stub-tray');
             tray.innerHTML = "";
-            tray.appendChild(createPill("Overall CSAT (T2B)", true));
+            tray.appendChild(createPill(targetCol, true));
             currentMetric = 't2b';
         } else if (lower.includes('brand') || lower.includes('preference') || lower.includes('nanotech')) {
+            const targetCol = findBestColumnMatch(['brand', 'preference'], schema) || "Brand Preference";
             const tray = document.getElementById('stub-tray');
             tray.innerHTML = "";
-            tray.appendChild(createPill("Brand Preference", true));
+            tray.appendChild(createPill(targetCol, true));
             currentMetric = 'pct';
         } else if (lower.includes('repurchase') || lower.includes('intent') || lower.includes('ulit') || lower.includes('bili')) {
+            const targetCol = findBestColumnMatch(['repurchase', 'intent'], schema) || "Repurchase Intent";
             const tray = document.getElementById('stub-tray');
             tray.innerHTML = "";
-            tray.appendChild(createPill("Repurchase Intent", true));
+            tray.appendChild(createPill(targetCol, true));
         } else if (lower.includes('income') || lower.includes('sec') || lower.includes('class')) {
+            const targetCol = findBestColumnMatch(['income', 'sec', 'class'], schema) || "Monthly Income Class (SEC)";
             const tray = document.getElementById('stub-tray');
             tray.innerHTML = "";
-            tray.appendChild(createPill("Monthly Income Class (SEC)", true));
+            tray.appendChild(createPill(targetCol, true));
         } else if (input.length > 0 && !lower.includes('generate') && !lower.includes('table')) {
             addStubPill(input);
         }

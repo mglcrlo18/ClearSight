@@ -557,19 +557,23 @@ def rao_scott_second_order_mrcv(
     chi2_raw = float(np.sum(((mention_table[valid] - expected[valid]) ** 2) / expected[valid]))
     df_raw = float((r - 1) * (c - 1))
 
-    # Design effect estimation
+    # Design effect estimation (CS-005: Eigenvalue-based second-order Rao-Scott)
     if respondent_matrix is not None and len(respondent_matrix) > 0:
-        # Estimate design effect from multi-select correlation structure
-        co_mentions = (respondent_matrix.T @ respondent_matrix) / len(respondent_matrix)
-        diag = np.diag(co_mentions)
-        mean_diag = np.mean(diag) if np.mean(diag) > 0 else 1.0
-        delta_bar = 1.0 + (np.mean(co_mentions) / mean_diag) * 0.5
-        a_sq = float(np.var(diag) / (mean_diag ** 2 + 1e-6))
+        Y = respondent_matrix.astype(float)
+        p_ijk = Y / len(Y)
+        cov_hat = np.cov(Y, rowvar=False)
+        p_marg = np.mean(Y, axis=0)
+        V_0 = np.diag(p_marg) - np.outer(p_marg, p_marg)
+
+        eigvals = np.linalg.eigvals(np.linalg.pinv(V_0) @ cov_hat)
+        eigvals = eigvals[eigvals > 0]
+        if len(eigvals) > 0:
+            delta_bar = float(np.mean(eigvals))
+            a_sq = float(np.var(eigvals) / (delta_bar ** 2)) if delta_bar > 0 else 0.0
+        else:
+            delta_bar, a_sq = 1.0, 0.0
     else:
-        cell_props = mention_table / total
-        mean_p = float(np.mean(cell_props)) + 1e-9
-        delta_bar = 1.0 + (float(np.std(cell_props)) / mean_p) * 0.25
-        a_sq = 0.15
+        delta_bar, a_sq = 1.0, 0.0
 
     f_stat = chi2_raw / (df_raw * delta_bar * (1.0 + a_sq))
     df1_adj = max(1.0, df_raw / (1.0 + a_sq))

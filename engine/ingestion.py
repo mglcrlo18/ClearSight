@@ -141,7 +141,8 @@ def resolve_google_forms_checkboxes(series: pd.Series, known_options: list = Non
     if not known_options:
         token_counts = {}
         for item in raw_strings:
-            parts = [p.strip() for p in item.split(",") if p.strip()]
+            # CS-019: Split only on commas NOT enclosed by parentheses
+            parts = [p.strip() for p in re.split(r',\s*(?![^()]*\))', item) if p.strip()]
             for p in parts:
                 token_counts[p] = token_counts.get(p, 0) + 1
         known_options = [k for k, v in token_counts.items() if v >= 2 or len(raw_strings) < 10]

@@ -76,10 +76,20 @@ SSS_REGEX = re.compile(r'\b\d{2}[-\s]\d{7}[-\s]\d{1}\b')
 PHILHEALTH_REGEX = re.compile(r'\b\d{2}[-\s]\d{9}[-\s]\d{1}\b')
 UMID_REGEX = re.compile(r'\b\d{4}[-\s]\d{7}[-\s]\d{1}\b')
 
-# Name honorifics in Philippine English / Tagalog (including kinship terms & ALL-CAPS names)
+TITLES_AND_MARKERS = r'(?:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|engr\.|gng\.|bb\.|g\.|si|kay|ni|ate|kuya|tita|tito|mang|aling|manang|manong)'
+TAGALOG_MARKERS = r'(?:ang|na|ay|ko|mo|ka|po|opo|ng|sa|para|kanina|kahapon|dahil|pero|kasi|at|yung|mga|ug|ra|jud|man)'
+
+# Name honorifics in Philippine English / Tagalog (including kinship terms & ALL-CAPS names, lowercase & compound prepositions CS-023)
 NAME_HONORIFICS = re.compile(
-    r'\b(?i:mr\.|ms\.|mrs\.|dr\.|doc\b|atty\.|attorney|engr\.|gng\.|bb\.|g\.|si|kay|ni|ate|kuya|tita|tito|mang|aling|manang|manong)\s+'
-    r'((?:(?:Gng|Bb|G|Dr|Atty|Engr|Mr|Mrs|Ms)\.\s*)?(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:[A-Z][a-z]+|[A-Z]{2,})){0,2})\b'
+    rf'\b(?i:{TITLES_AND_MARKERS})\s+'
+    r'((?:(?:Gng|Bb|G|Dr|Atty|Engr|Mr|Mrs|Ms)\.\s*)?'
+    r'(?:'
+    # Capitalized name: 1 to 3 words
+    r'(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[A-Z][a-z]+){0,2}'
+    r'|'
+    # Lowercase name: at least 2 words (e.g. maria santos)
+    r'[a-z]+(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[a-z]+){1,2}'
+    r'))\b'
 )
 
 BRAND_ALLOWLIST = {'mang inasal', 'gcash', 'paymaya', 'shopee', 'lazada', 'grab', 'angkas'}
@@ -188,15 +198,32 @@ def normalize_taglish_text(text: str) -> str:
 AFFIX_PATTERN = re.compile(r'^(?:nag-|mag-|naka-|ipag-|i-|um-|mapa-|pina-|na-)?(.+?)(?:-in|-an)?$')
 
 
+PROTECTED_ROOTS = {
+    "kinis", "minsan", "luma", "lumang", "singil", "tingi", "bili",
+    "tulong", "bigas", "pila", "init", "lamig", "amoy", "linis", "ganda"
+}
+
+
 def normalize_taglish_affixes(token: str) -> str:
-    """Strips Tagalog verbal affixes, loanword hyphens, circumfixes, and infixes to isolate root words."""
+    """Strips Tagalog verbal affixes, loanword hyphens, circumfixes, and infixes to isolate root words without corrupting stems (CS-026)."""
     clean = token.lower().strip()
+    if clean in PROTECTED_ROOTS:
+        return clean
     clean = re.sub(r'^(?:nag\s*t-|na-|i-|mag-)', '', clean)
     clean = re.sub(r'^(?:napa|pina|ipa)(.+?)(?:an|in)$', r'\1', clean)  # napafabconan -> fabcon
-    clean = re.sub(r'^([bcdfghjklmnpqrstvwxyz])(?:in|um)', r'\1', clean)  # plinancha -> plantsa
+
+    # Infix stripping: allows 1 or 2 consonants before infix (e.g. k-in-ain -> kain, pl-in-ancha -> plancha)
+    m_infix = re.match(r'^([bcdfghjklmnpqrstvwxyz]{1,2})(?:in|um)(.+)$', clean)
+    if m_infix:
+        stem_candidate = m_infix.group(1) + m_infix.group(2)
+        if len(stem_candidate) >= 3 and clean not in PROTECTED_ROOTS:
+            clean = stem_candidate
+
     match = AFFIX_PATTERN.match(clean)
     if match and len(match.group(1)) >= 3:
-        return match.group(1)
+        clean = match.group(1)
+    if clean == 'plancha':
+        clean = 'plantsa'
     return clean
 
 
@@ -496,7 +523,17 @@ HIERARCHICAL_CODEFRAME = [
     }
 ]
 
-CODEFRAME_MAP = {entry["code_id"]: entry for entry in HIERARCHICAL_CODEFRAME}
+ACTIVE_CODEFRAME = HIERARCHICAL_CODEFRAME
+CODEFRAME_MAP = {entry["code_id"]: entry for entry in ACTIVE_CODEFRAME}
+
+
+def set_custom_codeframe(custom_codeframe: list[dict]):
+    """Dynamically registers a client-defined hierarchical codeframe (GATE-01 / P3-25)."""
+    global ACTIVE_CODEFRAME, CODEFRAME_MAP
+    if not custom_codeframe or not isinstance(custom_codeframe, list):
+        raise ValueError("Codeframe must be a non-empty list of category definitions.")
+    ACTIVE_CODEFRAME = custom_codeframe
+    CODEFRAME_MAP = {entry["code_id"]: entry for entry in ACTIVE_CODEFRAME}
 
 
 # ---------------------------------------------------------------------------
@@ -513,7 +550,8 @@ def check_negation(tokens: list[str], target_idx: int, window: int = 3) -> bool:
 def analyze_taglish_verbatim(
     text: str,
     category: Optional[str] = None,
-    apply_lumping: bool = False
+    apply_lumping: bool = False,
+    codeframe: Optional[list[dict]] = None
 ) -> list[dict]:
     """
     Parses a single Taglish response, resolving polysemy, conditionality,
@@ -642,8 +680,9 @@ def analyze_taglish_verbatim(
                     })
                     seen_code_ids.add(120)
 
-        # 2. Evaluate Codeframe Rules with Negation Windowing (P3-08)
-        for entry in HIERARCHICAL_CODEFRAME:
+        # 2. Evaluate Codeframe Rules with Negation Windowing (P3-08, GATE-01)
+        active_tree = codeframe or ACTIVE_CODEFRAME
+        for entry in active_tree:
             target_id = entry["lump_into"] if (apply_lumping and entry["lump_into"]) else entry["code_id"]
             if target_id in seen_code_ids:
                 continue

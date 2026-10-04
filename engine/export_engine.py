@@ -238,9 +238,16 @@ def generate_excel_banner_book(
                     except ValueError:
                         val_cell.value = sanitize_excel_cell(val)
                 elif isinstance(val, (int, float)):
-                    val_cell.value = val
+                    val_cell.value = float(val)
+                    val_cell.number_format = "0.00"
                 else:
-                    val_cell.value = sanitize_excel_cell(str(val))
+                    # CS-080: Convert numeric float strings (e.g. means) to numeric Excel cells
+                    try:
+                        num_val = float(val)
+                        val_cell.value = num_val
+                        val_cell.number_format = "0.00"
+                    except (ValueError, TypeError):
+                        val_cell.value = sanitize_excel_cell(str(val))
 
                 val_cell.font = table_bold_font if is_net else table_regular_font
                 val_cell.alignment = Alignment(horizontal="center", vertical="center")

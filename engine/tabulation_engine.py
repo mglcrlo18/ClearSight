@@ -25,7 +25,9 @@ from engine.stats_engine import (
     test_vs_total_benchmark,
     test_means_significance,
     calculate_kish_neff,
-    apply_fdr_benjamini_hochberg
+    apply_fdr_benjamini_hochberg,
+    chi_square_independence,
+    rao_scott_second_order_mrcv
 )
 
 
@@ -305,7 +307,8 @@ def build_crosstab_table(
         row_definitions = [r for r in row_definitions if r.get("is_net")]
 
     # 5. Compute Proportions, Means, and Dual Significance Testing
-    alpha_hi = 1.0 - confidence_level if confidence_level > 0.5 else 0.05
+    alpha_hi = 0.01 if confidence_level == 0.99 else 0.05
+    alpha_lo = 0.05 if confidence_level == 0.99 else 0.10
     num_banners = len(sub_banner_names)
     computed_rows = []
 
@@ -455,7 +458,7 @@ def build_crosstab_table(
             target_let = col_letters[lo]
             if pa < alpha_hi:
                 col_letters_won[hi].append(target_let.upper())
-            elif pa < 0.10:
+            elif pa < alpha_lo:
                 col_letters_won[hi].append(target_let.lower())
 
         row_sig_letters = ["-"] + [" ".join(col_letters_won[j]) for j in range(1, num_banners + 1)]
@@ -521,6 +524,51 @@ def build_crosstab_table(
                     "weighted": False
                 }
 
+    # Compute Chi-Square for categorical stub tables across banner columns (CS-017)
+    chi2_info = None
+    if not is_numeric and not is_rating_scale and not has_commas and num_banners >= 2:
+        obs_matrix = []
+        for r_def in row_definitions:
+            evaluator = r_def.get("evaluator")
+            if evaluator:
+                row_counts = []
+                for c in range(1, num_banners + 1):
+                    valid_c = all_col_masks[c] & df[stub_col].notna()
+                    matches = evaluator(df.loc[valid_c, stub_col]).to_numpy()
+                    w_c = w_all[valid_c.to_numpy()]
+                    row_counts.append(float(w_c[matches].sum()))
+                obs_matrix.append(row_counts)
+        if len(obs_matrix) >= 2:
+            contingency = np.array(obs_matrix)
+            c_stat, c_df, c_p = chi_square_independence(contingency)
+            chi2_info = {
+                "chi2_stat": float(round(c_stat, 4)),
+                "df": int(c_df),
+                "p_val": float(round(c_p, 4))
+            }
+
+    # If multi-select checkbox stub, compute second-order Rao-Scott MRCV test (CS-005)
+    mrcv_info = None
+    if has_commas and num_banners >= 2:
+        from engine.ingestion import resolve_google_forms_checkboxes
+        ind_df, _ = resolve_google_forms_checkboxes(df[stub_col])
+        if len(ind_df.columns) >= 2:
+            mention_table = []
+            for opt in ind_df.columns:
+                row_c = []
+                for c in range(1, num_banners + 1):
+                    valid_c = all_col_masks[c] & df[stub_col].notna()
+                    matched_cnt = ind_df.loc[valid_c, opt].sum()
+                    row_c.append(float(matched_cnt))
+                mention_table.append(row_c)
+            mention_arr = np.array(mention_table)
+            rs_f, rs_df1, rs_p = rao_scott_second_order_mrcv(mention_arr, n_eff=float(effective_bases[0]))
+            mrcv_info = {
+                "f_stat": float(round(rs_f, 4)),
+                "df1": float(round(rs_df1, 4)),
+                "p_val": float(round(rs_p, 4))
+            }
+
     return {
         "title": f"Tabulation: {stub_col}",
         "stub_label": stub_col,
@@ -532,5 +580,7 @@ def build_crosstab_table(
         "effective_bases": effective_bases,
         "small_base": small_base,
         "anova": anova_info,
+        "chi_square": chi2_info,
+        "mrcv": mrcv_info,
         "rows": computed_rows
     }
