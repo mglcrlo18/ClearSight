@@ -73,7 +73,8 @@ def build_crosstab_table(
     rs2_enabled: bool = True,
     chi_square_enabled: bool = True,
     welch_anova_enabled: bool = True,
-    fdr_method: str = "bh"
+    fdr_method: str = "bh",
+    custom_nets: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """
     Computes a mathematically sound crosstabulation table directly from the DataFrame.
@@ -296,6 +297,19 @@ def build_crosstab_table(
                     "label": str(cat_val),
                     "is_net": False,
                     "evaluator": lambda s, cat_val=cat_val: s.astype(str) == str(cat_val)
+                })
+
+    # Custom Netting Insertion (CS-USER-04)
+    if custom_nets:
+        for net in custom_nets:
+            net_stub = net.get("stub")
+            if net_stub and (net_stub == stub_name or net_stub == stub_col or str(stub_col).lower() in str(net_stub).lower()):
+                cats = [str(c) for c in net.get("categories", [])]
+                net_label = str(net.get("label", "Custom NET"))
+                row_definitions.insert(0, {
+                    "label": net_label,
+                    "is_net": True,
+                    "evaluator": lambda s, cats=cats: s.astype(str).apply(lambda v: any(c in v for c in cats))
                 })
 
     # If metric is "mean" and variable is numeric, add Mean Rating row (P3-02)

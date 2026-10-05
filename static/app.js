@@ -1028,7 +1028,8 @@ async function renderTable() {
                 stubs: stubs,
                 confidence: currentConfidence,
                 fdr_enabled: isFDREnabled,
-                metric: currentMetric
+                metric: currentMetric,
+                custom_nets: activeCustomNets
             })
         });
 
@@ -1250,6 +1251,14 @@ async function loadTaglishCoding() {
             return;
         }
         const data = await res.json();
+        if (data.status === 'needs_codeframe') {
+            grid.innerHTML = `<div style="grid-column: 1/-1; padding: 2.5rem 1.5rem; text-align: center; color: #1E293B; background: #F8FAFC; border: 1.5px dashed #CBD5E1; border-radius: 10px;">
+                <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: #0F172A;">No Codeframe Assigned</div>
+                <div style="font-size: 0.875rem; color: #64748B; margin-bottom: 1.25rem;">Open-ended responses require a verified domain codeframe. Please upload an Excel (.xlsx) codeframe or select one from the codeframe manager.</div>
+                <button type="button" class="primary-btn" onclick="document.getElementById('codeframe-file-input').click()">Upload Project Codeframe (.xlsx)</button>
+            </div>`;
+            return;
+        }
         if (data.status === 'success' && data.codeframe) {
             renderTaglishCodeframe(data);
             if (data.coder === 'v2') {
@@ -1858,6 +1867,91 @@ async function executeKruskalQuadrantAnalysis() {
     } catch (err) {
         showToast(`IPA error: ${err.message}`, true);
     }
+}
+
+
+// ==========================================
+// Custom Category Netting (CS-USER-04)
+// ==========================================
+let activeCustomNets = [];
+
+function openCreateNetModal() {
+    const modal = document.getElementById('create-net-modal');
+    const select = document.getElementById('net-stub-select');
+    if (!modal || !select) return;
+
+    select.innerHTML = '';
+    const stubs = getActiveStubs();
+    if (!stubs || stubs.length === 0) {
+        showToast("Please add at least one Question Stub (Row) first.", true);
+        return;
+    }
+    stubs.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s;
+        opt.textContent = s;
+        select.appendChild(opt);
+    });
+
+    populateNetCategories(select.value);
+    modal.classList.remove('hidden');
+}
+
+function closeCreateNetModal() {
+    const modal = document.getElementById('create-net-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function populateNetCategories(stubName) {
+    const list = document.getElementById('net-categories-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    let categories = [];
+    if (currentTableData && currentTableData.length > 0) {
+        const tbl = currentTableData.find(t => t.stub_label === stubName || (t.title && t.title.includes(stubName))) || currentTableData[0];
+        if (tbl && tbl.rows) {
+            categories = tbl.rows.filter(r => !r.is_net && !r.is_mean).map(r => r.label);
+        }
+    }
+    if (categories.length === 0 && loadedDatasetInfo && loadedDatasetInfo.schema && loadedDatasetInfo.schema[stubName]) {
+        categories = loadedDatasetInfo.schema[stubName].categories || [];
+    }
+
+    if (categories.length === 0) {
+        list.innerHTML = '<span style="font-size: 12px; color: #64748B;">No discrete categories detected for this variable.</span>';
+        return;
+    }
+
+    categories.forEach(cat => {
+        const lbl = document.createElement('label');
+        lbl.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; color: #1E293B; cursor: pointer;';
+        lbl.innerHTML = `<input type="checkbox" class="net-cat-cb" value="${escapeHtml(String(cat))}"> <span>${escapeHtml(String(cat))}</span>`;
+        list.appendChild(lbl);
+    });
+}
+
+function applyCustomNet() {
+    const select = document.getElementById('net-stub-select');
+    const labelInput = document.getElementById('net-label-input');
+    const stubName = select ? select.value : '';
+    const labelVal = (labelInput && labelInput.value.trim()) || 'Custom NET';
+
+    const checkedBoxes = Array.from(document.querySelectorAll('.net-cat-cb:checked')).map(cb => cb.value);
+    if (checkedBoxes.length < 2) {
+        showToast("Please select at least 2 categories to create a net.", true);
+        return;
+    }
+
+    activeCustomNets.push({
+        stub: stubName,
+        label: labelVal,
+        categories: checkedBoxes
+    });
+
+    closeCreateNetModal();
+    showToast(`Added custom net: "${labelVal}"`);
+    renderTable();
 }
 
 // Initialize on Load

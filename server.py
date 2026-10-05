@@ -57,13 +57,17 @@ def get_feedback_store():
     return _FEEDBACK_STORE
 
 
-def pick_codeframe(req_data: dict) -> str:
-    """Codeframe by *name* only (no paths: CWE-22); falls back to the category hint."""
+def pick_codeframe(req_data: dict):
+    """Codeframe by *name* only (no paths: CWE-22); does not silently fallback to FMCG (CS-USER-03)."""
     name = req_data.get("codeframe")
-    if isinstance(name, str) and name:
-        return name
+    if isinstance(name, str) and name.strip():
+        return name.strip()
     cat = str(req_data.get("category") or "").lower()
-    return "governance_default" if any(w in cat for w in ("govern", "public", "politic", "election")) else "consumer_default"
+    if any(w in cat for w in ("govern", "public", "politic", "election", "policy")):
+        return "governance_default"
+    elif any(w in cat for w in ("consumer", "fmcg", "retail", "brand", "product")):
+        return "consumer_default"
+    return None
 from engine.export_engine import (
     generate_excel_banner_book,
     generate_customer_voice_snapshot_html,
@@ -543,9 +547,10 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": "Invalid tabulation request: banner_cols/stubs must be lists of strings, confidence 90/95/99, fdr_enabled true/false, metric pct/mean/t2b."}, 400)
                 return
             fdr_enabled = fdr_raw
+            custom_nets = req_data.get("custom_nets")
 
             try:
-                result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric)
+                result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric, custom_nets=custom_nets)
             except Exception as e:
                 logging.exception(f"Tabulation error: {e}")
                 self.send_json_response({"status": "error", "message": f"Tabulation failed: {e}"}, 500)
@@ -609,7 +614,15 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                             from engine.codeframe_loader import load_codeframe_from_dict
                             cf = load_codeframe_from_dict(custom_codeframe)
                         else:
-                            cf = load_codeframe(pick_codeframe(req_data))
+                            picked = pick_codeframe(req_data)
+                            if not picked:
+                                self.send_json_response({
+                                    "status": "needs_codeframe",
+                                    "message": "No codeframe selected. Please choose or upload a domain codeframe.",
+                                    "column": open_col
+                                })
+                                return
+                            cf = load_codeframe(picked)
                     except CodeframeError as e:
                         self.send_json_response({"status": "error", "message": f"Invalid codeframe: {e}"}, 400)
                         return
@@ -854,11 +867,22 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             with SESSION_LOCK:
                 SESSION["custom_codeframe"] = cf
 
+            sanitized_topics = []
+            for t in cf.get("topics", []):
+                t_clean = dict(t)
+                for k, v in list(t_clean.items()):
+                    if isinstance(v, (set, tuple)):
+                        t_clean[k] = sorted(list(v))
+                sanitized_topics.append(t_clean)
+
+            clean_cf = dict(cf)
+            clean_cf["topics"] = sanitized_topics
+
             self.send_json_response({
                 "status": "success",
                 "message": f"Compiled codeframe '{cf['name']}' with {len(cf['topics'])} topics.",
                 "topics_count": len(cf["topics"]),
-                "codeframe": cf
+                "codeframe": clean_cf
             })
         except Exception as e:
             logging.exception("Failed to parse uploaded codeframe")
@@ -1056,13 +1080,28 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         """Executes Kruskal-derived Importance-Performance Analysis on demand (CS-STAT-01 / IPA)."""
         try:
             req = json.loads(body_bytes.decode('utf-8')) if body_bytes else {}
-            target_col = req.get('target', 'Overall_CSAT')
-            attrs = req.get('attributes', [])
             with SESSION_LOCK:
                 df = SESSION.get('df')
             if df is None:
                 self.send_json_response({"status": "error", "message": "No dataset loaded"}, 400)
                 return
+            target_col = req.get('target')
+            if not target_col or target_col not in df.columns:
+                scale_cols = [c for c, v in SESSION.get("schema", {}).items() if v.get("type") == "rating_scale" and c in df.columns]
+                if scale_cols:
+                    target_col = scale_cols[0]
+                else:
+                    candidate_cols = [
+                        c for c in df.columns 
+                        if any(k in str(c).lower() for k in ("csat", "sat", "rating", "nps", "recommend", "overall"))
+                        and pd.api.types.is_numeric_dtype(df[c])
+                    ]
+                    if candidate_cols:
+                        target_col = candidate_cols[0]
+                    else:
+                        num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c]) and not str(c).startswith("__")]
+                        target_col = num_cols[-1] if num_cols else df.columns[0]
+            attrs = req.get('attributes', [])
             if not attrs:
                 # Autodetect candidate rating scale / numeric attributes excluding target
                 attrs = [
@@ -1213,7 +1252,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             logging.exception(f"Advanced models error: {e}")
             self.send_json_response({"status": "error", "message": str(e)}, 500)
 
-    def execute_tabulation(self, df, banner_cols, stubs, confidence=95, fdr_enabled=True, metric="pct"):
+    def execute_tabulation(self, df, banner_cols, stubs, confidence=95, fdr_enabled=True, metric="pct", custom_nets=None):
         """Computes cross-tabulation table with rigorous dual significance testing on real microdata."""
         from engine.tabulation_engine import build_crosstab_table
 
@@ -1270,7 +1309,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 rs2_enabled=rs2_on,
                 chi_square_enabled=chi2_on,
                 welch_anova_enabled=anova_on,
-                fdr_method=fdr_method
+                fdr_method=fdr_method,
+                custom_nets=custom_nets
             )
             # Guarantee runtime invariants
             if not rs2_on:

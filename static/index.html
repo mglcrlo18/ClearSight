@@ -306,19 +306,19 @@
                     </div>
                     <div class="summary-stats-grid">
                         <div class="stat-box">
-                            <div class="stat-number" id=\"detected-respondents\">412</div>
+                            <div class="stat-number" id="detected-respondents">412</div>
                             <div class="stat-desc">Total Respondents</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number" id=\"detected-multi\">3</div>
+                            <div class="stat-number" id="detected-multi">3</div>
                             <div class="stat-desc">Multi-Select (Resolved Comma Delimiters)</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number" id=\"detected-scales\">4</div>
+                            <div class="stat-number" id="detected-scales">4</div>
                             <div class="stat-desc">Rating Scale Batteries</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number" id=\"detected-open\">2</div>
+                            <div class="stat-number" id="detected-open">2</div>
                             <div class="stat-desc">Taglish Open-Ends</div>
                         </div>
                     </div>
@@ -513,7 +513,10 @@
 
                         <!-- Stub Drop Zone -->
                         <div class="tray-container">
-                            <div class="tray-label">Question Stubs (Rows):</div>
+                            <div class="tray-label" style="display: flex; align-items: center; justify-content: space-between;">
+                                <span>Question Stubs (Rows):</span>
+                                <button type="button" class="btn-subtle" onclick="openCreateNetModal()" style="font-size: 11px; padding: 2px 8px; border-radius: 4px; border: 1px solid #CBD5E1; background: #FFFFFF; cursor: pointer; color: #1E293B; font-weight: 600;">+ Create Net</button>
+                            </div>
                             <div class="tag-tray" id="stub-tray" ondrop="drop(event, 'stub')" ondragover="allowDrop(event)">
                                 <span class="tag-pill" data-name="Brand Preference"><span class="pill-label">Brand Preference</span><span class="pill-remove" onclick="removeStubPill(event, 'Brand Preference')">×</span></span>
                             </div>
@@ -750,5 +753,33 @@
     </main>
 
     <script src="/static/app.js"></script>
+
+    <!-- Custom Netting Modal (CS-USER-04) -->
+    <div id="create-net-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeCreateNetModal()">
+        <div class="modal-dialog" style="max-width: 480px; max-height: 85vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3 style="font-size: 1.05rem; font-weight: 700; color: #111827;">Create Custom Category Net</h3>
+                <button type="button" class="modal-close-btn" onclick="closeCreateNetModal()">×</button>
+            </div>
+            <div style="padding: 16px 20px;">
+                <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Target Question Stub:</label>
+                <select id="net-stub-select" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #D1D5DB; margin-bottom: 12px;" onchange="populateNetCategories(this.value)"></select>
+
+                <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Categories to Combine into Net:</label>
+                <div id="net-categories-list" style="max-height: 180px; overflow-y: auto; border: 1px solid #E5E7EB; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; background: #F9FAFB;">
+                    <span style="font-size: 12px; color: #64748B;">Select a stub above to list categories...</span>
+                </div>
+
+                <label style="font-size: 12px; font-weight: 600; color: #374151; display: block; margin-bottom: 6px;">Net Row Name:</label>
+                <input type="text" id="net-label-input" placeholder="e.g. NET: Top-2-Box or NET: Favorable" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #D1D5DB; margin-bottom: 16px;">
+
+                <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <button type="button" onclick="closeCreateNetModal()" style="padding: 8px 16px; border-radius: 6px; border: 1px solid #D1D5DB; background: #FFFFFF; cursor: pointer; font-size: 12px;">Cancel</button>
+                    <button type="button" class="primary-btn" onclick="applyCustomNet()" style="padding: 8px 16px; border-radius: 6px; font-size: 12px;">Add Net to Table</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

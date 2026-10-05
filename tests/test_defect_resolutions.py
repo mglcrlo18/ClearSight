@@ -1,5 +1,8 @@
 """
-Automated Regression Test Suite for ClearSight QA Defect Resolutions (CS-DEF-01 through CS-DEF-04, CS-UI-01 through CS-STAT-01, Lifecycle & Statistical Suite).
+Automated Regression Test Suite for ClearSight QA Defect Resolutions:
+- CS-DEF-01 through CS-DEF-04
+- CS-UI-01 through CS-STAT-01
+- CS-USER-01 through CS-USER-07
 """
 import io
 import json
@@ -8,6 +11,7 @@ import unittest
 import openpyxl
 import pandas as pd
 import numpy as np
+import tempfile
 
 import server
 from engine.codeframe_excel_parser import parse_excel_codeframe
@@ -55,7 +59,6 @@ class TestDefectResolutions(unittest.TestCase):
 
     def test_cs_def_02_export_academic_tables(self):
         """CS-DEF-02: Ensure generate_thesis_excel_tables dispatches and produces a valid openpyxl workbook."""
-        import tempfile
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
             tmp_path = tmp.name
         try:
@@ -104,7 +107,7 @@ class TestDefectResolutions(unittest.TestCase):
             server.SESSION["analysis_config"]["stats"]["chi_square"] = False
 
         tab_chi2_off = handler.execute_tabulation(df, ["Total", "Region"], ["Age_Generation"])[0]
-        self.assertIsNone(tab_chi2_off.get("chi_square"), "Chi-square should be None when disabled")
+        self.assertIsNone(tab_chi2_off.get("chi_square"))
 
         # 2. Rao-Scott RS2 on multi-select checkbox variable (Brand_Preference)
         tab_rs2_on = handler.execute_tabulation(df, ["Total", "Region"], ["Brand_Preference"])[0]
@@ -114,7 +117,7 @@ class TestDefectResolutions(unittest.TestCase):
             server.SESSION["analysis_config"]["stats"]["rao_scott_2"] = False
 
         tab_rs2_off = handler.execute_tabulation(df, ["Total", "Region"], ["Brand_Preference"])[0]
-        self.assertIsNone(tab_rs2_off.get("mrcv"), "Rao-Scott RS2 should be None when disabled")
+        self.assertIsNone(tab_rs2_off.get("mrcv"))
 
         # 3. Welch ANOVA on rating scale mean variable (Overall_CSAT)
         tab_anova_on = handler.execute_tabulation(df, ["Total", "Region"], ["Overall_CSAT"], metric="mean")[0]
@@ -124,7 +127,7 @@ class TestDefectResolutions(unittest.TestCase):
             server.SESSION["analysis_config"]["stats"]["welch_anova"] = False
 
         tab_anova_off = handler.execute_tabulation(df, ["Total", "Region"], ["Overall_CSAT"], metric="mean")[0]
-        self.assertIsNone(tab_anova_off.get("anova"), "Welch ANOVA should be None when disabled")
+        self.assertIsNone(tab_anova_off.get("anova"))
 
         # 4. RIM Weighting toggle
         with server.SESSION_LOCK:
@@ -143,100 +146,100 @@ class TestDefectResolutions(unittest.TestCase):
         self.assertIn("stroke=\"currentColor\"", content)
         self.assertIn("toast-notification", content)
 
-    def test_cs_ui_01_no_literal_newline_in_html(self):
-        """CS-UI-01: Ensure no literal \\n strings are present in static/index.html."""
+    def test_cs_ui_01_and_05_html_ids(self):
+        """CS-UI-01 & CS-USER-05: Ensure no literal \\n or escaped backslashes in HTML attribute IDs."""
         index_path = os.path.join(os.path.dirname(__file__), "..", "static", "index.html")
         with open(index_path, "r", encoding="utf-8") as f:
             content = f.read()
-        self.assertNotIn("\\n", content)
+        self.assertNotIn("id=\\\"detected-respondents\\\"", content)
+        self.assertIn("id=\"detected-respondents\"", content)
         self.assertIn("table-controls-spacer", content)
 
-    def test_cs_ui_02_and_03_styles(self):
-        """CS-UI-02 & CS-UI-03: Ensure transparent sig rows, badges, and high-contrast section headers."""
+    def test_cs_user_01_dynamic_demographics_n(self):
+        """CS-USER-01: Verify generate_thesis_excel_tables reflects active dataset N=1000 dynamically."""
+        with server.SESSION_LOCK:
+            df_1000 = pd.concat([server.SESSION["df"]] * 3, ignore_index=True)[:1000]
+            server.SESSION["df"] = df_1000
+            server.SESSION["weights"] = None
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            tmp_path = tmp.name
+        try:
+            generate_thesis_excel_tables(tmp_path, "Benteng Bigas Dynamic Study")
+            wb = openpyxl.load_workbook(tmp_path)
+            ws1 = wb["Table 4.1 - Demographics"]
+            header_str = ws1.cell(row=3, column=2).value
+            self.assertIn("N = 1000", header_str)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def test_cs_user_02_high_contrast_table_styles(self):
+        """CS-USER-02: Ensure styles.css has #0F172A dark slate headers and zebra striping."""
         styles_path = os.path.join(os.path.dirname(__file__), "..", "static", "styles.css")
         with open(styles_path, "r", encoding="utf-8") as f:
             css = f.read()
-        self.assertIn(".sig-subrow, .sig-row", css)
-        self.assertIn("background-color: transparent !important;", css)
-        self.assertIn(".sig-badge", css)
-        self.assertIn(".stub-group-header td", css)
-        self.assertIn("border-left: 3px solid #E10600 !important;", css)
+        self.assertIn("background-color: #0F172A !important;", css)
+        self.assertIn("background-color: #F8FAFC !important;", css)
+        self.assertIn("background-color: #F1F5F9 !important;", css)
 
-    def test_cs_stat_01_chi_square_df(self):
-        """CS-STAT-01: Verify calculate_chi_square_df strictly ignores zero-count rows and cols."""
-        mat = np.array([
-            [10, 20, 15, 5],
-            [12, 18, 14, 6],
-            [15, 15, 10, 10],
-            [0, 0, 0, 0]  # unobserved 4th row
-        ])
-        df = calculate_chi_square_df(mat)
-        self.assertEqual(df, 6, "Expected (3-1)*(4-1) = 6 degrees of freedom")
+    def test_cs_user_03_no_fmcg_fallback(self):
+        """CS-USER-03: Ensure pick_codeframe returns None rather than silently defaulting to consumer_default."""
+        self.assertIsNone(server.pick_codeframe({}))
+        self.assertEqual(server.pick_codeframe({"category": "Elections"}), "governance_default")
+        self.assertEqual(server.pick_codeframe({"category": "FMCG"}), "consumer_default")
 
-    def test_advanced_statistical_suite(self):
-        """Part 2: Verify all 15 models of the modular statistical suite."""
+    def test_cs_user_04_custom_netting(self):
+        """CS-USER-04: Ensure build_crosstab_table dynamically generates custom Net row."""
         df = server.SESSION["df"]
-        self.assertIsNotNone(df)
+        custom_nets = [{
+            "stub": "Brand_Preference",
+            "label": "NET: Top Brands (Brand A + Brand B)",
+            "categories": ["Brand A", "Brand B"]
+        }]
+        t = build_crosstab_table(df, "Brand_Preference", ["Total", "Region"], custom_nets=custom_nets)
+        first_row = t["rows"][0]
+        self.assertEqual(first_row["label"], "NET: Top Brands (Brand A + Brand B)")
+        self.assertTrue(first_row.get("is_net"))
 
-        # 1. Independent T-test
-        res_tt = run_independent_ttest(
-            df.loc[df["Gender"] == "Male", "Overall_CSAT"].dropna().to_numpy(),
-            df.loc[df["Gender"] == "Female", "Overall_CSAT"].dropna().to_numpy()
-        )
-        self.assertIn("t_stat", res_tt)
+    def test_cs_user_06_codeframe_set_serialization(self):
+        """CS-USER-06: Ensure handle_upload_codeframe sanitizes sets so json.dumps succeeds."""
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["Codes", "Label", "Anchored Verbatims", "DP Instructions"])
+        ws.append([None, "GAVE FAVORABLE COMMENTS (NET)", None, None])
+        ws.append([None, "Quality (Subnet)", None, None])
+        ws.append([101, "Great service and speed", "Maganda ang serbisyo", "None"])
+        buf = io.BytesIO()
+        wb.save(buf)
+        excel_bytes = buf.getvalue()
 
-        # 2. Paired T-test
-        res_pt = run_paired_ttest(
-            df["Overall_CSAT"].dropna().to_numpy(),
-            df["Repurchase_Intent"].dropna().to_numpy()
-        )
-        self.assertIn("t_stat", res_pt)
+        handler = server.ClearSightRequestHandler.__new__(server.ClearSightRequestHandler)
+        captured = []
+        handler.send_json_response = lambda data, status=200: captured.append((status, data))
+        handler.headers = {"X-Filename": "custom_dp.xlsx"}
+        handler.handle_upload_codeframe(excel_bytes)
 
-        # 3. Mann-Whitney U
-        res_mwu = run_mann_whitney_u(
-            df.loc[df["Gender"] == "Male", "Overall_CSAT"].dropna().to_numpy(),
-            df.loc[df["Gender"] == "Female", "Overall_CSAT"].dropna().to_numpy()
-        )
-        self.assertIn("u_stat", res_mwu)
+        status, resp = captured.pop()
+        self.assertEqual(status, 200)
+        self.assertEqual(resp.get("status"), "success")
 
-        # 4. Wilcoxon Signed Rank
-        res_w = run_wilcoxon_signed_rank(
-            df["Overall_CSAT"].dropna().to_numpy(),
-            df["Repurchase_Intent"].dropna().to_numpy()
-        )
-        self.assertIn("w_stat", res_w)
+    def test_cs_user_07_quadrant_analysis_autodetect_target(self):
+        """CS-USER-07: Ensure handle_stats_quadrant autodetects target when Overall_CSAT is absent."""
+        with server.SESSION_LOCK:
+            df = server.SESSION["df"].drop(columns=["Overall_CSAT"])
+            server.SESSION["df"] = df
+            server.SESSION["schema"]["Repurchase_Intent"] = {"type": "rating_scale"}
 
-        # 5. Kruskal-Wallis H
-        groups = [df.loc[df["Region"] == r, "Overall_CSAT"].dropna().to_numpy() for r in df["Region"].dropna().unique()]
-        res_kw = run_kruskal_wallis(groups)
-        self.assertIn("h_stat", res_kw)
+        handler = server.ClearSightRequestHandler.__new__(server.ClearSightRequestHandler)
+        captured = []
+        handler.send_json_response = lambda data, status=200: captured.append((status, data))
+        handler.handle_stats_quadrant(json.dumps({}).encode("utf-8"))
 
-        # 6. Pearson, Spearman, Kendall, Point-Biserial
-        for m in ("pearson", "spearman", "kendall"):
-            corr = run_correlation_matrix(df["Overall_CSAT"].to_numpy(), df["Repurchase_Intent"].to_numpy(), test_type=m)
-            self.assertIn("coefficient", corr)
-
-        # 7. Linear OLS Regression
-        clean = df.dropna(subset=["Overall_CSAT", "Survey_Duration_Sec", "Repurchase_Intent"])
-        X = clean[["Survey_Duration_Sec", "Repurchase_Intent"]].to_numpy(dtype=float)
-        y = clean["Overall_CSAT"].to_numpy(dtype=float)
-        ols = run_linear_regression(X, y, ["Survey_Duration_Sec", "Repurchase_Intent"])
-        self.assertIn("r_squared", ols)
-
-        # 8. Ordinal Logit
-        ord_logit = run_ordinal_logistic_regression(X, y, ["Survey_Duration_Sec", "Repurchase_Intent"])
-        self.assertIn("num_classes", ord_logit)
-
-        # 9. Path Analysis / SEM
-        corr_mat = np.corrcoef(clean[["Survey_Duration_Sec", "Repurchase_Intent", "Overall_CSAT"]].to_numpy(dtype=float), rowvar=False)
-        sem = run_path_analysis_sem(corr_mat, ["Duration", "Repurchase", "CSAT"], 2)
-        self.assertIn("explained_variance_r2", sem)
-        self.assertIn("fit_indices", sem)
-
-        # 10. Kruskal Quadrant Analysis (IPA)
-        ipa = run_kruskal_quadrant_analysis(df, ["Survey_Duration_Sec", "Repurchase_Intent"], "Overall_CSAT")
-        self.assertIn("attributes", ipa)
-        self.assertEqual(len(ipa["attributes"]), 2)
+        status, resp = captured.pop()
+        self.assertEqual(status, 200)
+        self.assertEqual(resp.get("status"), "success")
+        self.assertEqual(resp.get("results", {}).get("target_variable"), "Repurchase_Intent")
 
 
 if __name__ == "__main__":

@@ -514,17 +514,41 @@ def generate_customer_voice_snapshot_html(filepath: str, data: dict) -> str:
 
 
 def generate_thesis_excel_tables(filepath: str, project_title: str) -> str:
-    """Generates APA-formatted Chapter 4 tables in Excel."""
+    """Generates dynamic APA-formatted Chapter 4 tables in Excel from active session microdata (CS-USER-01)."""
+    import numpy as np
+    import pandas as pd
+    from server import SESSION, SESSION_LOCK, load_bundled_sample
+
     wb = openpyxl.Workbook()
+
+    with SESSION_LOCK:
+        df = SESSION.get("df")
+        weights = SESSION.get("weights")
+        filename = SESSION.get("filename", project_title)
+        last_tab = SESSION.get("last_tabulation")
+
+    if df is None:
+        load_bundled_sample()
+        with SESSION_LOCK:
+            df = SESSION.get("df")
+            weights = SESSION.get("weights")
+            filename = SESSION.get("filename", project_title)
+            last_tab = SESSION.get("last_tabulation")
+
+    total_n = len(df) if df is not None else 0
+    if weights is not None and len(weights) == total_n:
+        eff_n = round(float(np.sum(weights)**2 / np.sum(weights**2)), 1)
+    else:
+        eff_n = float(total_n)
 
     apa_title_font = Font(name="Times New Roman", size=12, bold=True)
     apa_italic_font = Font(name="Times New Roman", size=11, italic=True)
     apa_regular_font = Font(name="Times New Roman", size=11)
     apa_bold_font = Font(name="Times New Roman", size=11, bold=True)
 
-    top_border = Border(top=Side(style='medium', color='000000'), bottom=Side(style='thin', color='000000'))
-    bottom_border = Border(bottom=Side(style='medium', color='000000'))
-    sub_border = Border(bottom=Side(style='thin', color='D0D0D0'))
+    top_border = Border(top=Side(style="medium", color="000000"), bottom=Side(style="thin", color="000000"))
+    bottom_border = Border(bottom=Side(style="medium", color="000000"))
+    sub_border = Border(bottom=Side(style="thin", color="D0D0D0"))
 
     # Sheet 1: Table 4.1 Demographics
     ws1 = wb.active
@@ -532,7 +556,7 @@ def generate_thesis_excel_tables(filepath: str, project_title: str) -> str:
     ws1.views.sheetView[0].showGridLines = True
 
     ws1.cell(row=2, column=2, value="Table 4.1").font = apa_title_font
-    ws1.cell(row=3, column=2, value="Frequency and Percentage Distribution of Respondents (N = 412)").font = apa_italic_font
+    ws1.cell(row=3, column=2, value=f"Frequency and Percentage Distribution of Respondents (N = {total_n}, Neff = {eff_n:.1f})").font = apa_italic_font
 
     headers1 = ["Demographic Profile", "Frequency (f)", "Percent (%)", "Weighted Base (Nw)", "Effective %"]
     for c_idx, h in enumerate(headers1, start=2):
@@ -541,104 +565,161 @@ def generate_thesis_excel_tables(filepath: str, project_title: str) -> str:
         cell.border = top_border
         cell.alignment = Alignment(horizontal="left" if c_idx == 2 else "center")
 
-    demo_data = [
-        ("Region", "", "", "", ""),
-        ("  National Capital Region (NCR)", 120, 0.291, 57.7, 0.140),
-        ("  Balance Luzon", 150, 0.364, 185.4, 0.450),
-        ("  Visayas", 72, 0.175, 82.4, 0.200),
-        ("  Mindanao", 70, 0.170, 86.5, 0.210),
-        ("Age Generation", "", "", "", ""),
-        ("  Generation Z (18–27)", 154, 0.374, 156.6, 0.380),
-        ("  Millennials (28–43)", 168, 0.408, 164.8, 0.400),
-        ("  Generation X (44–59)", 90, 0.218, 90.6, 0.220),
-        ("Socioeconomic Class (SEC)", "", "", "", ""),
-        ("  Class ABC", 82, 0.199, 78.3, 0.190),
-        ("  Class D", 246, 0.597, 251.3, 0.610),
-        ("  Class E", 84, 0.204, 82.4, 0.200),
-        ("Total / Kish Effective Base", 412, 1.000, 412.0, "Neff = 389.2")
-    ]
+    curr_row = 6
+    if df is not None:
+        preferred_cols = ["Region", "Age_Generation", "Socioeconomic_Class", "Gender"]
+        cat_cols = [c for c in preferred_cols if c in df.columns]
+        for c in df.columns:
+            if c not in cat_cols and not str(c).startswith("__") and 2 <= df[c].nunique(dropna=True) <= 10:
+                cat_cols.append(c)
+        cat_cols = cat_cols[:4]
 
-    for r_idx, row in enumerate(demo_data, start=6):
-        is_sub = row[1] == ""
-        is_total = "Total" in row[0]
-        for c_idx, val in enumerate(row, start=2):
-            cell = ws1.cell(row=r_idx, column=c_idx)
-            cell.font = apa_bold_font if (is_sub or is_total) else apa_regular_font
-            cell.alignment = Alignment(horizontal="left" if c_idx == 2 else "center")
-            if isinstance(val, float) and val <= 1.0 and val > 0:
-                cell.value = val
-                cell.number_format = '0.0%'
-            elif val != "":
-                cell.value = sanitize_excel_cell(val)
-            if is_total:
-                cell.border = bottom_border
-            elif not is_sub:
-                cell.border = sub_border
+        w_arr = np.asarray(weights, dtype=float) if weights is not None else np.ones(total_n, dtype=float)
 
-    ws1.column_dimensions['B'].width = 38
-    ws1.column_dimensions['C'].width = 16
-    ws1.column_dimensions['D'].width = 16
-    ws1.column_dimensions['E'].width = 22
-    ws1.column_dimensions['F'].width = 16
+        for col in cat_cols:
+            c_header = ws1.cell(row=curr_row, column=2, value=sanitize_excel_cell(str(col).replace("_", " ")))
+            c_header.font = apa_bold_font
+            curr_row += 1
+
+            counts = df[col].value_counts(dropna=True)
+            for cat, freq in counts.items():
+                pct = float(freq) / total_n if total_n > 0 else 0.0
+                mask = (df[col] == cat).to_numpy()
+                nw = float(np.sum(w_arr[mask])) if len(w_arr) == total_n else float(freq)
+                eff_pct = nw / float(np.sum(w_arr)) if np.sum(w_arr) > 0 else pct
+
+                ws1.cell(row=curr_row, column=2, value=sanitize_excel_cell(f"  {cat}")).font = apa_regular_font
+                
+                f_cell = ws1.cell(row=curr_row, column=3, value=int(freq))
+                f_cell.font = apa_regular_font
+                f_cell.alignment = Alignment(horizontal="center")
+
+                p_cell = ws1.cell(row=curr_row, column=4, value=pct)
+                p_cell.font = apa_regular_font
+                p_cell.number_format = "0.0%"
+                p_cell.alignment = Alignment(horizontal="center")
+
+                nw_cell = ws1.cell(row=curr_row, column=5, value=round(nw, 1))
+                nw_cell.font = apa_regular_font
+                nw_cell.alignment = Alignment(horizontal="center")
+
+                ep_cell = ws1.cell(row=curr_row, column=6, value=eff_pct)
+                ep_cell.font = apa_regular_font
+                ep_cell.number_format = "0.0%"
+                ep_cell.alignment = Alignment(horizontal="center")
+
+                curr_row += 1
+
+        tot_lbl = ws1.cell(row=curr_row, column=2, value="Total / Kish Effective Base")
+        tot_lbl.font = apa_bold_font
+        tot_lbl.border = bottom_border
+
+        tot_f = ws1.cell(row=curr_row, column=3, value=total_n)
+        tot_f.font = apa_bold_font
+        tot_f.border = bottom_border
+        tot_f.alignment = Alignment(horizontal="center")
+
+        tot_p = ws1.cell(row=curr_row, column=4, value=1.0)
+        tot_p.font = apa_bold_font
+        tot_p.border = bottom_border
+        tot_p.number_format = "0.0%"
+        tot_p.alignment = Alignment(horizontal="center")
+
+        tot_nw = ws1.cell(row=curr_row, column=5, value=round(float(np.sum(w_arr)), 1))
+        tot_nw.font = apa_bold_font
+        tot_nw.border = bottom_border
+        tot_nw.alignment = Alignment(horizontal="center")
+
+        tot_neff = ws1.cell(row=curr_row, column=6, value=f"Neff = {eff_n:.1f}")
+        tot_neff.font = apa_bold_font
+        tot_neff.border = bottom_border
+        tot_neff.alignment = Alignment(horizontal="center")
+
+    ws1.column_dimensions["B"].width = 38
+    ws1.column_dimensions["C"].width = 16
+    ws1.column_dimensions["D"].width = 16
+    ws1.column_dimensions["E"].width = 22
+    ws1.column_dimensions["F"].width = 18
 
     # Sheet 2: Table 4.2 Cross-Tabulation & Dual Sig
     ws2 = wb.create_sheet(title="Table 4.2 - CrossTab")
     ws2.views.sheetView[0].showGridLines = True
     ws2.cell(row=2, column=2, value="Table 4.2").font = apa_title_font
-    ws2.cell(row=3, column=2, value="Brand Consideration Across Geographic Regions with Dual Significance (n = 412, Neff = 389.2)").font = apa_italic_font
 
-    headers2 = ["Brand Option", "Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"]
+    tab_table = last_tab[0] if last_tab and len(last_tab) > 0 else None
+    stub_title = tab_table.get("stub_label", "Survey Measure") if tab_table else "Survey Measure"
+    ws2.cell(row=3, column=2, value=f"Cross-Tabulation of {stub_title} Across Subgroups with Dual Significance (N = {total_n}, Neff = {eff_n:.1f})").font = apa_italic_font
+
+    if tab_table:
+        headers2 = ["Stub Category", "Total"] + [b for b in tab_table.get("clean_banner_cols", []) if b != "Total"]
+    else:
+        headers2 = ["Stub Category", "Total"]
+
     for c_idx, h in enumerate(headers2, start=2):
         cell = ws2.cell(row=5, column=c_idx, value=sanitize_excel_cell(h))
         cell.font = apa_bold_font
         cell.border = top_border
         cell.alignment = Alignment(horizontal="left" if c_idx == 2 else "center")
 
-    t2_rows = [
-        ("Brand A (Premium Nanotech)", [0.425, 0.550, 0.380, 0.361, 0.402], ["", "B C D", "", "", ""], ["", "++", "", "-", ""]),
-        ("Brand B (Standard Market)", [0.311, 0.283, 0.335, 0.306, 0.320], ["", "", "", "", ""], ["", "", "", "", ""]),
-        ("Brand C (Bio-Oil Formulation)", [0.264, 0.167, 0.285, 0.333, 0.278], ["", "", "A", "A", ""], ["", "--", "", "+", ""]),
-        ("Chi-Square Test of Independence", ["χ² = 24.81", "df = 9", "p = .003**", "Interpretation:", "Significant at p < .01"], ["", "", "", "", ""], ["", "", "", "", ""])
-    ]
-
     curr = 6
-    for item in t2_rows:
-        label, vals, lets, benchs = item
-        c_lbl = ws2.cell(row=curr, column=2, value=sanitize_excel_cell(label))
-        c_lbl.font = apa_bold_font if "Chi-Square" in label else apa_regular_font
-        c_lbl.border = sub_border
-        for c_idx, v in enumerate(vals, start=3):
-            cell = ws2.cell(row=curr, column=c_idx)
-            if isinstance(v, float):
-                cell.value = v
-                cell.number_format = '0.0%'
-            else:
-                cell.value = sanitize_excel_cell(str(v))
-            cell.font = apa_bold_font if "Chi-Square" in label else apa_regular_font
-            cell.alignment = Alignment(horizontal="center")
-            cell.border = sub_border
-        curr += 1
-        if "Chi-Square" not in label:
-            ws2.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ Pairwise Col Sig (A, B, C, D)")).font = Font(name="Times New Roman", size=9, italic=True)
-            for c_idx, l in enumerate(lets, start=3):
-                cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(l))
-                cell.font = Font(name="Times New Roman", size=10, bold=True, color="2D46B9")
+    if tab_table and "rows" in tab_table:
+        for r in tab_table["rows"]:
+            label = r.get("label", "")
+            vals = r.get("values", [])
+            lets = r.get("sig_letters", [])
+            benchs = r.get("sig_benchmarks", [])
+            is_net = r.get("is_net", False)
+
+            c_lbl = ws2.cell(row=curr, column=2, value=sanitize_excel_cell(label))
+            c_lbl.font = apa_bold_font if is_net else apa_regular_font
+            c_lbl.border = sub_border
+
+            for c_idx, v in enumerate(vals, start=3):
+                cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(str(v)))
+                cell.font = apa_bold_font if is_net else apa_regular_font
                 cell.alignment = Alignment(horizontal="center")
-            curr += 1
-            ws2.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ vs. Total Benchmark (+/++, -/--)")).font = Font(name="Times New Roman", size=9, italic=True)
-            for c_idx, b in enumerate(benchs, start=3):
-                cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(b))
-                cell.font = Font(name="Times New Roman", size=10, bold=True, color="047857" if "+" in b else ("B91C1C" if "-" in b and b != "-" else "333333"))
-                cell.alignment = Alignment(horizontal="center")
+                cell.border = sub_border
             curr += 1
 
-    ws2.cell(row=curr-1, column=2).border = bottom_border
-    for c in range(3, 8):
-        ws2.cell(row=curr-1, column=c).border = bottom_border
+            if any(l and l != "-" for l in lets):
+                ws2.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ Pairwise Col Sig")).font = Font(name="Times New Roman", size=9, italic=True)
+                for c_idx, l in enumerate(lets, start=3):
+                    cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(l if l != "-" else ""))
+                    cell.font = Font(name="Times New Roman", size=10, bold=True, color="2D46B9")
+                    cell.alignment = Alignment(horizontal="center")
+                curr += 1
 
-    ws2.column_dimensions['B'].width = 38
-    for c in range(3, 8):
-        ws2.column_dimensions[get_column_letter(c)].width = 20
+            if any(b and b != "-" for b in benchs):
+                ws2.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ vs. Total Benchmark")).font = Font(name="Times New Roman", size=9, italic=True)
+                for c_idx, b in enumerate(benchs, start=3):
+                    cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(b if b != "-" else ""))
+                    cell.font = Font(name="Times New Roman", size=10, bold=True, color="047857" if "+" in b else ("B91C1C" if "-" in b and b != "-" else "333333"))
+                    cell.alignment = Alignment(horizontal="center")
+                curr += 1
+
+        test_info = []
+        if tab_table.get("chi_square"):
+            cs = tab_table["chi_square"]
+            test_info.append(f"χ² = {cs.get("chi2_stat")}, df = {cs.get("df")}, p = {cs.get("p_val")}")
+        if tab_table.get("anova"):
+            an = tab_table["anova"]
+            test_info.append(f"F({an.get("df1")}, {an.get("df2")}) = {an.get("f_stat")}, p = {an.get("p_val")}")
+        if tab_table.get("mrcv"):
+            mr = tab_table["mrcv"]
+            test_info.append(f"FRSb = {mr.get("f_stat")}, df = {mr.get("df1")}, p = {mr.get("p_val")}")
+
+        if test_info:
+            c_test = ws2.cell(row=curr, column=2, value=sanitize_excel_cell("Omnibus Test of Association"))
+            c_test.font = apa_bold_font
+            c_test.border = bottom_border
+            ws2.cell(row=curr, column=3, value=sanitize_excel_cell(" | ".join(test_info))).font = apa_italic_font
+            for c in range(3, len(headers2) + 2):
+                ws2.cell(row=curr, column=c).border = bottom_border
+            curr += 1
+
+    for c in range(2, len(headers2) + 2):
+        ws2.cell(row=curr - 1, column=c).border = bottom_border
+        ws2.column_dimensions[get_column_letter(c)].width = 22 if c > 2 else 38
 
     wb.save(filepath)
     return filepath

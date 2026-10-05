@@ -844,51 +844,77 @@ body {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-/* Agency Crosstab Matrix */
+/* Agency Crosstab Matrix (CS-USER-02: High Contrast Executive Crosstab) */
 .table-scroll-wrapper {
     overflow-x: auto;
 }
 
-.agency-table {
+.agency-table, .agency-crosstab-table {
     width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
+    border-collapse: collapse !important;
+    font-size: 13px;
     font-variant-numeric: tabular-nums;
 }
 
-.agency-table th, .agency-table td {
-    padding: 8px 12px;
-    border: 1px solid var(--border-subtle);
+.agency-table thead tr:first-child th,
+.agency-crosstab-table thead tr:first-child th {
+    background-color: #0F172A !important; /* Dark Slate Header */
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+    border-right: 1px solid #334155 !important;
+    border-bottom: 2px solid #0F172A !important;
+    padding: 10px 14px !important;
+}
+
+.agency-table th, .agency-table td,
+.agency-crosstab-table th, .agency-crosstab-table td {
+    padding: 8px 12px !important;
+    border: 1px solid #E2E8F0 !important;
     text-align: center;
+    color: #111827 !important;
 }
 
-.agency-table th {
-    background: var(--carbon-card);
-    font-weight: 800;
-    color: var(--off-white);
+.agency-table tbody tr:nth-child(even) td,
+.agency-crosstab-table tbody tr:nth-child(even) td {
+    background-color: #F8FAFC !important; /* Alternating Zebra Striping */
 }
 
-.agency-table .stub-header {
-    text-align: left;
+/* Total Benchmark Column Tint */
+.agency-table td:nth-child(2), 
+.agency-table th:nth-child(2),
+.agency-crosstab-table td:nth-child(2), 
+.agency-crosstab-table th:nth-child(2) {
+    background-color: #F1F5F9 !important;
+    font-weight: 700 !important;
+    border-right: 2px solid #CBD5E1 !important;
+}
+
+.agency-table .stub-header,
+.agency-crosstab-table .stub-header {
+    text-align: left !important;
     width: 250px;
 }
 
-.agency-table td:first-child {
-    text-align: left;
-    font-weight: 700;
-    color: var(--off-white);
+.agency-table td:first-child,
+.agency-crosstab-table td:first-child {
+    text-align: left !important;
+    font-weight: 700 !important;
+    color: #0F172A !important;
 }
 
 .meta-row td {
-    background: rgba(0, 0, 0, 0.35);
-    font-size: 11px;
-    color: var(--text-muted);
+    background: #F8FAFC !important;
+    font-size: 11px !important;
+    color: #64748B !important;
+    border-bottom: 1px solid #E2E8F0 !important;
 }
 
 .net-row td {
-    background: rgba(225, 6, 0, 0.12);
-    font-weight: 900;
-    color: var(--volt-yellow);
+    background-color: #FEF2F2 !important;
+    font-weight: 800 !important;
+    color: #B91C1C !important;
+    border-top: 1.5px solid #E10600 !important;
+    border-bottom: 1.5px solid #E10600 !important;
 }
 
 .sig-cell {
