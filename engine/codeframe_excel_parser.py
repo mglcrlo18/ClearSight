@@ -209,7 +209,8 @@ def parse_excel_codeframe(
                 active_sub_sub_subnet = None
             elif RE_NET.search(label_str) or not topics:
                 active_net = label_str
-                active_subnet = f"{re.sub(r'\(.*?\)', '', label_str).strip()} (Subnet)"
+                clean_net = re.sub(r'\(.*?\)', '', label_str).strip()
+                active_subnet = f"{clean_net} (Subnet)"
                 active_sub_subnet = None
                 active_sub_sub_subnet = None
             else:

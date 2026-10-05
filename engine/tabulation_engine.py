@@ -69,7 +69,11 @@ def build_crosstab_table(
     weights: Optional[np.ndarray] = None,
     confidence_level: float = 0.95,
     fdr_enabled: bool = True,
-    metric: str = "pct"
+    metric: str = "pct",
+    rs2_enabled: bool = True,
+    chi_square_enabled: bool = True,
+    welch_anova_enabled: bool = True,
+    fdr_method: str = "bh"
 ) -> Dict[str, Any]:
     """
     Computes a mathematically sound crosstabulation table directly from the DataFrame.
@@ -444,9 +448,10 @@ def build_crosstab_table(
                 pairs.append((j, m, z_dir, is_small))
                 pvals.append(p_val)
 
-        # Apply Benjamini-Hochberg FDR to the row's pairwise tests (P3-01)
+        # Apply Benjamini-Hochberg or Benjamini-Yekutieli FDR to the row's pairwise tests (P3-01)
         if fdr_enabled and len(pvals) > 0:
-            adj_pvals = scipy.stats.false_discovery_control(pvals, method='bh')
+            method = 'by' if str(fdr_method).lower() == 'by' else 'bh'
+            adj_pvals = scipy.stats.false_discovery_control(pvals, method=method)
         else:
             adj_pvals = pvals
 
@@ -473,7 +478,7 @@ def build_crosstab_table(
 
     # If mean row, calculate one-way ANOVA across banner groups (P3-02, P4-08)
     anova_info = None
-    if metric == "mean" and (is_numeric or is_rating_scale) and num_banners >= 2:
+    if welch_anova_enabled and metric == "mean" and (is_numeric or is_rating_scale) and num_banners >= 2:
         groups = []
         group_weights = []
         for c in range(1, num_banners + 1):
@@ -526,7 +531,7 @@ def build_crosstab_table(
 
     # Compute Chi-Square for categorical stub tables across banner columns (CS-017)
     chi2_info = None
-    if not is_numeric and not is_rating_scale and not has_commas and num_banners >= 2:
+    if chi_square_enabled and not is_numeric and not is_rating_scale and not has_commas and num_banners >= 2:
         obs_matrix = []
         for r_def in row_definitions:
             evaluator = r_def.get("evaluator")
@@ -549,7 +554,7 @@ def build_crosstab_table(
 
     # If multi-select checkbox stub, compute second-order Rao-Scott MRCV test (CS-005)
     mrcv_info = None
-    if has_commas and num_banners >= 2:
+    if rs2_enabled and has_commas and num_banners >= 2:
         from engine.ingestion import resolve_google_forms_checkboxes
         ind_df, _ = resolve_google_forms_checkboxes(df[stub_col])
         if len(ind_df.columns) >= 2:

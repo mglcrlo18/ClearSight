@@ -1055,20 +1055,42 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         conf_float = 0.95 if int(confidence) == 95 else (0.90 if int(confidence) == 90 else 0.99)
         weights = SESSION.get("weights")
 
+        with SESSION_LOCK:
+            cfg = SESSION.get("analysis_config") or DEFAULT_ANALYSIS_CONFIG
+        stats_cfg = cfg.get("stats", {})
+        hygiene_cfg = cfg.get("hygiene", {})
+
+        # Check RIM weighting toggle (CS-DEF-03, CS-102)
+        if not hygiene_cfg.get("rim_weighting", True):
+            weights = None
+
+        q_straight = hygiene_cfg.get("quarantine_straightliners", SESSION.get("quarantine_straight_liners", True))
+        q_speeders = hygiene_cfg.get("quarantine_speeders", SESSION.get("quarantine_speeders", True))
+
         # Apply active hygiene quarantine filters to analytical sample (CS-045)
         flag_col = "__is_flagged" if df is not None and "__is_flagged" in df.columns else ("_is_flagged" if df is not None and "_is_flagged" in df.columns else None)
         reason_col = "__flag_reasons" if df is not None and "__flag_reasons" in df.columns else ("_flag_reasons" if df is not None and "_flag_reasons" in df.columns else None)
 
         if df is not None and flag_col and reason_col:
             cond = pd.Series(True, index=df.index)
-            if SESSION.get("quarantine_straight_liners", True):
+            if q_straight:
                 cond &= ~df[reason_col].str.contains("Straight-liner", na=False)
-            if SESSION.get("quarantine_speeders", True):
+            if q_speeders:
                 cond &= ~df[reason_col].str.contains("Speeder", na=False)
             if not cond.all():
                 df = df[cond].copy()
                 if weights is not None:
                     weights = weights[cond.to_numpy()]
+
+        # Multiple testing adjustment toggles: Benjamini-Hochberg (BH) vs. Benjamini-Yekutieli (BY) vs. Uncorrected
+        fdr_bh_on = stats_cfg.get("fdr_benjamini_hochberg", True)
+        fdr_by_on = stats_cfg.get("fdr_benjamini_yekutieli", False)
+        effective_fdr = fdr_enabled and (fdr_bh_on or fdr_by_on)
+        fdr_method = "by" if fdr_by_on else "bh"
+
+        rs2_on = stats_cfg.get("rao_scott_2", True)
+        chi2_on = stats_cfg.get("chi_square", True)
+        anova_on = stats_cfg.get("welch_anova", True)
 
         tables = []
         for stub_name in stubs:
@@ -1078,9 +1100,20 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 banner_cols_input=banner_cols,
                 weights=weights,
                 confidence_level=conf_float,
-                fdr_enabled=fdr_enabled,
-                metric=metric
+                fdr_enabled=effective_fdr,
+                metric=metric,
+                rs2_enabled=rs2_on,
+                chi_square_enabled=chi2_on,
+                welch_anova_enabled=anova_on,
+                fdr_method=fdr_method
             )
+            # Guarantee runtime invariants
+            if not rs2_on:
+                t["mrcv"] = None
+            if not chi2_on:
+                t["chi_square"] = None
+            if not anova_on:
+                t["anova"] = None
             tables.append(t)
         return tables
 
@@ -1107,17 +1140,65 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         ]
 
 
-def run_server():
+def run_server(start_port: int = None, max_attempts: int = 10):
+    global PORT, ALLOWED_HOSTS
     # Load sample on server boot
     load_bundled_sample()
-    server_address = ('127.0.0.1', PORT)
-    httpd = ThreadingHTTPServer(server_address, ClearSightRequestHandler)
-    print(f"[*] ClearSight Analytical Server active on http://127.0.0.1:{PORT}")
+
+    env_port = os.environ.get("CLEARSIGHT_PORT", os.environ.get("PORT"))
+    if env_port:
+        start_port = int(env_port)
+        max_attempts = 1
+    elif start_port is None:
+        start_port = PORT
+
+    httpd = None
+    bound_port = start_port
+    for offset in range(max_attempts):
+        candidate_port = start_port + offset
+        server_address = ('127.0.0.1', candidate_port)
+        try:
+            httpd = ThreadingHTTPServer(server_address, ClearSightRequestHandler)
+            bound_port = candidate_port
+            PORT = bound_port
+            ALLOWED_HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}", "127.0.0.1", "localhost"}
+            break
+        except OSError as e:
+            if offset == max_attempts - 1:
+                print(f"[-] Error: Could not bind to any port in range {start_port}..{candidate_port}: {e}")
+                sys.exit(1)
+            continue
+
+    # Record bound port to .clearsight_port for frontend discovery
+    port_file = os.path.join(CURR_DIR, ".clearsight_port")
+    try:
+        with open(port_file, "w") as f:
+            f.write(str(bound_port))
+    except Exception:
+        pass
+
+    # Record PID file
+    pid_file = os.path.join(CURR_DIR, ".clearsight_server.pid")
+    try:
+        with open(pid_file, "w") as f:
+            f.write(str(os.getpid()))
+    except Exception:
+        pass
+
+    print(f"[*] ClearSight Analytical Server active on http://127.0.0.1:{bound_port}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n[*] Server shutdown cleanly.")
-        httpd.server_close()
+    finally:
+        if httpd:
+            httpd.server_close()
+        for fpath in (port_file, pid_file):
+            if os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
 
 
 if __name__ == "__main__":

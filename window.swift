@@ -45,7 +45,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         webView.autoresizingMask = [.width, .height]
         window.contentView?.addSubview(webView)
 
-        if let url = URL(string: "http://127.0.0.1:8540") {
+        // Read dynamic port if configured or discover via .clearsight_port
+        let envPort = ProcessInfo.processInfo.environment["CLEARSIGHT_PORT"]
+        let filePort: String? = {
+            if let dir = Bundle.main.resourcePath {
+                let candidate = (dir as NSString).appendingPathComponent(".clearsight_port")
+                if let str = try? String(contentsOfFile: candidate, encoding: .utf8) {
+                    return str.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+            if let str = try? String(contentsOfFile: ".clearsight_port", encoding: .utf8) {
+                return str.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return nil
+        }()
+        let portStr = envPort ?? filePort ?? "8540"
+        let port = Int(portStr) ?? 8540
+
+        if let url = URL(string: "http://127.0.0.1:\(port)") {
             webView.load(URLRequest(url: url))
         }
 
@@ -139,8 +156,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         NSApp.mainMenu = mainMenu
     }
 
+    func killServerProcess() {
+        let envPid = ProcessInfo.processInfo.environment["CLEARSIGHT_SERVER_PID"]
+        let filePid: String? = {
+            if let dir = Bundle.main.resourcePath {
+                let candidate = (dir as NSString).appendingPathComponent(".clearsight_server.pid")
+                if let str = try? String(contentsOfFile: candidate, encoding: .utf8) {
+                    return str.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+            if let str = try? String(contentsOfFile: ".clearsight_server.pid", encoding: .utf8) {
+                return str.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return nil
+        }()
+
+        if let pidStr = envPid ?? filePid, let pid = Int32(pidStr), pid > 1 {
+            // Verify PID is running before sending SIGTERM (CS-101 / zero-orphan lifecycle)
+            if kill(pid, 0) == 0 {
+                kill(pid, SIGTERM)
+            }
+            try? FileManager.default.removeItem(atPath: ".clearsight_server.pid")
+            try? FileManager.default.removeItem(atPath: ".clearsight_port")
+        }
+    }
+
     func windowWillClose(_ notification: Notification) {
+        killServerProcess()
         NSApp.terminate(nil)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        killServerProcess()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

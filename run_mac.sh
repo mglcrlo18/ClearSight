@@ -19,6 +19,7 @@ cleanup() {
         fi
         rm -f "$PID_FILE"
     fi
+    rm -f "$DIR/.clearsight_port" 2>/dev/null || true
     echo "[*] ClearSight session terminated cleanly."
 }
 trap cleanup EXIT INT TERM
@@ -35,8 +36,21 @@ if [ -f "$PID_FILE" ]; then
 fi
 
 # 2. Select Python 3.10+ interpreter
-PYTHON_BIN="/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
-if [ ! -f "$PYTHON_BIN" ]; then
+if [ -x "/usr/local/bin/python3.14" ]; then
+    PYTHON_BIN="/usr/local/bin/python3.14"
+elif [ -x "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3" ]; then
+    PYTHON_BIN="/Library/Frameworks/Python.framework/Versions/3.14/bin/python3"
+elif command -v python3.14 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3.14)"
+elif command -v python3.12 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3.12)"
+elif command -v python3.11 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3.11)"
+elif command -v python3.10 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3.10)"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_BIN="$(command -v python3)"
+else
     PYTHON_BIN="python3"
 fi
 
@@ -57,11 +71,16 @@ echo "[*] Starting ClearSight zero-cloud analytical core..."
 "$PYTHON_BIN" "$DIR/server.py" > /tmp/clearsight_server.log 2>&1 &
 SERVER_PID=$!
 echo "$SERVER_PID" > "$PID_FILE"
+export CLEARSIGHT_SERVER_PID="$SERVER_PID"
 
-# 5. Readiness probe (Wait for port 8540 with 6-second timeout)
+# 5. Readiness probe (Wait for server port discovery with timeout)
 READY=0
+ACTIVE_PORT=8540
 for i in {1..24}; do
-    if curl -s http://127.0.0.1:8540/api/dataset-status >/dev/null 2>&1; then
+    if [ -f "$DIR/.clearsight_port" ]; then
+        ACTIVE_PORT=$(cat "$DIR/.clearsight_port" 2>/dev/null || echo "8540")
+    fi
+    if curl -s "http://127.0.0.1:${ACTIVE_PORT}/api/dataset-status" >/dev/null 2>&1; then
         READY=1
         break
     fi
@@ -69,11 +88,13 @@ for i in {1..24}; do
 done
 
 if [ "$READY" -ne 1 ]; then
-    echo "[-] Error: ClearSight server failed to respond on port 8540 within timeout."
+    echo "[-] Error: ClearSight server failed to respond on port ${ACTIVE_PORT} within timeout."
     echo "    Check logs at /tmp/clearsight_server.log"
     exit 1
 fi
 
+export CLEARSIGHT_PORT="$ACTIVE_PORT"
+
 # 6. Launch Native macOS Window
-echo "[✓] Opening ClearSight native desktop window..."
+echo "[✓] Opening ClearSight native desktop window (port ${ACTIVE_PORT})..."
 "$DIR/ClearSight_Window"
