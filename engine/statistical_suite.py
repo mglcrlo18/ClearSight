@@ -80,6 +80,26 @@ def run_paired_ttest(sample_pre: np.ndarray, sample_post: np.ndarray) -> Dict[st
     }
 
 
+def run_anova(groups: List[np.ndarray]) -> Dict[str, Any]:
+    """One-Way / Two-Way Analysis of Variance (ANOVA) comparing means across k >= 2 groups."""
+    cleaned = [g[~np.isnan(g)] for g in groups if len(g[~np.isnan(g)]) > 0]
+    if len(cleaned) < 2:
+        return {"error": "At least 2 non-empty groups required for ANOVA"}
+    res = stats.f_oneway(*cleaned)
+    k = len(cleaned)
+    n_total = sum(len(g) for g in cleaned)
+    df_between = k - 1
+    df_within = n_total - k
+    return {
+        "test": "One-Way ANOVA",
+        "f_stat": round(float(res.statistic), 4),
+        "df_between": df_between,
+        "df_within": df_within,
+        "p_val": round(float(res.pvalue), 4),
+        "group_means": [round(float(np.mean(g)), 3) for g in cleaned]
+    }
+
+
 def run_mann_whitney_u(group_1: np.ndarray, group_2: np.ndarray) -> Dict[str, Any]:
     """Non-parametric Mann-Whitney U Test for 2 ordinal/skewed groups."""
     g1 = group_1[~np.isnan(group_1)]

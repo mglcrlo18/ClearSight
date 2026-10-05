@@ -1097,6 +1097,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             from engine.statistical_suite import (
                 run_independent_ttest,
                 run_paired_ttest,
+                run_anova,
                 run_mann_whitney_u,
                 run_wilcoxon_signed_rank,
                 run_kruskal_wallis,
@@ -1179,6 +1180,20 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     return
                 groups_list = [df.loc[df[group_col] == g, var_x].dropna().to_numpy(dtype=float) for g in df[group_col].dropna().unique()]
                 results = run_kruskal_wallis(groups_list)
+
+            elif model_type == "anova":
+                if not var_x or not group_col:
+                    self.send_json_response({"status": "error", "message": "var_x and group_by required"}, 400)
+                    return
+                groups_list = [df.loc[df[group_col] == g, var_x].dropna().to_numpy(dtype=float) for g in df[group_col].dropna().unique()]
+                results = run_anova(groups_list)
+
+            elif model_type == "chi_square_assoc":
+                if not var_x or not var_y:
+                    self.send_json_response({"status": "error", "message": "var_x and var_y required"}, 400)
+                    return
+                ct = pd.crosstab(df[var_x], df[var_y]).to_numpy()
+                results = run_chi_square_association(ct)
 
             elif model_type == "sem":
                 if not predictor_cols or not target_col:
