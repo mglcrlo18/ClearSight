@@ -963,3 +963,174 @@ def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(html_content)
     return filepath
+
+
+def generate_vertical_codeframe_excel(
+    filepath: str,
+    codeframe: dict,
+    project_title: str = "ClearSight Survey Study",
+    question_text: str = ""
+) -> str:
+    """
+    Generates a standardized vertical hierarchical codeframe in Microsoft Excel (.xlsx).
+    Features:
+    - Native collapsible row outlines (outlineLevel, summaryBelow=False)
+    - Side-by-side Theme / Label and Anchored Verbatims
+    - Pre-flight formula injection defense (CWE-1236)
+    - Global Code ID allocation and Netting reach compatibility
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Vertical Codeframe"
+    ws.views.sheetView[0].showGridLines = True
+    ws.sheet_properties.outlinePr.summaryBelow = False
+
+    # Styling Palette
+    font_project = Font(name="Helvetica Neue", size=13, bold=True, color=CARBON_HEADER)
+    font_question = Font(name="Helvetica Neue", size=11, bold=True, italic=True, color="333333")
+    font_tbl_header = Font(name="Helvetica Neue", size=11, bold=True, color="FFFFFF")
+    fill_tbl_header = PatternFill(start_color=CARBON_HEADER, end_color=CARBON_HEADER, fill_type="solid")
+
+    font_net = Font(name="Helvetica Neue", size=11, bold=True, color="991B1B")
+    fill_net = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+
+    font_subnet = Font(name="Helvetica Neue", size=10, bold=True, color="92400E")
+    fill_subnet = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+
+    font_sub_subnet = Font(name="Helvetica Neue", size=10, bold=True, color="166534")
+    fill_sub_subnet = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+
+    font_code = Font(name="Helvetica Neue", size=10, bold=True, color="1D4ED8")
+    font_leaf = Font(name="Helvetica Neue", size=10, color="111111")
+    font_verbatim = Font(name="Helvetica Neue", size=10, italic=True, color="374151")
+    font_dp = Font(name="Helvetica Neue", size=9, color="4B5563")
+
+    thin_border = Border(
+        left=Side(style='thin', color=BORDER_GRAY),
+        right=Side(style='thin', color=BORDER_GRAY),
+        top=Side(style='thin', color=BORDER_GRAY),
+        bottom=Side(style='thin', color=BORDER_GRAY)
+    )
+
+    # 1. Header Metadata Block
+    ws.cell(row=1, column=1, value=sanitize_excel_cell(f"PROJECT: \"{project_title}\"")).font = font_project
+    q_str = question_text or codeframe.get("name") or "Q. Open-Ended Inquiry"
+    ws.cell(row=2, column=1, value=sanitize_excel_cell(f"QUESTION: {q_str}")).font = font_question
+
+    # 2. Table Column Headers
+    headers = [
+        ("Codes", 12),
+        ("Theme / Standardized Label", 48),
+        ("Anchored Verbatims (Raw Quotes)", 55),
+        ("DP / Coding Instructions", 30)
+    ]
+    header_row = 4
+    ws.row_dimensions[header_row].height = 24.0
+
+    for c_idx, (h_title, col_width) in enumerate(headers, start=1):
+        cell = ws.cell(row=header_row, column=c_idx, value=sanitize_excel_cell(h_title))
+        cell.font = font_tbl_header
+        cell.fill = fill_tbl_header
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = thin_border
+        col_letter = get_column_letter(c_idx)
+        ws.column_dimensions[col_letter].width = col_width
+
+    # 3. Hierarchy Grouping & Traversal
+    curr_row = 5
+    topics = codeframe.get("topics", [])
+
+    # Group by NET -> Subnet
+    net_groups = {}
+    for t in topics:
+        n_name = t.get("net") or "General (NET)"
+        s_name = t.get("subnet") or "General (Subnet)"
+        if n_name not in net_groups:
+            net_groups[n_name] = {}
+        if s_name not in net_groups[n_name]:
+            net_groups[n_name][s_name] = []
+        net_groups[n_name][s_name].append(t)
+
+    for net_name, subnets in net_groups.items():
+        # Insert NET banner row
+        ws.row_dimensions[curr_row].outlineLevel = 0
+        c_code = ws.cell(row=curr_row, column=1, value="")
+        c_label = ws.cell(row=curr_row, column=2, value=sanitize_excel_cell(net_name))
+        c_label.font = font_net
+        c_label.fill = fill_net
+        c_verb = ws.cell(row=curr_row, column=3, value="")
+        c_dp = ws.cell(row=curr_row, column=4, value="")
+
+        for c_cell in (c_code, c_label, c_verb, c_dp):
+            c_cell.border = thin_border
+        curr_row += 1
+
+        for subnet_name, topic_list in subnets.items():
+            # Check if compound subnet (e.g. Subnet > Sub-Subnet)
+            parts = [p.strip() for p in subnet_name.split(">") if p.strip()]
+            parent_sub = parts[0] if parts else subnet_name
+            sub_sub = parts[1] if len(parts) > 1 else None
+
+            # Subnet row
+            ws.row_dimensions[curr_row].outlineLevel = 1
+            ws.cell(row=curr_row, column=1, value="")
+            c_sub = ws.cell(row=curr_row, column=2, value=sanitize_excel_cell(f"  {parent_sub}"))
+            c_sub.font = font_subnet
+            c_sub.fill = fill_subnet
+            for c_col in range(1, 5):
+                ws.cell(row=curr_row, column=c_col).border = thin_border
+            curr_row += 1
+
+            if sub_sub:
+                ws.row_dimensions[curr_row].outlineLevel = 2
+                ws.cell(row=curr_row, column=1, value="")
+                c_ssub = ws.cell(row=curr_row, column=2, value=sanitize_excel_cell(f"    ↳ {sub_sub}"))
+                c_ssub.font = font_sub_subnet
+                c_ssub.fill = fill_sub_subnet
+                for c_col in range(1, 5):
+                    ws.cell(row=curr_row, column=c_col).border = thin_border
+                curr_row += 1
+
+            leaf_level = 3 if sub_sub else 2
+
+            for t in topic_list:
+                for pol, c_info in (t.get("codes") or {}).items():
+                    c_id = c_info.get("code_id")
+                    c_lbl = c_info.get("label") or t.get("id")
+
+                    ws.row_dimensions[curr_row].outlineLevel = leaf_level
+
+                    # Col A: Numeric Code
+                    cell_a = ws.cell(row=curr_row, column=1, value=c_id if c_id is not None else "")
+                    cell_a.font = font_code
+                    cell_a.alignment = Alignment(horizontal="center", vertical="center")
+
+                    # Col B: Theme Label
+                    indent_prefix = "      " if sub_sub else "    "
+                    safe_lbl = sanitize_excel_cell(str(c_lbl))
+                    cell_b = ws.cell(row=curr_row, column=2, value=f"{indent_prefix}{safe_lbl}")
+                    cell_b.font = font_leaf
+                    cell_b.alignment = Alignment(horizontal="left", vertical="center")
+
+                    # Col C: Exemplar / Anchored Verbatim
+                    exs = t.get("exemplars") or []
+                    safe_ex = sanitize_excel_cell(str(exs[0])) if exs else ""
+                    ex_str = f'"{safe_ex}"' if safe_ex else ""
+                    cell_c = ws.cell(row=curr_row, column=3, value=ex_str)
+                    cell_c.font = font_verbatim
+                    cell_c.alignment = Alignment(horizontal="left", vertical="center")
+
+                    # Col D: DP Instruction
+                    dp_instr = t.get("dp_instruction") or ""
+                    cell_d = ws.cell(row=curr_row, column=4, value=sanitize_excel_cell(dp_instr))
+                    cell_d.font = font_dp
+                    cell_d.alignment = Alignment(horizontal="left", vertical="center")
+
+                    for c_col in (cell_a, cell_b, cell_c, cell_d):
+                        c_col.border = thin_border
+
+                    curr_row += 1
+
+    wb.save(filepath)
+    return filepath
+

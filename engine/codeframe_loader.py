@@ -153,14 +153,17 @@ def validate_codeframe(data: dict, includes: Optional[list[dict]] = None) -> dic
         if not (kw or pk or nk):
             raise CodeframeError(f"Topic '{tid}' has no keywords.")
         register_roots(kw + pk + nk)
-        topics.append({
+        top_dict = {
             "id": tid,
             "net": str(t.get("net") or "")[:MAX_LABEL],
             "subnet": str(t.get("subnet") or tid)[:MAX_LABEL],
             "codes": codes,
             "keywords": kw, "pos_keywords": pk, "neg_keywords": nk,
             "exemplars": _str_list(t.get("exemplars"), "exemplars", tid) if t.get("exemplars") else [],
-        })
+        }
+        if t.get("dp_instruction"):
+            top_dict["dp_instruction"] = str(t.get("dp_instruction"))[:MAX_LABEL]
+        topics.append(top_dict)
     # compile phrases AFTER all roots are registered so stems are consistent
     for t in topics:
         t["kw_stems"] = sorted({stem_phrase(k) for k in t["keywords"] + t["pos_keywords"] + t["neg_keywords"]} - {()}, key=len, reverse=True)

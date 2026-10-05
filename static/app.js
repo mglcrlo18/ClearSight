@@ -1502,6 +1502,38 @@ async function handleCodeframeUpload(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
+    showToast(`⏳ Reading "${file.name}"...`);
+    const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+
+    if (isExcel) {
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const res = await fetch('/api/upload-codeframe', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                    'X-Filename': file.name
+                },
+                body: arrayBuffer
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                const count = data.topics_count || (data.codeframe && data.codeframe.topics ? data.codeframe.topics.length : 'Custom');
+                const lbl = document.getElementById('active-codeframe-label');
+                if (lbl) lbl.textContent = `Active: ${escapeHtml((data.codeframe && data.codeframe.name) || file.name)} (${count} Categories)`;
+                showToast(`✓ Dynamic Excel codeframe loaded: ${count} categories parsed.`);
+                loadTaglishCoding();
+            } else {
+                showToast('Codeframe upload failed: ' + (data.message || 'Unknown error'), true);
+            }
+        } catch (err) {
+            showToast('Failed to upload Excel codeframe: ' + err.message, true);
+        } finally {
+            event.target.value = '';
+        }
+        return;
+    }
+
     try {
         const text = await file.text();
         let codeframe = JSON.parse(text);
@@ -1533,6 +1565,11 @@ async function handleCodeframeUpload(event) {
     } finally {
         event.target.value = '';
     }
+}
+
+function downloadVerticalCodeframe() {
+    showToast("⏳ Generating vertical Excel codeframe (.xlsx)...");
+    window.location.href = "/api/export/vertical-codeframe";
 }
 
 function uploadProjectCodeframe(event) {

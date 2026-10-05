@@ -340,6 +340,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.stream_export_file("ClearSight_Customer_Voice_Snapshot_A4.html", "text/html; charset=utf-8")
         elif path == "/api/export/thesis-download":
             self.stream_export_file("ClearSight_Thesis_Chapter_4_Package.html", "text/html; charset=utf-8")
+        elif path == "/api/export/vertical-codeframe":
+            self.handle_export_vertical_codeframe()
         else:
             self.send_error(404, "Endpoint not found.")
 
@@ -616,6 +618,14 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/coder/feedback":
             self.handle_coder_feedback(body_bytes)
+        elif path == "/api/upload-codeframe":
+            self.handle_upload_codeframe(body_bytes)
+        elif path == "/api/stats/kruskal":
+            self.handle_stats_kruskal(body_bytes)
+        elif path == "/api/stats/turf":
+            self.handle_stats_turf(body_bytes)
+        elif path == "/api/stats/key-drivers":
+            self.handle_stats_key_drivers(body_bytes)
         elif path in ["/api/export/save-to-downloads", "/api/export/save-snapshot-to-downloads", "/api/export/save-thesis-to-downloads"]:
             self.handle_save_to_downloads(path)
         else:
@@ -768,6 +778,179 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             generate_customer_voice_snapshot_html(target_path, data)
         elif "Thesis" in filename:
             raise NotImplementedError("Thesis Chapter 4 Package is currently under calibration and disabled until dynamic inference is certified.")
+
+    def handle_upload_codeframe(self, body_bytes: bytes):
+        """Upload and compile a custom Excel (.xlsx) or JSON codeframe into active session."""
+        filename = self.headers.get("X-Filename", "codeframe.xlsx")
+        try:
+            if filename.lower().endswith((".xlsx", ".xls")) or (len(body_bytes) > 4 and body_bytes[:4] == b"PK\x03\x04"):
+                from engine.codeframe_excel_parser import parse_excel_codeframe
+                cf = parse_excel_codeframe(body_bytes, codeframe_name=filename)
+            else:
+                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+                if isinstance(req_data, dict) and "topics" in req_data:
+                    cf = load_codeframe_from_dict(req_data)
+                elif isinstance(req_data, list):
+                    cf = validate_codeframe({"schema_version": 1, "id": "custom_dp", "name": "Custom Uploaded Codeframe", "topics": req_data})
+                else:
+                    self.send_json_response({"status": "error", "message": "Invalid codeframe payload."}, 400)
+                    return
+
+            with SESSION_LOCK:
+                SESSION["custom_codeframe"] = cf
+
+            self.send_json_response({
+                "status": "success",
+                "message": f"Compiled codeframe '{cf['name']}' with {len(cf['topics'])} topics.",
+                "topics_count": len(cf["topics"]),
+                "codeframe": cf
+            })
+        except Exception as e:
+            logging.exception("Failed to parse uploaded codeframe")
+            self.send_json_response({"status": "error", "message": f"Codeframe parsing failed: {e}"}, 400)
+
+    def handle_export_vertical_codeframe(self):
+        """Streams a standardized vertical Excel codeframe to the client."""
+        with SESSION_LOCK:
+            cf = SESSION.get("custom_codeframe")
+            if not cf:
+                cf = load_codeframe("governance_default")
+            proj_title = SESSION.get("filename", "ClearSight Survey Study")
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp_f:
+            tmp_path = tmp_f.name
+        try:
+            from engine.export_engine import generate_vertical_codeframe_excel
+            generate_vertical_codeframe_excel(tmp_path, cf, project_title=proj_title)
+            with open(tmp_path, "rb") as f:
+                xlsx_bytes = f.read()
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Vertical_Codeframe.xlsx"')
+        self.send_header("Content-Length", str(len(xlsx_bytes)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.end_headers()
+        self.wfile.write(xlsx_bytes)
+
+    def handle_stats_kruskal(self, body_bytes: bytes):
+        """Execute survey-weighted Kruskal-Wallis & post-hoc Dunn's tests."""
+        try:
+            req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+        except Exception:
+            req_data = {}
+
+        var_col = req_data.get("variable")
+        grp_col = req_data.get("group_by")
+        if not var_col or not grp_col:
+            self.send_json_response({"status": "error", "message": "variable and group_by are required."}, 400)
+            return
+
+        with SESSION_LOCK:
+            df = SESSION.get("df")
+            weights = SESSION.get("weights")
+
+        if df is None:
+            self.send_json_response({"status": "error", "message": "No dataset loaded."}, 400)
+            return
+
+        if var_col not in df.columns or grp_col not in df.columns:
+            self.send_json_response({"status": "error", "message": f"Column '{var_col}' or '{grp_col}' not found in dataset."}, 400)
+            return
+
+        try:
+            from engine.non_parametric import survey_weighted_kruskal_wallis, survey_weighted_dunn_posthoc
+            kw_res = survey_weighted_kruskal_wallis(df[var_col], df[grp_col], weights)
+            dunn_res = survey_weighted_dunn_posthoc(df[var_col], df[grp_col], weights)
+            self.send_json_response({
+                "status": "success",
+                "kruskal_wallis": kw_res,
+                "dunn_posthoc": dunn_res
+            })
+        except Exception as e:
+            logging.exception("Kruskal-Wallis analysis error")
+            self.send_json_response({"status": "error", "message": str(e)}, 500)
+
+    def handle_stats_turf(self, body_bytes: bytes):
+        """Execute TURF reach and frequency combinatorial optimization."""
+        try:
+            req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+        except Exception:
+            req_data = {}
+
+        items = req_data.get("items", [])
+        k = int(req_data.get("k", 3))
+        top_n = int(req_data.get("top_n", 5))
+
+        if not items or not isinstance(items, list):
+            self.send_json_response({"status": "error", "message": "items must be a non-empty list of columns."}, 400)
+            return
+
+        with SESSION_LOCK:
+            df = SESSION.get("df")
+            weights = SESSION.get("weights")
+
+        if df is None:
+            self.send_json_response({"status": "error", "message": "No dataset loaded."}, 400)
+            return
+
+        missing = [it for it in items if it not in df.columns]
+        if missing:
+            self.send_json_response({"status": "error", "message": f"Columns not found: {missing}"}, 400)
+            return
+
+        try:
+            from engine.turf_engine import calculate_turf
+            binary_mat = df[items].to_numpy()
+            res = calculate_turf(binary_mat, items, k=k, weights=weights, top_n=top_n)
+            self.send_json_response({"status": "success", "turf": res})
+        except Exception as e:
+            logging.exception("TURF analysis error")
+            self.send_json_response({"status": "error", "message": str(e)}, 500)
+
+    def handle_stats_key_drivers(self, body_bytes: bytes):
+        """Execute Johnson's Relative Weights key driver analysis."""
+        try:
+            req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+        except Exception:
+            req_data = {}
+
+        target = req_data.get("target")
+        predictors = req_data.get("predictors", [])
+
+        if not target or not predictors or not isinstance(predictors, list):
+            self.send_json_response({"status": "error", "message": "target and a list of predictors are required."}, 400)
+            return
+
+        with SESSION_LOCK:
+            df = SESSION.get("df")
+            weights = SESSION.get("weights")
+
+        if df is None:
+            self.send_json_response({"status": "error", "message": "No dataset loaded."}, 400)
+            return
+
+        all_cols = [target] + predictors
+        missing = [c for c in all_cols if c not in df.columns]
+        if missing:
+            self.send_json_response({"status": "error", "message": f"Columns not found: {missing}"}, 400)
+            return
+
+        try:
+            from engine.driver_analysis import compute_johnsons_relative_weights
+            X = df[predictors].to_numpy()
+            y = df[target].to_numpy()
+            res = compute_johnsons_relative_weights(X, y, predictors, weights=weights)
+            self.send_json_response({"status": "success", "key_drivers": res})
+        except Exception as e:
+            logging.exception("Key driver analysis error")
+            self.send_json_response({"status": "error", "message": str(e)}, 500)
 
     def handle_save_to_downloads(self, path: str):
         """Handles saving deliverable files directly to user's ~/Downloads directory."""

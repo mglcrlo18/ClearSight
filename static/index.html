@@ -458,10 +458,11 @@
                     <div class="lock-status" style="display: flex; gap: 0.75rem; align-items: center;">
                         <span id="agreement-score">Heuristic Qualitative Coder (Preview)</span>
                         <label for="codeframe-file-input" class="lock-btn" id="upload-codeframe-label" style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; user-select: none; margin-right: 4px;">
-                            📁 Import Project Codeframe (.json)
+                            📁 Import DP Codeframe (.xlsx / .json)
                         </label>
-                        <input type="file" id="codeframe-file-input" accept=".json,application/json" style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;" onchange="uploadProjectCodeframe(event)">
+                        <input type="file" id="codeframe-file-input" accept=".xlsx,.xls,.json,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;" onchange="uploadProjectCodeframe(event)">
                         <span id="active-codeframe-label" style="font-size: 0.85rem; color: #64748B; margin-right: 8px;">Active: Default FMCG Taxonomy (16 Themes)</span>
+                        <button type="button" class="lock-btn" id="export-codeframe-btn" onclick="downloadVerticalCodeframe()" style="cursor: pointer; margin-right: 4px;">📊 Export Vertical Codeframe (.xlsx)</button>
                         <button class="lock-btn" id="lock-btn" onclick="toggleLock()">🔒 Lock Codeframe</button>
                     </div>
                 </div>

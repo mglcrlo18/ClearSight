@@ -1,133 +1,145 @@
 """
-ClearSight Analytics - Key Driver Analysis via Johnson's Relative Weights
-Computes orthogonalized variance decomposition for collinear survey predictors.
-Supports unweighted and survey-weighted specifications.
+Multicollinearity-Proof Key Driver Analysis Engine (Johnson's Relative Weights) for ClearSight.
+
+Features:
+1. Singular Value Decomposition (SVD) orthogonalization resolving severe multicollinearity.
+2. Exact R-squared variance decomposition summing to 100%.
+3. Condition number monitoring with automated Tikhonov regularization guard (kappa > 1e5).
+4. Survey weight integration for representative population key driver rankings.
 """
+from __future__ import annotations
 
+from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
-import pandas as pd
 
 
-def compute_johnsons_relative_weights(
-    df: pd.DataFrame, 
-    target_col: str, 
-    feature_cols: list[str],
-    weight_col: str = None
-) -> dict:
+def johnsons_relative_weights(
+    X: Union[np.ndarray, List[List[float]]],
+    y: Union[np.ndarray, List[float]],
+    feature_names: List[str],
+    weights: Optional[Union[np.ndarray, List[float]]] = None,
+    tikhonov_ridge: float = 1e-6
+) -> Dict[str, Any]:
     """
-    Computes Johnson's Relative Weights (2000) for resolving predictor collinearity.
-    Uses Singular Value Decomposition (SVD) on correlation matrices to yield 
-    orthogonal variance decomposition without ddof inflation.
-    
-    Returns:
-    {
-        'r_squared': float,
-        'sample_size': int,
-        'weights': [
-            {'feature': 'Product Quality', 'raw_weight': 0.18, 'relative_importance_pct': 34.2},
-            ...
-        ]
-    }
+    Computes Johnson's Relative Weights for a set of correlated predictors against a criterion variable.
     """
-    # 1. Input Validation & Numeric Coercion
-    if not target_col or target_col not in df.columns:
-        return {"error": f"Target column '{target_col}' not found in dataset."}
-    
-    valid_features = [f for f in feature_cols if f in df.columns and f != target_col]
-    if len(valid_features) < 2:
-        return {"error": "Driver analysis requires at least two distinct predictor features."}
+    X_mat = np.asarray(X, dtype=float)
+    y_vec = np.asarray(y, dtype=float)
+    n, p = X_mat.shape
 
-    all_cols = [target_col] + valid_features
-    if weight_col and weight_col in df.columns:
-        all_cols.append(weight_col)
+    if len(y_vec) != n:
+        raise ValueError(f"y length ({len(y_vec)}) must match X rows ({n}).")
+    if len(feature_names) != p:
+        raise ValueError(f"feature_names length ({len(feature_names)}) must match X columns ({p}).")
 
-    # Coerce to numeric
-    work_df = df[all_cols].copy()
-    for col in [target_col] + valid_features:
-        work_df[col] = pd.to_numeric(work_df[col], errors='coerce')
-
-    clean_df = work_df.dropna()
-    N = len(clean_df)
-    p = len(valid_features)
-
-    if N < p + 5:
-        return {"error": f"Insufficient sample size (N = {N}) for {p} predictors. Minimum required: {p + 5}."}
-
-    Y = clean_df[target_col].values.astype(np.float64)
-    X = clean_df[valid_features].values.astype(np.float64)
-
-    # 2. Compute Correlation Matrices R_xx and R_xy (weighted or unweighted)
-    if weight_col and weight_col in clean_df.columns:
-        w = clean_df[weight_col].values.astype(np.float64)
-        w = np.maximum(0.0, w)
-        w_sum = np.sum(w)
-        if w_sum > 0:
-            w_norm = w / w_sum
-            # Weighted means & std
-            y_mean = np.sum(w_norm * Y)
-            y_std = np.sqrt(np.sum(w_norm * ((Y - y_mean) ** 2))) + 1e-12
-            Y_z = (Y - y_mean) / y_std
-
-            x_means = np.sum(w_norm[:, None] * X, axis=0)
-            x_stds = np.sqrt(np.sum(w_norm[:, None] * ((X - x_means) ** 2), axis=0)) + 1e-12
-            X_z = (X - x_means) / x_stds
-
-            # Weighted correlation matrix
-            R_xx = (X_z.T * w_norm) @ X_z
-            R_xy = (X_z.T * w_norm) @ Y_z
-        else:
-            # Fallback to standard corrcoef
-            corr_all = np.corrcoef(np.column_stack([X, Y]), rowvar=False)
-            R_xx = corr_all[:p, :p]
-            R_xy = corr_all[:p, p]
+    if weights is None:
+        w = np.ones(n, dtype=float)
     else:
-        corr_all = np.corrcoef(np.column_stack([X, Y]), rowvar=False)
-        R_xx = corr_all[:p, :p]
-        R_xy = corr_all[:p, p]
+        w = np.asarray(weights, dtype=float)
 
-    # Clean any NaN correlations due to zero variance
-    if np.any(np.isnan(R_xx)) or np.any(np.isnan(R_xy)):
-        return {"error": "One or more features have zero variance or contain invariant constant values."}
+    # Filter out NaNs
+    valid = ~np.isnan(y_vec) & ~np.any(np.isnan(X_mat), axis=1) & (w > 0)
+    X_mat = X_mat[valid]
+    y_vec = y_vec[valid]
+    w = w[valid]
+    n = len(y_vec)
 
-    # Regularize tiny diagonal jitter if near-singular
-    R_xx += np.eye(p) * 1e-8
+    if n <= p:
+        raise ValueError(f"Sample size ({n}) must be greater than number of predictors ({p}).")
 
-    # 3. Spectral Decomposition of R_xx = V * Lambda * V^T
-    try:
-        eigenvalues, V = np.linalg.eigh(R_xx)
-    except np.linalg.LinAlgError:
-        return {"error": "Predictor correlation matrix could not be decomposed (singular)."}
+    w_sum = float(np.sum(w))
+    # Weighted standardization of y and X
+    y_mean = float(np.sum(w * y_vec) / w_sum)
+    y_std = float(np.sqrt(np.sum(w * ((y_vec - y_mean) ** 2)) / w_sum))
+    if y_std <= 0:
+        raise ValueError("Criterion y has zero variance.")
+    y_stdzd = (y_vec - y_mean) / y_std
 
-    # Guard positive eigenvalues
-    eigenvalues = np.maximum(eigenvalues, 1e-12)
-    Lambda_sqrt = np.diag(np.sqrt(eigenvalues))
-    Lambda_inv_sqrt = np.diag(1.0 / np.sqrt(eigenvalues))
+    X_mean = np.sum(w[:, np.newaxis] * X_mat, axis=0) / w_sum
+    X_std = np.sqrt(np.sum(w[:, np.newaxis] * ((X_mat - X_mean) ** 2), axis=0) / w_sum)
+    zero_var_idx = np.where(X_std <= 0)[0]
+    if len(zero_var_idx) > 0:
+        bad_feats = [feature_names[i] for i in zero_var_idx]
+        raise ValueError(f"Predictors with zero variance detected: {bad_feats}")
 
-    # 4. Transformation Matrix relating X to orthogonal variables Z
-    Lambda_star = V @ Lambda_sqrt @ V.T
-    Beta_star = (V @ Lambda_inv_sqrt @ V.T) @ R_xy
+    X_stdzd = (X_mat - X_mean) / X_std
 
-    # 5. Raw Relative Weights: epsilon = Lambda_star^2 @ Beta_star^2
-    raw_weights = (Lambda_star ** 2) @ (Beta_star ** 2)
-    raw_sum = float(np.sum(raw_weights))
-    R2 = max(0.0, min(1.0, raw_sum))
+    # Compute weighted correlation matrices
+    # R_xx = (X^T W X) / w_sum
+    # R_xy = (X^T W y) / w_sum
+    W_diag = np.sqrt(w)[:, np.newaxis]
+    X_weighted = X_stdzd * W_diag
+    y_weighted = y_stdzd * np.sqrt(w)
 
-    # 6. Percentage Shares (Guaranteed to strictly sum to 100.0%)
-    weights_summary = []
-    for i, col in enumerate(valid_features):
-        raw_w = max(0.0, float(raw_weights[i]))
-        pct_contrib = float((raw_w / raw_sum * 100.0) if raw_sum > 0 else (100.0 / p))
-        weights_summary.append({
-            "feature": col,
-            "raw_weight": round(raw_w, 4),
-            "relative_importance_pct": round(pct_contrib, 1)
+    R_xx = (X_weighted.T @ X_weighted) / w_sum
+    R_xy = (X_weighted.T @ y_weighted) / w_sum
+
+    # Eigen-decomposition of R_xx
+    eigenvals, Q = np.linalg.eigh(R_xx)
+
+    # Condition number check
+    max_eval = float(np.max(eigenvals))
+    min_eval = float(np.min(eigenvals))
+    is_regularized = False
+
+    if min_eval <= 0 or (min_eval > 0 and (max_eval / min_eval) > 1e5):
+        # Tikhonov regularization guard
+        R_xx_reg = R_xx + (tikhonov_ridge * np.eye(p))
+        eigenvals, Q = np.linalg.eigh(R_xx_reg)
+        min_eval = float(np.min(eigenvals))
+        is_regularized = True
+
+    # Ensure strictly positive eigenvalues for sqrt
+    eigenvals = np.clip(eigenvals, 1e-12, None)
+    diag_sqrt = np.sqrt(eigenvals)
+    diag_inv_sqrt = 1.0 / diag_sqrt
+
+    # P matrix: orthogonal mapping transformation
+    # P = Q @ diag(sqrt(evals)) @ Q^T
+    P = (Q * diag_sqrt) @ Q.T
+    # P_inv = Q @ diag(1/sqrt(evals)) @ Q^T
+    P_inv = (Q * diag_inv_sqrt) @ Q.T
+
+    # Regression of y on orthogonal variables Z:
+    # beta_star = P_inv @ R_xy
+    beta_star = P_inv @ R_xy
+
+    # Raw relative weight: epsilon_j = sum_k (P_jk^2 * beta_star_k^2)
+    P_sq = P ** 2
+    beta_star_sq = beta_star ** 2
+    raw_weights = P_sq @ beta_star_sq
+
+    # Model R-squared
+    r_squared = float(np.sum(raw_weights))
+    r_squared = max(0.0, min(1.0, r_squared))
+
+    # Normalized relative weights (percentage of R^2)
+    if r_squared > 0:
+        norm_weights = (raw_weights / r_squared) * 100.0
+    else:
+        norm_weights = np.zeros(p)
+
+    # Format sorted driver ranking
+    ranked_drivers = []
+    order = np.argsort(-raw_weights)
+    for rank_idx, feat_idx in enumerate(order, start=1):
+        ranked_drivers.append({
+            "rank": rank_idx,
+            "feature": feature_names[feat_idx],
+            "relative_weight_raw": round(float(raw_weights[feat_idx]), 6),
+            "relative_importance_pct": round(float(norm_weights[feat_idx]), 2)
         })
 
-    weights_summary = sorted(weights_summary, key=lambda x: x["relative_importance_pct"], reverse=True)
-
     return {
-        "r_squared": round(R2, 4),
-        "sample_size": N,
-        "is_weighted": bool(weight_col is not None),
-        "weights": weights_summary
+        "analysis": "Key Driver Analysis (Johnson's Relative Weights)",
+        "model_r_squared": round(r_squared, 4),
+        "total_sample_size": n,
+        "predictors_count": p,
+        "is_tikhonov_regularized": is_regularized,
+        "condition_number": round(float(max_eval / max(1e-12, min_eval)), 2),
+        "drivers": ranked_drivers
     }
+
+
+# Compatibility alias with engine/__init__.py
+compute_johnsons_relative_weights = johnsons_relative_weights
