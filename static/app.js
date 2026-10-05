@@ -1760,32 +1760,48 @@ async function runSelectedStatModel(modelType, isChecked) {
         return;
     }
 
-    showToast(`Running ${modelType} model on active dataset...`);
-    try {
-        let payload = { model_type: modelType };
-        if (modelType === 'linear_reg' || modelType === 'ordinal_logit') {
-            payload.target = 'Overall_CSAT';
-            payload.predictors = ['Survey_Duration_Sec', 'Repurchase_Intent'];
-        } else if (modelType === 'sem') {
-            payload.target = 'Overall_CSAT';
-            payload.predictors = ['Repurchase_Intent', 'Survey_Duration_Sec'];
-        } else if (['pearson', 'spearman', 'kendall', 'point_biserial'].includes(modelType)) {
-            payload.var_x = 'Overall_CSAT';
-            payload.var_y = 'Repurchase_Intent';
-        } else if (modelType === 'ttest_indep' || modelType === 'mann_whitney') {
-            payload.var_x = 'Overall_CSAT';
-            payload.group_by = 'Gender';
-        } else if (modelType === 'ttest_paired' || modelType === 'wilcoxon') {
-            payload.var_x = 'Overall_CSAT';
-            payload.var_y = 'Repurchase_Intent';
-        } else if (modelType === 'anova' || modelType === 'kruskal_wallis') {
-            payload.var_x = 'Overall_CSAT';
-            payload.group_by = 'Region';
-        } else if (modelType === 'quadrant') {
-            executeKruskalQuadrantAnalysis();
-            return;
-        }
+    if (modelType === 'quadrant') {
+        triggerDynamicKruskalAnalysis();
+        return;
+    }
 
+    // Dynamic Active Context Resolution (CS-STAT-HARDCODE)
+    const activeStubs = getActiveStubs();
+    const activeBanners = getActiveBannerColumns().filter(b => b.toLowerCase() !== 'total');
+    const schema = (loadedDatasetInfo && loadedDatasetInfo.schema) || {};
+
+    let targetVar = activeStubs.length > 0 ? activeStubs[0] : null;
+    let groupVar = activeBanners.length > 0 ? activeBanners[0] : null;
+    let secondVar = activeStubs.length > 1 ? activeStubs[1] : null;
+
+    // Autodetect fallbacks from schema if canvas trays are unpopulated
+    if (!targetVar) {
+        targetVar = Object.keys(schema).find(c => schema[c].type === 'rating_scale') ||
+                    Object.keys(schema).find(c => schema[c].type === 'single_select') ||
+                    Object.keys(schema).find(c => !c.startsWith('__'));
+    }
+    if (!groupVar) {
+        groupVar = Object.keys(schema).find(c => c !== targetVar && schema[c].type === 'single_select') ||
+                   Object.keys(schema).find(c => c !== targetVar && !c.startsWith('__'));
+    }
+    if (!secondVar) {
+        secondVar = Object.keys(schema).find(c => c !== targetVar && (schema[c].type === 'rating_scale' || schema[c].type === 'single_select')) ||
+                    Object.keys(schema).find(c => c !== targetVar && c !== groupVar && !c.startsWith('__'));
+    }
+
+    const numericPredictors = Object.keys(schema).filter(c => c !== targetVar && (schema[c].type === 'rating_scale' || schema[c].type === 'numeric')).slice(0, 5);
+
+    const payload = {
+        model_type: modelType,
+        target: targetVar,
+        var_x: targetVar,
+        var_y: secondVar,
+        group_by: groupVar,
+        predictors: numericPredictors.length > 0 ? numericPredictors : (secondVar ? [secondVar] : [])
+    };
+
+    showToast(`Running ${modelType} model (${targetVar || 'Auto'})...`);
+    try {
         const res = await fetch('/api/stats/advanced-models', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1834,39 +1850,150 @@ async function runSelectedStatModel(modelType, isChecked) {
     }
 }
 
-async function executeKruskalQuadrantAnalysis() {
-    showToast("Executing Kruskal Importance-Performance Quadrant Analysis (IPA)...");
+// 100% Dynamic Kruskal Quadrant Analysis Trigger (CS-STAT-IPA-DYNAMIC)
+async function triggerDynamicKruskalAnalysis() {
+    const activeStubs = getActiveStubs();
+    const schema = (loadedDatasetInfo && loadedDatasetInfo.schema) || {};
+
+    // 1. Resolve Target Metric Dynamically from Active Canvas
+    let target = activeStubs.length > 0 ? activeStubs[0] : null;
+    if (!target) {
+        target = Object.keys(schema).find(c => schema[c].type === 'rating_scale') || 
+                 Object.keys(schema).find(c => schema[c].type === 'single_select') ||
+                 Object.keys(schema).find(c => !c.startsWith('__'));
+    }
+    if (!target) {
+        showToast("Please select a target variable or rating scale.", true);
+        return;
+    }
+
+    // 2. Resolve Attribute Battery Dynamically
+    let attributes = activeStubs.slice(1);
+    if (attributes.length === 0) {
+        attributes = Object.keys(schema).filter(c => c !== target && schema[c].type === 'rating_scale');
+    }
+    if (attributes.length === 0) {
+        attributes = Object.keys(schema).filter(c => c !== target && !c.startsWith('__')).slice(0, 12);
+    }
+
+    showToast(`Computing dynamic Kruskal Quadrant Analysis for "${target}"...`);
+
     try {
         const res = await fetch('/api/stats/quadrant-analysis', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ target: 'Overall_CSAT' })
+            body: JSON.stringify({ target: target, attributes: attributes })
         });
         const data = await res.json();
-        if (data.status === 'success' && data.results && data.results.attributes) {
-            const r = data.results;
-            let html = `<div style="font-size: 0.85rem; line-height: 1.5; color: #1E293B;">`;
-            html += `<div style="margin-bottom: 12px; font-weight: 600; color: #334155;">Target: <b>${r.target_variable}</b> (N = ${r.sample_size}) | Midpoints: Perf = ${r.midpoints.performance_midpoint_x}, Importance = ${r.midpoints.importance_midpoint_y}%</div>`;
-            html += `<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">`;
-            r.attributes.forEach(attr => {
-                const isQ1 = attr.quadrant.startsWith("Q1");
-                const borderClr = isQ1 ? "#E10600" : "#CBD5E1";
-                const bgClr = isQ1 ? "#FEF2F2" : "#F8FAFC";
-                html += `<div style="border: 1px solid ${borderClr}; background: ${bgClr}; border-radius: 8px; padding: 10px 12px;">
-                    <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">${attr.attribute}</div>
-                    <div style="font-size: 0.78rem; color: #475569; margin: 4px 0;">Performance: <b>${attr.performance_mean}</b> | Derived Imp: <b>${attr.kruskal_importance_pct}%</b></div>
-                    <div style="font-size: 0.75rem; font-weight: 700; color: ${isQ1 ? '#B91C1C' : '#1E40AF'};">${attr.quadrant}</div>
-                    <div style="font-size: 0.72rem; color: #64748B; margin-top: 4px;">${attr.recommendation}</div>
-                </div>`;
-            });
-            html += `</div></div>`;
-            showAdvancedStatsModal("Kruskal Importance-Performance (IPA) Matrix", html);
+        if (data.status === 'success' && data.results) {
+            renderKruskalQuadrantMatrix(data);
         } else {
-            showToast(data.message || 'Quadrant analysis failed', true);
+            showToast(`Quadrant Analysis Error: ${data.message || 'Execution failed'}`, true);
         }
     } catch (err) {
-        showToast(`IPA error: ${err.message}`, true);
+        showToast(`Quadrant Analysis Error: ${err.message}`, true);
     }
+}
+
+function executeKruskalQuadrantAnalysis() {
+    triggerDynamicKruskalAnalysis();
+}
+
+function renderKruskalQuadrantMatrix(data) {
+    const r = data.results;
+    if (!r || !r.attributes) return;
+
+    const perfCut = (r.cutoffs && r.cutoffs.performance_midpoint) || (r.midpoints && r.midpoints.performance_midpoint_x) || 0;
+    const impCut = (r.cutoffs && r.cutoffs.importance_midpoint) || (r.midpoints && r.midpoints.importance_midpoint_y) || 0;
+
+    let html = `<div class="quadrant-container" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="font-size: 1.15rem; font-weight: 800; color: #0F172A; margin-bottom: 4px;">
+            Quadrant Analysis: Level of Importance vs. Level of Performance
+        </div>
+        <div style="font-size: 0.85rem; color: #64748B; margin-bottom: 16px;">
+            Target Construct: <b>${escapeHtml(r.target_variable)}</b> (N = ${r.sample_size}) | Dynamic Cutoffs: Perf = <b>${perfCut}</b>, Imp = <b>${impCut}%</b>
+        </div>
+
+        <!-- 2x2 PSRC / SWS Visual Matrix -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; gap: 12px; margin-bottom: 24px;">
+            <!-- Top-Left: Q4 Secondary Advantage (Yellow) -->
+            <div style="background: #FEF3C7; border: 2px solid #F59E0B; border-radius: 8px; padding: 14px;">
+                <div style="font-weight: 800; color: #92400E; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 4px;">
+                    Top-Left: Secondary Advantage / Possible Overkill
+                </div>
+                <div style="font-size: 0.72rem; color: #B45309; margin-bottom: 8px;">High Performance | Low Importance</div>
+                <ul style="margin: 0; padding-left: 18px; font-size: 0.82rem; color: #78350F;">
+                    ${r.attributes.filter(a => a.quadrant_code === 'Q4' || (a.quadrant && a.quadrant.startsWith('Q4'))).map(a => `<li><b>${escapeHtml(a.attribute)}</b> (${a.performance_mean} | ${a.derived_importance_pct || a.kruskal_importance_pct}%)</li>`).join('') || '<li style="color: #A16207;">None</li>'}
+                </ul>
+            </div>
+
+            <!-- Top-Right: Q2 Core Strengths (Green) -->
+            <div style="background: #DCFCE7; border: 2px solid #16A34A; border-radius: 8px; padding: 14px;">
+                <div style="font-weight: 800; color: #166534; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 4px;">
+                    Top-Right: Core Strengths / Keep Up Good Work
+                </div>
+                <div style="font-size: 0.72rem; color: #15803D; margin-bottom: 8px;">High Performance | High Importance</div>
+                <ul style="margin: 0; padding-left: 18px; font-size: 0.82rem; color: #14532D;">
+                    ${r.attributes.filter(a => a.quadrant_code === 'Q2' || (a.quadrant && a.quadrant.startsWith('Q2'))).map(a => `<li><b>${escapeHtml(a.attribute)}</b> (${a.performance_mean} | ${a.derived_importance_pct || a.kruskal_importance_pct}%)</li>`).join('') || '<li style="color: #15803D;">None</li>'}
+                </ul>
+            </div>
+
+            <!-- Bottom-Left: Q3 Low Priority (Blue/Grey) -->
+            <div style="background: #F1F5F9; border: 2px solid #94A3B8; border-radius: 8px; padding: 14px;">
+                <div style="font-weight: 800; color: #334155; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 4px;">
+                    Bottom-Left: Low Priority / Secondary Friction
+                </div>
+                <div style="font-size: 0.72rem; color: #64748B; margin-bottom: 8px;">Low Performance | Low Importance</div>
+                <ul style="margin: 0; padding-left: 18px; font-size: 0.82rem; color: #1E293B;">
+                    ${r.attributes.filter(a => a.quadrant_code === 'Q3' || (a.quadrant && a.quadrant.startsWith('Q3'))).map(a => `<li><b>${escapeHtml(a.attribute)}</b> (${a.performance_mean} | ${a.derived_importance_pct || a.kruskal_importance_pct}%)</li>`).join('') || '<li style="color: #64748B;">None</li>'}
+                </ul>
+            </div>
+
+            <!-- Bottom-Right: Q1 Critical Priority (Red) -->
+            <div style="background: #FEE2E2; border: 2px solid #DC2626; border-radius: 8px; padding: 14px;">
+                <div style="font-weight: 800; color: #991B1B; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 4px;">
+                    Bottom-Right: Urgent Priority / Concentrate Here
+                </div>
+                <div style="font-size: 0.72rem; color: #B91C1C; margin-bottom: 8px;">Low Performance | High Importance</div>
+                <ul style="margin: 0; padding-left: 18px; font-size: 0.82rem; color: #7F1D1D;">
+                    ${r.attributes.filter(a => a.quadrant_code === 'Q1' || (a.quadrant && a.quadrant.startsWith('Q1'))).map(a => `<li><b>${escapeHtml(a.attribute)}</b> (${a.performance_mean} | ${a.derived_importance_pct || a.kruskal_importance_pct}%)</li>`).join('') || '<li style="color: #B91C1C;">None</li>'}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Specialized Kruskal Analysis Data Table -->
+        <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 8px; color: #0F172A;">
+            Kruskal-Wallis Importance-Performance Attribute Ledger
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: left;">
+            <thead>
+                <tr style="background: #0F172A; color: #FFFFFF;">
+                    <th style="padding: 8px;">Rank</th>
+                    <th style="padding: 8px;">Attribute / Issue</th>
+                    <th style="padding: 8px; text-align: center;">Performance (Mean / %)</th>
+                    <th style="padding: 8px; text-align: center;">Kruskal H (χ²)</th>
+                    <th style="padding: 8px; text-align: center;">Derived Imp (%)</th>
+                    <th style="padding: 8px;">Assigned Quadrant</th>
+                    <th style="padding: 8px;">Strategic Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${r.attributes.map((a, idx) => `
+                    <tr style="border-bottom: 1px solid #E2E8F0; background: ${idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC'};">
+                        <td style="padding: 8px; font-weight: 700;">#${a.priority_rank || (idx + 1)}</td>
+                        <td style="padding: 8px; font-weight: 600; color: #0F172A;">${escapeHtml(a.attribute)}</td>
+                        <td style="padding: 8px; text-align: center;">${a.performance_mean}</td>
+                        <td style="padding: 8px; text-align: center;">${a.h_stat || 'N/A'}</td>
+                        <td style="padding: 8px; text-align: center; font-weight: 700;">${a.derived_importance_pct || a.kruskal_importance_pct}%</td>
+                        <td style="padding: 8px;"><span style="background: ${a.quadrant_code === 'Q1' || (a.quadrant && a.quadrant.startsWith('Q1')) ? '#FEE2E2; color:#991B1B' : (a.quadrant_code === 'Q2' || (a.quadrant && a.quadrant.startsWith('Q2')) ? '#DCFCE7; color:#166534' : (a.quadrant_code === 'Q4' || (a.quadrant && a.quadrant.startsWith('Q4')) ? '#FEF3C7; color:#92400E' : '#F1F5F9; color:#334155'))}; padding: 3px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">${escapeHtml(a.quadrant_code || (a.quadrant && a.quadrant.split(':')[0]) || '')}</span></td>
+                        <td style="padding: 8px; font-size: 0.75rem; color: #475569;">${escapeHtml(a.strategic_action || a.recommendation || '')}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>`;
+
+    showAdvancedStatsModal("Importance-Performance Quadrant Analysis", html);
 }
 
 

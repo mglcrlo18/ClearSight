@@ -355,88 +355,144 @@ def run_path_analysis_sem(
 # 4. KRUSKAL QUADRANT ANALYSIS (IPA)
 # ==========================================
 
+def run_dynamic_kruskal_quadrant_analysis(
+    df: pd.DataFrame,
+    target_metric_col: str,
+    attribute_cols: List[str],
+    weights_col: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    100% Dynamic Kruskal-Wallis Importance-Performance Analysis (IPA).
+    Computes performance means, non-parametric Kruskal-Wallis derived importance weights,
+    dynamic midpoints, and quadrant allocations for ANY arbitrary survey dataset.
+    """
+    valid_cols = [target_metric_col] + [c for c in attribute_cols if c in df.columns]
+    if len(valid_cols) < 2:
+        return {"error": "Target metric and at least one attribute column required."}
+
+    clean_df = df.dropna(subset=valid_cols)
+    n_sample = len(clean_df)
+    if n_sample < 10:
+        return {"error": f"Insufficient sample size (N = {n_sample}) for Kruskal Quadrant Analysis."}
+
+    y_target = clean_df[target_metric_col].to_numpy()
+    weights = clean_df[weights_col].to_numpy() if weights_col and weights_col in clean_df.columns else None
+
+    attributes_output = []
+    kw_h_scores = []
+    performance_scores = []
+
+    # 1. Compute dynamic performance and non-parametric association for each attribute
+    for col in attribute_cols:
+        if col not in clean_df.columns:
+            continue
+        x_attr = clean_df[col].to_numpy()
+
+        # Dynamic Performance Score (Weighted mean or unweighted mean)
+        if weights is not None:
+            perf_mean = float(np.sum(weights * x_attr) / np.sum(weights))
+        else:
+            perf_mean = float(np.mean(x_attr))
+
+        performance_scores.append(perf_mean)
+
+        # Dynamic Kruskal-Wallis Decomposition
+        unique_groups = np.unique(x_attr)
+        if len(unique_groups) <= 10:
+            groups = [y_target[x_attr == val] for val in unique_groups if len(y_target[x_attr == val]) > 0]
+        else:
+            q_bins = pd.qcut(x_attr, q=4, labels=False, duplicates="drop")
+            groups = [y_target[q_bins == val] for val in np.unique(q_bins) if len(y_target[q_bins == val]) > 0]
+
+        if len(groups) >= 2:
+            h_stat, p_val = stats.kruskal(*groups)
+            h_stat_clean = max(0.001, float(h_stat))
+            df_k = len(groups) - 1
+        else:
+            h_stat_clean = 0.001
+            p_val = 1.0
+            df_k = 1
+
+        kw_h_scores.append(h_stat_clean)
+        attributes_output.append({
+            "attribute": col,
+            "performance_mean": round(perf_mean, 2),
+            "h_stat": round(h_stat_clean, 3),
+            "df": df_k,
+            "p_val": round(float(p_val), 4)
+        })
+
+    # 2. Compute Dynamic Derived Importance Percentage
+    total_h = sum(kw_h_scores)
+    m = len(attributes_output)
+    for idx, item in enumerate(attributes_output):
+        item["derived_importance_pct"] = round((kw_h_scores[idx] / max(0.001, total_h)) * 100.0, 2)
+        item["kruskal_importance_pct"] = item["derived_importance_pct"]
+
+    # 3. Compute Dynamic Benchmark Cutoffs (Grand Means)
+    perf_cutoff = round(float(np.mean(performance_scores)), 2)
+    imp_cutoff = round(100.0 / max(1, m), 2)
+
+    # 4. Dynamic Quadrant Allocation & Strategic Action
+    for item in attributes_output:
+        perf = item["performance_mean"]
+        imp = item["derived_importance_pct"]
+
+        if imp >= imp_cutoff and perf >= perf_cutoff:
+            item["quadrant_code"] = "Q2"
+            item["quadrant_label"] = "Core Strength (Keep Up the Good Work)"
+            item["quadrant_color"] = "#16A34A" # Green
+            item["strategic_action"] = "Key competitive pillar. Maintain high visibility and protect performance."
+        elif imp >= imp_cutoff and perf < perf_cutoff:
+            item["quadrant_code"] = "Q1"
+            item["quadrant_label"] = "Urgent Priority (Concentrate Here)"
+            item["quadrant_color"] = "#DC2626" # Red
+            item["strategic_action"] = "High impact driver currently underperforming. Prioritize immediate operational fix."
+        elif imp < imp_cutoff and perf >= perf_cutoff:
+            item["quadrant_code"] = "Q4"
+            item["quadrant_label"] = "Secondary Advantage (Maintain)"
+            item["quadrant_color"] = "#F59E0B" # Yellow
+            item["strategic_action"] = "Strong performance on secondary priority. Maintain efficiency without over-investing."
+        else:
+            item["quadrant_code"] = "Q3"
+            item["quadrant_label"] = "Low Priority (Secondary Friction)"
+            item["quadrant_color"] = "#94A3B8" # Slate Blue/Grey
+            item["strategic_action"] = "Minor issue with low relative importance. Deprioritize capital allocation."
+
+        item["quadrant"] = f"{item["quadrant_code"]}: {item["quadrant_label"]}"
+        item["recommendation"] = item["strategic_action"]
+
+    # Sort descending by Derived Importance
+    attributes_output.sort(key=lambda x: x["derived_importance_pct"], reverse=True)
+    for rank, item in enumerate(attributes_output, start=1):
+        item["priority_rank"] = rank
+
+    return {
+        "analysis_title": f"Dynamic Kruskal Quadrant Analysis: {target_metric_col}",
+        "target_variable": target_metric_col,
+        "sample_size": n_sample,
+        "cutoffs": {
+            "performance_midpoint": perf_cutoff,
+            "importance_midpoint": imp_cutoff
+        },
+        "midpoints": {
+            "performance_midpoint_x": perf_cutoff,
+            "importance_midpoint_y": imp_cutoff
+        },
+        "attributes": attributes_output
+    }
+
+
 def run_kruskal_quadrant_analysis(
     df: pd.DataFrame, 
     attribute_cols: List[str], 
-    target_metric_col: str
+    target_metric_col: str,
+    weights_col: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Importance-Performance Analysis (IPA) mapping:
-    - X-Axis (Performance): Mean satisfaction score for each attribute.
-    - Y-Axis (Importance): Kruskal-Wallis derived non-parametric relative importance weights (summing to 100%).
-    Categorizes attributes into 4 strategic quadrants:
-      * Quadrant I: Concentrate Here (High Importance, Low Performance)
-      * Quadrant II: Keep Up Good Work (High Importance, High Performance)
-      * Quadrant III: Low Priority (Low Importance, Low Performance)
-      * Quadrant IV: Possible Overkill (Low Importance, High Performance)
-    """
-    clean_df = df.dropna(subset=[target_metric_col] + attribute_cols)
-    if len(clean_df) < 20:
-        return {"error": "Quadrant Analysis requires at least 20 complete survey observations"}
-
-    y_target = clean_df[target_metric_col].to_numpy()
-    kw_chi2_values = []
-    performance_means = []
-
-    for col in attribute_cols:
-        x_attr = clean_df[col].to_numpy()
-        performance_means.append(float(np.mean(x_attr)))
-        
-        # Discretize attribute into quartiles or distinct groups to run Kruskal-Wallis against target
-        unique_vals = np.unique(x_attr)
-        if len(unique_vals) <= 7:
-            groups = [y_target[x_attr == val] for val in unique_vals if len(y_target[x_attr == val]) > 0]
-        else:
-            q = pd.qcut(x_attr, q=4, labels=False, duplicates='drop')
-            groups = [y_target[q == val] for val in np.unique(q) if len(y_target[q == val]) > 0]
-            
-        if len(groups) >= 2:
-            h_stat, _ = stats.kruskal(*groups)
-            kw_chi2_values.append(max(0.01, float(h_stat)))
-        else:
-            kw_chi2_values.append(0.01)
-
-    # Calculate Normalized Relative Importance (%)
-    total_chi2 = sum(kw_chi2_values)
-    importance_pcts = [(val / total_chi2) * 100.0 for val in kw_chi2_values]
-
-    # Benchmark intersection thresholds (Grand Means)
-    perf_midpoint = float(np.mean(performance_means))
-    imp_midpoint = float(np.mean(importance_pcts))
-
-    quadrant_plot_points = []
-    for idx, col in enumerate(attribute_cols):
-        perf = performance_means[idx]
-        imp = importance_pcts[idx]
-
-        if imp >= imp_midpoint and perf < perf_midpoint:
-            quadrant = "Q1: Concentrate Here (Urgent Action)"
-            strategic_action = "High business driver currently underperforming. Prioritize budget and process re-engineering immediately."
-        elif imp >= imp_midpoint and perf >= perf_midpoint:
-            quadrant = "Q2: Keep Up the Good Work (Key Strength)"
-            strategic_action = "Core equity anchor. Maintain performance standards and leverage in marketing."
-        elif imp < imp_midpoint and perf < perf_midpoint:
-            quadrant = "Q3: Low Priority (Minor Issue)"
-            strategic_action = "Secondary satisfaction driver. Monitor passively; avoid substantial capital allocation."
-        else:
-            quadrant = "Q4: Possible Overkill (Maintain Efficiency)"
-            strategic_action = "High satisfaction on low-impact attribute. Reallocate excess operational effort toward Q1."
-
-        quadrant_plot_points.append({
-            "attribute": col,
-            "performance_mean": round(perf, 2),
-            "kruskal_importance_pct": round(imp, 2),
-            "quadrant": quadrant,
-            "recommendation": strategic_action
-        })
-
-    return {
-        "analysis": "Kruskal Importance-Performance Quadrant Analysis",
-        "target_variable": target_metric_col,
-        "sample_size": len(clean_df),
-        "midpoints": {
-            "performance_midpoint_x": round(perf_midpoint, 2),
-            "importance_midpoint_y": round(imp_midpoint, 2)
-        },
-        "attributes": quadrant_plot_points
-    }
+    """Compatibility wrapper around run_dynamic_kruskal_quadrant_analysis."""
+    return run_dynamic_kruskal_quadrant_analysis(
+        df=df,
+        target_metric_col=target_metric_col,
+        attribute_cols=attribute_cols,
+        weights_col=weights_col
+    )

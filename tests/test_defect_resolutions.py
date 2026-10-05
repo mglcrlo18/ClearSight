@@ -241,6 +241,34 @@ class TestDefectResolutions(unittest.TestCase):
         self.assertEqual(resp.get("status"), "success")
         self.assertEqual(resp.get("results", {}).get("target_variable"), "Repurchase_Intent")
 
+    def test_cs_stat_ipa_dynamic_zero_hardcoding(self):
+        """CS-STAT-IPA-DYNAMIC: Verify 100% dynamic Kruskal IPA on arbitrary dataset with zero hardcoding."""
+        from engine.statistical_suite import run_dynamic_kruskal_quadrant_analysis
+        np.random.seed(42)
+        n = 120
+        df_arb = pd.DataFrame({
+            "voting_intent": np.random.choice([1, 2, 3, 4, 5], size=n),
+            "traffic_management": np.random.choice([1, 2, 3, 4, 5], size=n),
+            "healthcare_access": np.random.choice([1, 2, 3, 4, 5], size=n),
+            "anti_corruption": np.random.choice([1, 2, 3, 4, 5], size=n),
+            "job_creation": np.random.choice([1, 2, 3, 4, 5], size=n)
+        })
+
+        attrs = ["traffic_management", "healthcare_access", "anti_corruption", "job_creation"]
+        res = run_dynamic_kruskal_quadrant_analysis(df_arb, "voting_intent", attrs)
+
+        self.assertNotIn("error", res)
+        self.assertEqual(res["target_variable"], "voting_intent")
+        self.assertEqual(res["sample_size"], n)
+        self.assertIn("cutoffs", res)
+        self.assertIn("performance_midpoint", res["cutoffs"])
+        self.assertEqual(res["cutoffs"]["importance_midpoint"], 25.0)  # 100% / 4 attributes
+
+        for item in res["attributes"]:
+            self.assertIn(item["quadrant_code"], ("Q1", "Q2", "Q3", "Q4"))
+            self.assertIn(item["quadrant_color"], ("#DC2626", "#16A34A", "#94A3B8", "#F59E0B"))
+            self.assertGreater(item["derived_importance_pct"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
