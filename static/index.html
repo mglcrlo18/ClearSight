@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ClearSight - Survey Tabulation & Taglish Insights</title>
+    <link rel="icon" type="image/png" href="/static/app_icon.png">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -146,8 +147,114 @@
                     <span class="toggle-switch"></span>
                 </label>
             </div>
+
+            <!-- Group 4: Tests of Difference (CS-STAT-01 Suite) -->
+            <div class="toggle-group">
+                <div class="toggle-group-title">Tests of Difference</div>
+                <label class="toggle-row">
+                    <span class="toggle-label">Independent T-Test (Welch)</span>
+                    <input type="checkbox" id="toggle_ttest_indep" onchange="runSelectedStatModel('ttest_indep', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Paired Samples T-Test</span>
+                    <input type="checkbox" id="toggle_ttest_paired" onchange="runSelectedStatModel('ttest_paired', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">One-Way / Two-Way ANOVA</span>
+                    <input type="checkbox" id="toggle_anova" onchange="runSelectedStatModel('anova', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Mann-Whitney U Test</span>
+                    <input type="checkbox" id="toggle_mann_whitney" onchange="runSelectedStatModel('mann_whitney', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Wilcoxon Signed-Rank Test</span>
+                    <input type="checkbox" id="toggle_wilcoxon" onchange="runSelectedStatModel('wilcoxon', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Kruskal-Wallis H Test</span>
+                    <input type="checkbox" id="toggle_kruskal_wallis" onchange="runSelectedStatModel('kruskal_wallis', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+
+            <!-- Group 5: Tests of Relationship & Association -->
+            <div class="toggle-group">
+                <div class="toggle-group-title">Relationship & Association</div>
+                <label class="toggle-row">
+                    <span class="toggle-label">Pearson Correlation (r)</span>
+                    <input type="checkbox" id="toggle_pearson_r" onchange="runSelectedStatModel('pearson', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Spearman Rank Correlation (rho)</span>
+                    <input type="checkbox" id="toggle_spearman_rho" onchange="runSelectedStatModel('spearman', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Kendall's Tau-B (tau-b)</span>
+                    <input type="checkbox" id="toggle_kendall_tau" onchange="runSelectedStatModel('kendall', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Point-Biserial Correlation (r_pb)</span>
+                    <input type="checkbox" id="toggle_point_biserial" onchange="runSelectedStatModel('point_biserial', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Chi-Square & Cramér's V</span>
+                    <input type="checkbox" id="toggle_chisq" onchange="runSelectedStatModel('chi_square_assoc', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+
+            <!-- Group 6: Prediction Modeling -->
+            <div class="toggle-group">
+                <div class="toggle-group-title">Prediction Modeling</div>
+                <label class="toggle-row">
+                    <span class="toggle-label">Linear Regression (OLS)</span>
+                    <input type="checkbox" id="toggle_linear_reg" onchange="runSelectedStatModel('linear_reg', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Ordinal Logistic (Prop. Odds)</span>
+                    <input type="checkbox" id="toggle_ordinal_logit" onchange="runSelectedStatModel('ordinal_logit', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Path Analysis / SEM</span>
+                    <input type="checkbox" id="toggle_sem" onchange="runSelectedStatModel('sem', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+
+            <!-- Group 7: Strategic Importance-Performance (IPA) -->
+            <div class="toggle-group">
+                <div class="toggle-group-title">Strategic IPA Analysis</div>
+                <label class="toggle-row">
+                    <span class="toggle-label">Kruskal Quadrant Analysis</span>
+                    <input type="checkbox" id="toggle_quadrant_analysis" onchange="runSelectedStatModel('quadrant', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <button type="button" class="primary-btn" style="margin-top: 10px; width: 100%; padding: 8px 12px; font-size: 11px;" onclick="executeKruskalQuadrantAnalysis()">Run Quadrant Analysis</button>
+            </div>
         </div>
     </div>
+
+    <!-- Advanced Statistical Modal / Result Viewer -->
+    <div id="advanced-stats-modal" class="modal-backdrop hidden" onclick="if(event.target===this)closeAdvancedStatsModal()">
+        <div class="modal-dialog" style="max-width: 680px; max-height: 85vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3 id="advanced-stats-title" style="font-size: 1.1rem; font-weight: 700; color: #111827;">Statistical Analysis Output</h3>
+                <button type="button" class="modal-close-btn" onclick="closeAdvancedStatsModal()">×</button>
+            </div>
+            <div id="advanced-stats-body" style="padding: 16px 20px;"></div>
+        </div>
 
     <h1 class="visually-hidden">ClearSight Survey Tabulation & Analytics</h1>
 
@@ -433,6 +540,8 @@
                             </div>
                         </div>
 
+                        <div class="table-controls-spacer" style="margin-top: 1rem;"></div>
+
                         <!-- Data Presentation Table -->
                         <div class="data-table-scroll">
                             <table class="agency-crosstab-table" id="crosstab-table">
@@ -465,7 +574,8 @@
                                     </tr>
                                     <tr class="meta-row">
                                         <td>Kish Effective Base (Neff)</td>
-                                        <td>389.2</td>\n                                        <td>113.8</td>
+                                        <td>389.2</td>
+                                        <td>113.8</td>
                                         <td>141.6</td>
                                         <td>68.1</td>
                                         <td>65.7</td>

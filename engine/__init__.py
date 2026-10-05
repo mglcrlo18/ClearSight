@@ -10,6 +10,7 @@ from .stats_engine import (
     test_vs_total_benchmark,
     test_means_significance,
     chi_square_independence,
+    calculate_chi_square_df,
     rao_scott_second_order_mrcv,
     apply_fdr_benjamini_hochberg,
     apply_fdr_benjamini_yekutieli
@@ -22,6 +23,19 @@ from .export_engine import (
     generate_thesis_chapter_4_package,
     generate_thesis_excel_tables
 )
+from .statistical_suite import (
+    run_independent_ttest,
+    run_paired_ttest,
+    run_mann_whitney_u,
+    run_wilcoxon_signed_rank,
+    run_kruskal_wallis,
+    run_correlation_matrix,
+    run_chi_square_association,
+    run_linear_regression,
+    run_ordinal_logistic_regression,
+    run_path_analysis_sem,
+    run_kruskal_quadrant_analysis
+)
 
 __all__ = [
     "autodetect_schema",
@@ -33,6 +47,7 @@ __all__ = [
     "test_vs_total_benchmark",
     "test_means_significance",
     "chi_square_independence",
+    "calculate_chi_square_df",
     "rao_scott_second_order_mrcv",
     "apply_fdr_benjamini_hochberg",
     "apply_fdr_benjamini_yekutieli",
@@ -43,5 +58,16 @@ __all__ = [
     "generate_excel_banner_book",
     "generate_customer_voice_snapshot_html",
     "generate_thesis_chapter_4_package",
-    "generate_thesis_excel_tables"
+    "generate_thesis_excel_tables",
+    "run_independent_ttest",
+    "run_paired_ttest",
+    "run_mann_whitney_u",
+    "run_wilcoxon_signed_rank",
+    "run_kruskal_wallis",
+    "run_correlation_matrix",
+    "run_chi_square_association",
+    "run_linear_regression",
+    "run_ordinal_logistic_regression",
+    "run_path_analysis_sem",
+    "run_kruskal_quadrant_analysis"
 ]

@@ -652,6 +652,10 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.handle_stats_turf(body_bytes)
         elif path == "/api/stats/key-drivers":
             self.handle_stats_key_drivers(body_bytes)
+        elif path == "/api/stats/quadrant-analysis":
+            self.handle_stats_quadrant(body_bytes)
+        elif path == "/api/stats/advanced-models":
+            self.handle_stats_advanced_models(body_bytes)
         elif path == "/api/settings/analysis":
             self.handle_settings_analysis(body_bytes)
         elif path in ["/api/export/save-to-downloads", "/api/export/save-snapshot-to-downloads", "/api/export/save-thesis-to-downloads"]:
@@ -1047,6 +1051,152 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 "path": target_html,
                 "filename": "ClearSight_Thesis_Chapter_4_Package.html"
             })
+
+    def handle_stats_quadrant(self, body_bytes: bytes):
+        """Executes Kruskal-derived Importance-Performance Analysis on demand (CS-STAT-01 / IPA)."""
+        try:
+            req = json.loads(body_bytes.decode('utf-8')) if body_bytes else {}
+            target_col = req.get('target', 'Overall_CSAT')
+            attrs = req.get('attributes', [])
+            with SESSION_LOCK:
+                df = SESSION.get('df')
+            if df is None:
+                self.send_json_response({"status": "error", "message": "No dataset loaded"}, 400)
+                return
+            if not attrs:
+                # Autodetect candidate rating scale / numeric attributes excluding target
+                attrs = [
+                    c for c in df.columns 
+                    if c != target_col and not str(c).startswith("__") 
+                    and pd.api.types.is_numeric_dtype(df[c])
+                ][:8]
+            from engine.statistical_suite import run_kruskal_quadrant_analysis
+            results = run_kruskal_quadrant_analysis(df, attrs, target_col)
+            self.send_json_response({"status": "success", "results": results})
+        except Exception as e:
+            logging.exception(f"Quadrant analysis error: {e}")
+            self.send_json_response({"status": "error", "message": str(e)}, 500)
+
+    def handle_stats_advanced_models(self, body_bytes: bytes):
+        """Executes user-toggled advanced statistical models on demand."""
+        try:
+            req = json.loads(body_bytes.decode('utf-8')) if body_bytes else {}
+            model_type = req.get('model_type', 'linear_reg')
+            target_col = req.get('target')
+            predictor_cols = req.get('predictors', [])
+            group_col = req.get('group_by')
+            var_x = req.get('var_x')
+            var_y = req.get('var_y')
+
+            with SESSION_LOCK:
+                df = SESSION.get('df')
+            if df is None:
+                self.send_json_response({"status": "error", "message": "No dataset loaded"}, 400)
+                return
+
+            from engine.statistical_suite import (
+                run_independent_ttest,
+                run_paired_ttest,
+                run_mann_whitney_u,
+                run_wilcoxon_signed_rank,
+                run_kruskal_wallis,
+                run_correlation_matrix,
+                run_chi_square_association,
+                run_linear_regression,
+                run_ordinal_logistic_regression,
+                run_path_analysis_sem
+            )
+
+            results = {}
+            if model_type == "linear_reg":
+                if not target_col or not predictor_cols:
+                    self.send_json_response({"status": "error", "message": "target and predictors required"}, 400)
+                    return
+                clean = df.dropna(subset=[target_col] + predictor_cols)
+                X = clean[predictor_cols].to_numpy(dtype=float)
+                y = clean[target_col].to_numpy(dtype=float)
+                results = run_linear_regression(X, y, predictor_cols)
+
+            elif model_type == "ordinal_logit":
+                if not target_col or not predictor_cols:
+                    self.send_json_response({"status": "error", "message": "target and predictors required"}, 400)
+                    return
+                clean = df.dropna(subset=[target_col] + predictor_cols)
+                X = clean[predictor_cols].to_numpy(dtype=float)
+                y = clean[target_col].to_numpy(dtype=float)
+                results = run_ordinal_logistic_regression(X, y, predictor_cols)
+
+            elif model_type in ("pearson", "spearman", "kendall", "point_biserial"):
+                if not var_x or not var_y:
+                    self.send_json_response({"status": "error", "message": "var_x and var_y required"}, 400)
+                    return
+                clean = df.dropna(subset=[var_x, var_y])
+                x = clean[var_x].to_numpy(dtype=float)
+                y = clean[var_y].to_numpy(dtype=float)
+                results = run_correlation_matrix(x, y, test_type=model_type)
+
+            elif model_type == "ttest_indep":
+                if not var_x or not group_col:
+                    self.send_json_response({"status": "error", "message": "var_x and group_by required"}, 400)
+                    return
+                groups = df[group_col].dropna().unique()
+                if len(groups) < 2:
+                    self.send_json_response({"status": "error", "message": "group_by requires at least 2 distinct groups"}, 400)
+                    return
+                sa = df.loc[df[group_col] == groups[0], var_x].dropna().to_numpy(dtype=float)
+                sb = df.loc[df[group_col] == groups[1], var_x].dropna().to_numpy(dtype=float)
+                results = run_independent_ttest(sa, sb)
+
+            elif model_type == "ttest_paired":
+                if not var_x or not var_y:
+                    self.send_json_response({"status": "error", "message": "var_x and var_y required"}, 400)
+                    return
+                clean = df.dropna(subset=[var_x, var_y])
+                results = run_paired_ttest(clean[var_x].to_numpy(dtype=float), clean[var_y].to_numpy(dtype=float))
+
+            elif model_type == "mann_whitney":
+                if not var_x or not group_col:
+                    self.send_json_response({"status": "error", "message": "var_x and group_by required"}, 400)
+                    return
+                groups = df[group_col].dropna().unique()
+                if len(groups) < 2:
+                    self.send_json_response({"status": "error", "message": "group_by requires at least 2 distinct groups"}, 400)
+                    return
+                g1 = df.loc[df[group_col] == groups[0], var_x].dropna().to_numpy(dtype=float)
+                g2 = df.loc[df[group_col] == groups[1], var_x].dropna().to_numpy(dtype=float)
+                results = run_mann_whitney_u(g1, g2)
+
+            elif model_type == "wilcoxon":
+                if not var_x or not var_y:
+                    self.send_json_response({"status": "error", "message": "var_x and var_y required"}, 400)
+                    return
+                clean = df.dropna(subset=[var_x, var_y])
+                results = run_wilcoxon_signed_rank(clean[var_x].to_numpy(dtype=float), clean[var_y].to_numpy(dtype=float))
+
+            elif model_type == "kruskal_wallis":
+                if not var_x or not group_col:
+                    self.send_json_response({"status": "error", "message": "var_x and group_by required"}, 400)
+                    return
+                groups_list = [df.loc[df[group_col] == g, var_x].dropna().to_numpy(dtype=float) for g in df[group_col].dropna().unique()]
+                results = run_kruskal_wallis(groups_list)
+
+            elif model_type == "sem":
+                if not predictor_cols or not target_col:
+                    self.send_json_response({"status": "error", "message": "predictors and target required"}, 400)
+                    return
+                all_vars = predictor_cols + [target_col]
+                clean = df.dropna(subset=all_vars)
+                corr = np.corrcoef(clean[all_vars].to_numpy(dtype=float), rowvar=False)
+                results = run_path_analysis_sem(corr, all_vars, len(all_vars) - 1)
+
+            else:
+                self.send_json_response({"status": "error", "message": f"Unsupported model_type '{model_type}'"}, 400)
+                return
+
+            self.send_json_response({"status": "success", "results": results})
+        except Exception as e:
+            logging.exception(f"Advanced models error: {e}")
+            self.send_json_response({"status": "error", "message": str(e)}, 500)
 
     def execute_tabulation(self, df, banner_cols, stubs, confidence=95, fdr_enabled=True, metric="pct"):
         """Computes cross-tabulation table with rigorous dual significance testing on real microdata."""

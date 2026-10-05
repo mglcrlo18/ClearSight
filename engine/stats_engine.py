@@ -499,6 +499,15 @@ def test_means_significance(
     return float(t_stat), float(p_val), is_small_base
 
 
+def calculate_chi_square_df(observed_matrix: np.ndarray) -> int:
+    """Filter out rows or columns that sum to 0 and calculate degrees of freedom strictly on non-zero margins (CS-STAT-01)."""
+    valid_rows = np.sum(observed_matrix, axis=1) > 0
+    valid_cols = np.sum(observed_matrix, axis=0) > 0
+    r = int(np.sum(valid_rows))
+    c = int(np.sum(valid_cols))
+    return max(1, (r - 1) * (c - 1))
+
+
 def chi_square_independence(contingency_table: np.ndarray) -> tuple[float, int, float]:
     """Computes Pearson Chi-Square test of independence on a contingency table."""
     r, c = contingency_table.shape
@@ -515,7 +524,7 @@ def chi_square_independence(contingency_table: np.ndarray) -> tuple[float, int, 
     expected = (row_sums @ col_sums) / total
     valid = expected > 0
     chi2 = float(np.sum(((contingency_table[valid] - expected[valid]) ** 2) / expected[valid]))
-    df = int((r - 1) * (c - 1))
+    df = calculate_chi_square_df(contingency_table)
 
     if HAS_SCIPY:
         p_val = float(sp_stats.chi2.sf(chi2, df))

@@ -1727,6 +1727,139 @@ function dropStub(ev) {
     addStubPill(dataVar);
 }
 
+// ==========================================
+// Advanced Statistical Analysis Suite (On Demand / Non-Automated)
+// ==========================================
+function closeAdvancedStatsModal() {
+    const modal = document.getElementById('advanced-stats-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function showAdvancedStatsModal(title, contentHtml) {
+    const modal = document.getElementById('advanced-stats-modal');
+    const titleEl = document.getElementById('advanced-stats-title');
+    const bodyEl = document.getElementById('advanced-stats-body');
+    if (!modal || !titleEl || !bodyEl) return;
+    titleEl.textContent = title;
+    bodyEl.innerHTML = contentHtml;
+    modal.classList.remove('hidden');
+}
+
+async function runSelectedStatModel(modelType, isChecked) {
+    if (!isChecked) {
+        showToast(`Model ${modelType} deactivated.`);
+        return;
+    }
+
+    showToast(`Running ${modelType} model on active dataset...`);
+    try {
+        let payload = { model_type: modelType };
+        if (modelType === 'linear_reg' || modelType === 'ordinal_logit') {
+            payload.target = 'Overall_CSAT';
+            payload.predictors = ['Survey_Duration_Sec', 'Repurchase_Intent'];
+        } else if (modelType === 'sem') {
+            payload.target = 'Overall_CSAT';
+            payload.predictors = ['Repurchase_Intent', 'Survey_Duration_Sec'];
+        } else if (['pearson', 'spearman', 'kendall', 'point_biserial'].includes(modelType)) {
+            payload.var_x = 'Overall_CSAT';
+            payload.var_y = 'Repurchase_Intent';
+        } else if (modelType === 'ttest_indep' || modelType === 'mann_whitney') {
+            payload.var_x = 'Overall_CSAT';
+            payload.group_by = 'Gender';
+        } else if (modelType === 'ttest_paired' || modelType === 'wilcoxon') {
+            payload.var_x = 'Overall_CSAT';
+            payload.var_y = 'Repurchase_Intent';
+        } else if (modelType === 'anova' || modelType === 'kruskal_wallis') {
+            payload.var_x = 'Overall_CSAT';
+            payload.group_by = 'Region';
+        } else if (modelType === 'quadrant') {
+            executeKruskalQuadrantAnalysis();
+            return;
+        }
+
+        const res = await fetch('/api/stats/advanced-models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.status === 'success' && data.results) {
+            const r = data.results;
+            let html = `<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 0.85rem; line-height: 1.6; color: #1E293B;">`;
+            html += `<div style="font-weight: 700; font-size: 1rem; margin-bottom: 8px; color: #E10600;">${r.model || r.test || 'Model Output'}</div>`;
+            if (r.r_squared !== undefined) html += `<div><b>R²:</b> ${r.r_squared} | <b>Adj. R²:</b> ${r.adj_r_squared}</div>`;
+            if (r.f_stat !== undefined) html += `<div><b>ANOVA F:</b> ${r.f_stat} (p = ${r.f_pval})</div>`;
+            if (r.t_stat !== undefined) html += `<div><b>t-statistic:</b> ${r.t_stat} | <b>df:</b> ${r.df || 'N/A'} | <b>p:</b> ${r.p_val}</div>`;
+            if (r.h_stat !== undefined) html += `<div><b>H-statistic:</b> ${r.h_stat} | <b>df:</b> ${r.df} | <b>p:</b> ${r.p_val}</div>`;
+            if (r.u_stat !== undefined) html += `<div><b>U-statistic:</b> ${r.u_stat} | <b>p:</b> ${r.p_val}</div>`;
+            if (r.w_stat !== undefined) html += `<div><b>W-statistic:</b> ${r.w_stat} | <b>p:</b> ${r.p_val}</div>`;
+            if (r.coefficient !== undefined) html += `<div><b>Coefficient:</b> ${r.coefficient} (p = ${r.p_val}, N = ${r.n})</div>`;
+            if (r.coefficients) {
+                html += `<table style="width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 0.8rem;">
+                    <thead><tr style="border-bottom: 2px solid #CBD5E1; text-align: left;">
+                        <th style="padding: 4px;">Term</th><th style="padding: 4px;">Coef (B)</th><th style="padding: 4px;">SE</th><th style="padding: 4px;">t</th><th style="padding: 4px;">p</th>
+                    </tr></thead><tbody>`;
+                r.coefficients.forEach(c => {
+                    html += `<tr style="border-bottom: 1px solid #E2E8F0;">
+                        <td style="padding: 4px;"><b>${c.term}</b></td><td style="padding: 4px;">${c.coef}</td><td style="padding: 4px;">${c.se}</td><td style="padding: 4px;">${c.t_stat}</td><td style="padding: 4px;">${c.p_val}</td>
+                    </tr>`;
+                });
+                html += `</tbody></table>`;
+            }
+            if (r.path_coefficients) {
+                html += `<div style="margin-top: 10px;"><b>Path Estimates:</b></div>`;
+                r.path_coefficients.forEach(p => {
+                    html += `<div>• ${p.path}: β = ${p.standardized_beta}</div>`;
+                });
+                if (r.fit_indices) {
+                    html += `<div style="margin-top: 6px; font-size: 0.78rem; color: #475569;">CFI = ${r.fit_indices.CFI}, TLI = ${r.fit_indices.TLI}, RMSEA = ${r.fit_indices.RMSEA}</div>`;
+                }
+            }
+            html += `</div>`;
+            showAdvancedStatsModal(r.model || r.test || 'Model Results', html);
+        } else {
+            showToast(data.message || 'Execution failed', true);
+        }
+    } catch (err) {
+        showToast(`Model execution error: ${err.message}`, true);
+    }
+}
+
+async function executeKruskalQuadrantAnalysis() {
+    showToast("Executing Kruskal Importance-Performance Quadrant Analysis (IPA)...");
+    try {
+        const res = await fetch('/api/stats/quadrant-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target: 'Overall_CSAT' })
+        });
+        const data = await res.json();
+        if (data.status === 'success' && data.results && data.results.attributes) {
+            const r = data.results;
+            let html = `<div style="font-size: 0.85rem; line-height: 1.5; color: #1E293B;">`;
+            html += `<div style="margin-bottom: 12px; font-weight: 600; color: #334155;">Target: <b>${r.target_variable}</b> (N = ${r.sample_size}) | Midpoints: Perf = ${r.midpoints.performance_midpoint_x}, Importance = ${r.midpoints.importance_midpoint_y}%</div>`;
+            html += `<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">`;
+            r.attributes.forEach(attr => {
+                const isQ1 = attr.quadrant.startsWith("Q1");
+                const borderClr = isQ1 ? "#E10600" : "#CBD5E1";
+                const bgClr = isQ1 ? "#FEF2F2" : "#F8FAFC";
+                html += `<div style="border: 1px solid ${borderClr}; background: ${bgClr}; border-radius: 8px; padding: 10px 12px;">
+                    <div style="font-weight: 700; color: #0F172A; font-size: 0.9rem;">${attr.attribute}</div>
+                    <div style="font-size: 0.78rem; color: #475569; margin: 4px 0;">Performance: <b>${attr.performance_mean}</b> | Derived Imp: <b>${attr.kruskal_importance_pct}%</b></div>
+                    <div style="font-size: 0.75rem; font-weight: 700; color: ${isQ1 ? '#B91C1C' : '#1E40AF'};">${attr.quadrant}</div>
+                    <div style="font-size: 0.72rem; color: #64748B; margin-top: 4px;">${attr.recommendation}</div>
+                </div>`;
+            });
+            html += `</div></div>`;
+            showAdvancedStatsModal("Kruskal Importance-Performance (IPA) Matrix", html);
+        } else {
+            showToast(data.message || 'Quadrant analysis failed', true);
+        }
+    } catch (err) {
+        showToast(`IPA error: ${err.message}`, true);
+    }
+}
+
 // Initialize on Load
 document.addEventListener('DOMContentLoaded', () => {
     renderTable();

@@ -15,6 +15,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         NSApp.setActivationPolicy(.regular)
         setupMainMenu()
 
+        // Set native macOS Dock icon from official brand logo mark
+        let iconPaths = [
+            Bundle.main.path(forResource: "app_icon", ofType: "png"),
+            "app_icon.png",
+            "static/app_icon.png"
+        ].compactMap { $0 }
+        for path in iconPaths {
+            if FileManager.default.fileExists(atPath: path), let img = NSImage(contentsOfFile: path) {
+                NSApp.applicationIconImage = img
+                break
+            }
+        }
+
         let screenRect = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 920)
         let windowWidth: CGFloat = min(1440, screenRect.width * 0.94)
         let windowHeight: CGFloat = min(920, screenRect.height * 0.92)
