@@ -19,6 +19,57 @@ let isCodeframeLocked = false;
 let sigDisplayMode = 'both'; // 'both', 'letters', 'bench'
 let loadedDatasetInfo = null;
 
+const ANALYSIS_CONFIG = {
+    stats: {
+        rao_scott_2: true,
+        chi_square: true,
+        welch_anova: true,
+        fdr_benjamini_hochberg: true
+    },
+    hygiene: {
+        rim_weighting: true,
+        quarantine_straightliners: true,
+        quarantine_speeders: true
+    },
+    nlp: {
+        pii_masking: true,
+        contrastive_clause_weighting: true,
+        review_queue_routing: true
+    }
+};
+
+async function syncAnalysisConfig() {
+    try {
+        const response = await fetch('/api/settings/analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ANALYSIS_CONFIG)
+        });
+        return await response.json();
+    } catch (e) {
+        console.error('Failed to sync analysis config:', e);
+    }
+}
+
+function updateAnalysisToggle(category, key, value) {
+    if (ANALYSIS_CONFIG[category]) {
+        ANALYSIS_CONFIG[category][key] = Boolean(value);
+        syncAnalysisConfig();
+        showToast("Analysis setting updated: " + key + " = " + (value ? "ON" : "OFF"));
+        if (category === 'stats' || category === 'hygiene') {
+            renderTable();
+        }
+    }
+}
+
+function toggleAnalysisPanel() {
+    const drawer = document.getElementById('analysis-toggles-drawer');
+    if (drawer) {
+        drawer.classList.toggle('hidden');
+    }
+}
+
+
 // 1. Navigation Stepper
 function switchStep(stepNum) {
     document.querySelectorAll('.step-btn').forEach((btn, idx) => {
@@ -60,7 +111,7 @@ function handleFileDrop(event) {
 }
 
 function uploadDataFile(file) {
-    showToast(`⏳ Reading & sanitizing "${file.name}" locally...`);
+    showToast(`Reading & sanitizing "${file.name}" locally...`);
 
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -79,7 +130,7 @@ function uploadDataFile(file) {
                 loadedDatasetInfo = data;
                 applyIngestedSummary(data);
                 resetTraysForDataset(data);
-                showToast(`✓ Ingested ${data.total_respondents} records from "${data.filename}"`);
+                showToast(`Ingested ${data.total_respondents} records from "${data.filename}"`);
                 renderTable();
             } else {
                 showToast(`Error: ${data.message || 'Failed to parse file'}`, true);
@@ -116,7 +167,7 @@ function resetTraysForDataset(data) {
 }
 
 function loadSampleDataset() {
-    showToast("⏳ Loading bundled Philippine Consumer Survey...");
+    showToast("Loading bundled Philippine Consumer Survey...");
     fetch('/api/load-sample', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
@@ -124,7 +175,7 @@ function loadSampleDataset() {
                 loadedDatasetInfo = data;
                 applyIngestedSummary(data);
                 resetTraysForDataset(data);
-                showToast("✓ Loaded sample survey (n = 412) into local memory");
+                showToast("Loaded sample survey (n = 412) into local memory");
                 renderTable();
             } else {
                 showToast(`Error: ${data.message}`, true);
@@ -219,7 +270,7 @@ function executeWeighting() {
                 effDisp.style.color = diag.converged ? "#10B981" : "#FF6B66";
             }
             if (neffDisp) neffDisp.innerText = diag.kish_n_eff;
-            showToast(`✓ Raking converged in ${diag.iterations} iterations (Neff: ${diag.kish_n_eff})`);
+            showToast(`Raking converged in ${diag.iterations} iterations (Neff: ${diag.kish_n_eff})`);
             renderTable();
         } else {
             showToast(`Weighting error: ${data.message || 'Convergence failure'}`, true);
@@ -479,7 +530,7 @@ function addBannerFromInput() {
     input.value = "";
     refreshBannerPillLabels();
     renderTable();
-    showToast(`✓ Added ${totalAdded} banner column(s)`);
+    showToast(`Added ${totalAdded} banner column(s)`);
 }
 
 function handleBannerInputKey(e) {
@@ -494,7 +545,7 @@ function addStubFromInput() {
     if (!input || !input.value.trim()) return;
     input.value.split(',').forEach(p => addStubPill(p.trim()));
     input.value = "";
-    showToast("✓ Added stub variable(s)");
+    showToast("Added stub variable(s)");
 }
 
 function handleStubInputKey(e) {
@@ -508,7 +559,7 @@ function addStubFromDrawer(elem) {
     const varName = elem.getAttribute('data-var');
     if (varName) {
         addStubPill(varName);
-        showToast(`✓ Added "${varName}" to Stubs`);
+        showToast(`Added "${varName}" to Stubs`);
     }
 }
 
@@ -541,7 +592,7 @@ function addBannerPreset(type) {
 
     refreshBannerPillLabels();
     renderTable();
-    showToast(`✓ Added ${type.toUpperCase()} banner columns`);
+    showToast(`Added ${type.toUpperCase()} banner columns`);
 }
 
 function setBannerPreset(type) {
@@ -564,7 +615,7 @@ function addAllDemographicsPreset() {
     allItems.forEach(item => tray.appendChild(createPill(item, false)));
     refreshBannerPillLabels();
     renderTable();
-    showToast("✓ Stacked all 12 Demographic Banner Columns!");
+    showToast("Stacked all 12 Demographic Banner Columns!");
 }
 
 function clearBanners() {
@@ -592,7 +643,7 @@ function setStubPreset(type) {
         tray.appendChild(createPill("Monthly Income Class (SEC)", true));
     }
     renderTable();
-    showToast(`✓ Applied ${type.toUpperCase()} stub preset`);
+    showToast(`Applied ${type.toUpperCase()} stub preset`);
 }
 
 function clearStubs() {
@@ -1003,7 +1054,7 @@ function renderTableFromData(tables) {
         const tbody = document.getElementById('table-body');
         if (tbody) {
             tbody.innerHTML = `<tr><td colspan="99" style="text-align:center; padding: 2.5rem 1.5rem; color: #dc2626; font-weight: 500;">
-                <div style="font-size: 1.05rem; margin-bottom: 0.35rem;">⚠ ${escapeHtml(t.error)}</div>
+                <div style="font-size: 1.05rem; margin-bottom: 0.35rem;">Warning: ${escapeHtml(t.error)}</div>
                 <div style="font-size: 0.85rem; color: #64748B; font-weight: normal;">Please choose a variable from the Survey Variables drawer or check the spelling.</div>
             </td></tr>`;
         }
@@ -1081,7 +1132,7 @@ function renderTableFromData(tables) {
             trGroup.className = 'stub-group-header';
             const tdGroup = document.createElement('td');
             tdGroup.colSpan = (tbl.banner_cols || []).length + 1;
-            tdGroup.textContent = `📁 ${tbl.title}`;
+            tdGroup.textContent = `${tbl.title}`;
             trGroup.appendChild(tdGroup);
             tbody.appendChild(trGroup);
         }
@@ -1330,7 +1381,7 @@ async function submitCoderCorrection(responseId, codeId, sentiment, row) {
         const data = await res.json();
         if (res.ok && data.status === 'success') {
             row.remove();
-            showToast(`✓ Correction saved (${data.corrections} stored locally)`);
+            showToast(`Correction saved (${data.corrections} stored locally)`);
         } else {
             showToast(`Correction not saved: ${data.message || res.status}`);
         }
@@ -1404,7 +1455,7 @@ function executePromptToTable() {
     const origBtnText = btn ? btn.textContent : 'Generate Custom Table';
 
     if (btn) {
-        btn.textContent = "⚡ Computing Matrix & Sig...";
+        btn.textContent = "Computing Matrix & Sig...";
         btn.classList.add('loading-pulse');
         btn.disabled = true;
     }
@@ -1467,7 +1518,7 @@ function executePromptToTable() {
         renderTable();
 
         if (btn) {
-            btn.textContent = "✓ Generated!";
+            btn.textContent = "Generated!";
             btn.classList.remove('loading-pulse');
             setTimeout(() => {
                 btn.textContent = origBtnText;
@@ -1475,7 +1526,7 @@ function executePromptToTable() {
             }, 800);
         }
 
-        showToast("✓ Custom Table & Dual Significance Matrix updated!");
+        showToast("Custom Table & Dual Significance Matrix updated!");
     }, 240);
 }
 
@@ -1486,15 +1537,15 @@ function toggleLock() {
     if (!btn) return;
 
     if (isCodeframeLocked) {
-        btn.textContent = "🔓 Unlock Codeframe";
+        btn.textContent = "Unlock Codeframe";
         btn.style.background = "#10B981";
         btn.style.color = "#FFFFFF";
-        showToast("🔒 Codeframe locked for client audit.");
+        showToast("Codeframe locked for client audit.");
     } else {
-        btn.textContent = "🔒 Lock Codeframe";
+        btn.textContent = "Lock Codeframe";
         btn.style.background = "rgba(255, 212, 0, 0.15)";
         btn.style.color = "var(--volt-yellow)";
-        showToast("🔓 Codeframe unlocked for reviewer calibration.");
+        showToast("Codeframe unlocked for reviewer calibration.");
     }
 }
 
@@ -1502,7 +1553,7 @@ async function handleCodeframeUpload(event) {
     const file = event.target.files && event.target.files[0];
     if (!file) return;
 
-    showToast(`⏳ Reading "${file.name}"...`);
+    showToast(`Reading "${file.name}"...`);
     const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
 
     if (isExcel) {
@@ -1521,7 +1572,7 @@ async function handleCodeframeUpload(event) {
                 const count = data.topics_count || (data.codeframe && data.codeframe.topics ? data.codeframe.topics.length : 'Custom');
                 const lbl = document.getElementById('active-codeframe-label');
                 if (lbl) lbl.textContent = `Active: ${escapeHtml((data.codeframe && data.codeframe.name) || file.name)} (${count} Categories)`;
-                showToast(`✓ Dynamic Excel codeframe loaded: ${count} categories parsed.`);
+                showToast(`Dynamic Excel codeframe loaded: ${count} categories parsed.`);
                 loadTaglishCoding();
             } else {
                 showToast('Codeframe upload failed: ' + (data.message || 'Unknown error'), true);
@@ -1568,7 +1619,7 @@ async function handleCodeframeUpload(event) {
 }
 
 function downloadVerticalCodeframe() {
-    showToast("⏳ Generating vertical Excel codeframe (.xlsx)...");
+    showToast("Generating vertical Excel codeframe (.xlsx)...");
     window.location.href = "/api/export/vertical-codeframe";
 }
 
@@ -1600,15 +1651,15 @@ function triggerFileDownload(url, filename) {
 
 function downloadExcel() {
     const btn = document.getElementById('btn-dl-excel');
-    const origText = btn ? btn.textContent : '📥 Download Excel Banner Book';
-    if (btn) { btn.textContent = "⏳ Generating Banner Book..."; btn.disabled = true; }
+    const origText = btn ? btn.textContent : 'Download Excel Banner Book';
+    if (btn) { btn.textContent = "Generating Banner Book..."; btn.disabled = true; }
 
     fetch('/api/export/save-to-downloads', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (btn) { btn.textContent = origText; btn.disabled = false; }
             if (data.status === 'success') {
-                showToast("✓ Saved directly to Downloads folder!");
+                showToast("Saved directly to Downloads folder!");
                 triggerFileDownload('/api/export/excel', 'ClearSight_Agency_Banner_Book.xlsx');
                 return;
             }
@@ -1619,50 +1670,40 @@ function downloadExcel() {
         .catch(err => {
             if (btn) { btn.textContent = origText; btn.disabled = false; }
             triggerFileDownload('/api/export/excel', 'ClearSight_Agency_Banner_Book.xlsx');
-            showToast("✓ Downloading Banner Book via direct stream...");
+            showToast("Downloading Banner Book via direct stream...");
         });
 }
 
 function downloadSnapshot() {
     const btn = document.getElementById('btn-dl-snapshot');
-    const origText = btn ? btn.textContent : '📥 Download 1-Page A4 Snapshot';
-    if (btn) { btn.textContent = "⏳ Generating A4 Snapshot..."; btn.disabled = true; }
+    const origText = btn ? btn.textContent : 'Download 1-Page A4 Snapshot';
+    if (btn) { btn.textContent = "Generating A4 Snapshot..."; btn.disabled = true; }
 
     fetch('/api/export/save-snapshot-to-downloads', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (btn) { btn.textContent = origText; btn.disabled = false; }
             if (data.status === 'success') {
-                showToast("✓ Saved A4 Snapshot directly to Downloads folder!");
+                showToast("Saved A4 Snapshot directly to Downloads folder!");
             }
             triggerFileDownload('/api/export/snapshot-download', 'ClearSight_Customer_Voice_Snapshot_A4.html');
         })
         .catch(err => {
             if (btn) { btn.textContent = origText; btn.disabled = false; }
             triggerFileDownload('/api/export/snapshot-download', 'ClearSight_Customer_Voice_Snapshot_A4.html');
-            showToast("✓ Downloading A4 Snapshot directly...");
+            showToast("Downloading A4 Snapshot directly...");
         });
 }
 
-function downloadThesisTables() {
-    const btn = document.getElementById('btn-dl-thesis');
-    const origText = btn ? btn.textContent : '📥 Download Academic Tables';
-    if (btn) { btn.textContent = "⏳ Generating Thesis Tables..."; btn.disabled = true; }
 
-    fetch('/api/export/save-thesis-to-downloads', { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (btn) { btn.textContent = origText; btn.disabled = false; }
-            if (data.status === 'success') {
-                showToast("✓ Saved Thesis Chapter 4 Package to Downloads folder!");
-            }
-            triggerFileDownload('/api/export/thesis-download', 'ClearSight_Thesis_Chapter_4_Package.html');
-        })
-        .catch(err => {
-            if (btn) { btn.textContent = origText; btn.disabled = false; }
-            triggerFileDownload('/api/export/thesis-download', 'ClearSight_Thesis_Chapter_4_Package.html');
-            showToast("✓ Downloading Thesis Chapter 4 Package directly...");
-        });
+function downloadThesisTables() {
+    showToast("Generating APA 7th Edition Academic Tables (.xlsx)...");
+    triggerFileDownload('/api/export/thesis-tables', 'ClearSight_APA_Academic_Tables.xlsx');
+}
+
+function downloadThesisDocx() {
+    showToast("Generating Thesis Chapter 4 Package (.html)...");
+    triggerFileDownload('/api/export/thesis-docx', 'ClearSight_Thesis_Chapter_4_Package.html');
 }
 
 // Drag & Drop

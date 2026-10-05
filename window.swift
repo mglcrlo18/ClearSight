@@ -95,17 +95,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         }
     }
 
-    // MARK: - Native WebKit Open Panel (File Picker) Handling (CS-101)
+    // MARK: - Native WebKit Open Panel (File Picker) Handling (CS-101 / CS-103)
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
         let openPanel = NSOpenPanel()
         openPanel.canChooseFiles = true
         openPanel.canChooseDirectories = false
         openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        if #available(macOS 11.0, *) {
-            openPanel.allowedContentTypes = [.json]
-        } else {
-            openPanel.allowedFileTypes = ["json"]
-        }
+        openPanel.allowedFileTypes = ["json", "xlsx", "xls", "csv"]
         openPanel.beginSheetModal(for: self.window) { response in
             if response == .OK {
                 completionHandler(openPanel.urls)

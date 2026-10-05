@@ -1,38 +1,141 @@
 /* 
-ClearSight - Kinetic & Tactile macOS Design System
-Palette: Ignition Red
-- Main: Launch Red (#E10600)
-- Base: Carbon Black (#111111)
-- Accent: Volt Yellow (#FFD400)
-- Neutral: Off-white (#F5F3EF)
-Physics: 120Hz ProMotion fluid spring damping
+ClearSight - Executive White, Launch Red & Carbon Black (Pass 9, CS-106)
+Canvas: #FFFFFF
+Surface: #F9FAFB
+Border: #E5E7EB
+Accent: Launch Red (#E10600)
+Text: Carbon Black (#111827)
+Muted: #4B5563
+Physics: Critically damped harmonic spring curve cubic-bezier(0.16, 1, 0.3, 1)
 */
 
 :root {
-    --carbon-bg: #111111;
-    --carbon-surface: #181818;
-    --carbon-card: #222222;
-    --carbon-elevated: #2A2A2A;
+    --canvas-bg: #FFFFFF;
+    --surface-bg: #F9FAFB;
+    --card-bg: #FFFFFF;
+    --elevated-bg: #F3F4F6;
+    
+    --carbon-bg: #FFFFFF;
+    --carbon-surface: #F9FAFB;
+    --carbon-card: #FFFFFF;
+    --carbon-elevated: #F3F4F6;
     
     --launch-red: #E10600;
     --launch-red-hover: #C50500;
-    --launch-red-glow: rgba(225, 6, 0, 0.4);
+    --launch-red-glow: rgba(225, 6, 0, 0.15);
     
-    --volt-yellow: #FFD400;
-    --volt-yellow-hover: #E6BE00;
-    --volt-yellow-glow: rgba(255, 212, 0, 0.35);
+    --volt-yellow: #B45309;
+    --volt-yellow-hover: #92400E;
+    --volt-yellow-glow: rgba(180, 83, 9, 0.15);
     
-    --off-white: #F5F3EF;
-    --off-white-muted: #D1CEC7;
-    --text-muted: #8E8B85;
+    --off-white: #111827;
+    --off-white-muted: #4B5563;
+    --text-primary: #111827;
+    --text-muted: #4B5563;
+    --text-subtle: #6B7280;
     
-    --border-subtle: rgba(245, 243, 239, 0.1);
+    --border-neutral: #E5E7EB;
+    --border-subtle: #E5E7EB;
     --border-focus: rgba(225, 6, 0, 0.6);
-    --glass-bg: rgba(24, 24, 24, 0.85);
+    --glass-bg: rgba(255, 255, 255, 0.98);
     
-    --shadow-tactile: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-    --shadow-elevated: 0 20px 35px -10px rgba(0, 0, 0, 0.85), 0 0 20px rgba(225, 6, 0, 0.3);
-    --spring-physics: cubic-bezier(0.34, 1.4, 0.64, 1);
+    --shadow-tactile: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-elevated: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    
+    --ease-critically-damped: cubic-bezier(0.16, 1, 0.3, 1);
+    --spring-physics: cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-fast: 150ms var(--ease-critically-damped);
+    --transition-normal: 250ms var(--ease-critically-damped);
+}
+
+/* Universal Analysis Toggles Drawer (CS-102) */
+.analysis-toggles-trigger {
+    background: #FFFFFF;
+    color: #111827;
+    border: 1px solid #E5E7EB;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-fast);
+}
+.analysis-toggles-trigger:hover {
+    border-color: #E10600;
+    color: #E10600;
+}
+.analysis-drawer {
+    background: #FFFFFF;
+    border-bottom: 2px solid #E10600;
+    box-shadow: var(--shadow-elevated);
+    padding: 18px 28px;
+    transition: var(--transition-normal);
+}
+.analysis-drawer.hidden {
+    display: none;
+}
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.drawer-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+    font-size: 14px;
+    color: #111827;
+}
+.drawer-close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    line-height: 1;
+    color: #6B7280;
+    cursor: pointer;
+}
+.drawer-close-btn:hover {
+    color: #111827;
+}
+.drawer-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+.toggle-group {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 14px 16px;
+}
+.toggle-group-title {
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #E10600;
+    margin-bottom: 12px;
+}
+.toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+    color: #111827;
+    cursor: pointer;
+    user-select: none;
+}
+.toggle-row input {
+    accent-color: #E10600;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
 }
 
 * {

@@ -77,6 +77,25 @@ ALLOWED_HOSTS = {"127.0.0.1:8540", "localhost:8540", "127.0.0.1", "localhost"}
 MAX_BODY_BYTES = int(float(os.environ.get("CLEARSIGHT_MAX_UPLOAD_MB", "200")) * 1024 * 1024)
 REQUEST_TIMEOUT_SECONDS = 60
 
+DEFAULT_ANALYSIS_CONFIG = {
+    "stats": {
+        "rao_scott_2": True,
+        "chi_square": True,
+        "welch_anova": True,
+        "fdr_benjamini_hochberg": True
+    },
+    "hygiene": {
+        "rim_weighting": True,
+        "quarantine_straightliners": True,
+        "quarantine_speeders": True
+    },
+    "nlp": {
+        "pii_masking": True,
+        "contrastive_clause_weighting": True,
+        "review_queue_routing": True
+    }
+}
+
 # In-Memory Active Survey Session State
 SESSION = {
     "df": None,
@@ -89,7 +108,8 @@ SESSION = {
     "open_feedback_analysis": None,
     "custom_codeframe": None,
     "quarantine_straight_liners": True,
-    "quarantine_speeders": True
+    "quarantine_speeders": True,
+    "analysis_config": dict(DEFAULT_ANALYSIS_CONFIG)
 }
 
 
@@ -338,10 +358,16 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.stream_export_file("ClearSight_Agency_Banner_Book.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         elif path == "/api/export/snapshot-download":
             self.stream_export_file("ClearSight_Customer_Voice_Snapshot_A4.html", "text/html; charset=utf-8")
-        elif path == "/api/export/thesis-download":
+        elif path in ("/api/export/thesis-download", "/api/export/thesis-docx"):
             self.stream_export_file("ClearSight_Thesis_Chapter_4_Package.html", "text/html; charset=utf-8")
+        elif path == "/api/export/thesis-tables":
+            self.stream_export_file("ClearSight_APA_Academic_Tables.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         elif path == "/api/export/vertical-codeframe":
             self.handle_export_vertical_codeframe()
+        elif path == "/api/settings/analysis":
+            with SESSION_LOCK:
+                cfg = SESSION.get("analysis_config", DEFAULT_ANALYSIS_CONFIG)
+            self.send_json_response({"status": "success", "config": cfg})
         else:
             self.send_error(404, "Endpoint not found.")
 
@@ -626,6 +652,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.handle_stats_turf(body_bytes)
         elif path == "/api/stats/key-drivers":
             self.handle_stats_key_drivers(body_bytes)
+        elif path == "/api/settings/analysis":
+            self.handle_settings_analysis(body_bytes)
         elif path in ["/api/export/save-to-downloads", "/api/export/save-snapshot-to-downloads", "/api/export/save-thesis-to-downloads"]:
             self.handle_save_to_downloads(path)
         else:
@@ -776,8 +804,31 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         elif "Snapshot" in filename:
             data = build_snapshot_data()
             generate_customer_voice_snapshot_html(target_path, data)
+        elif "Academic_Tables" in filename or "Thesis_Tables" in filename:
+            generate_thesis_excel_tables(target_path, SESSION.get("filename", "Consumer Study"))
         elif "Thesis" in filename:
-            raise NotImplementedError("Thesis Chapter 4 Package is currently under calibration and disabled until dynamic inference is certified.")
+            generate_thesis_chapter_4_package(target_path, SESSION.get("filename", "Consumer Study"), n, neff)
+
+    def handle_settings_analysis(self, body_bytes: bytes):
+        """Update global analysis toggle configurations (Directive 01, CS-102)."""
+        try:
+            req = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+        except Exception:
+            req = {}
+        if not isinstance(req, dict):
+            self.send_json_response({"status": "error", "message": "Body must be a JSON object."}, 400)
+            return
+        with SESSION_LOCK:
+            cfg = SESSION.setdefault("analysis_config", dict(DEFAULT_ANALYSIS_CONFIG))
+            for cat in ("stats", "hygiene", "nlp"):
+                if cat in req and isinstance(req[cat], dict):
+                    cfg.setdefault(cat, {})
+                    for k, v in req[cat].items():
+                        cfg[cat][k] = bool(v)
+            if "hygiene" in cfg:
+                SESSION["quarantine_straight_liners"] = cfg["hygiene"].get("quarantine_straightliners", True)
+                SESSION["quarantine_speeders"] = cfg["hygiene"].get("quarantine_speeders", True)
+        self.send_json_response({"status": "success", "config": cfg})
 
     def handle_upload_codeframe(self, body_bytes: bytes):
         """Upload and compile a custom Excel (.xlsx) or JSON codeframe into active session."""

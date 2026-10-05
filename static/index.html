@@ -10,7 +10,17 @@
     <!-- Top Chrome & Navigation Bar -->
     <header class="app-header">
         <div class="brand-zone">
-            <div class="logo-mark">CS</div>
+            <!-- Official ClearSight Geometric Vision Vector Logo (CS-105) -->
+            <div class="logo-mark-svg" style="display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; margin-right: 8px;">
+                <svg width="34" height="34" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ClearSight Logo">
+                    <!-- Red Apex Prism / Chevron -->
+                    <path d="M50 0L0 55H100L50 0Z" fill="#E10600"/>
+                    <!-- Central Core Lens -->
+                    <circle cx="50" cy="62" r="21" fill="#111827"/>
+                    <!-- Lower Horizon Arc -->
+                    <path d="M5 78C20 105 80 105 95 78C82 118 18 118 5 78Z" fill="#111827"/>
+                </svg>
+            </div>
             <div>
                 <div class="app-title">CLEARSIGHT <span class="app-byline">ANALYTICS</span></div>
                 <div class="app-subtitle">Zero-Cloud Survey Tabulation & Taglish Insights</div>
@@ -40,10 +50,104 @@
         </nav>
 
         <div class="header-status">
-            <span class="status-pill active-pill">● Local Processing (Zero External Cloud)</span>
-            <span class="status-pill dpa-pill">Designed to Support RA 10173 Compliance</span>
+            <button type="button" class="analysis-toggles-trigger" id="btn-toggle-analysis-panel" onclick="toggleAnalysisPanel()" title="Configure Universal Analysis Toggles">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="4" y1="21" x2="4" y2="14"/>
+                    <line x1="4" y1="10" x2="4" y2="3"/>
+                    <line x1="12" y1="21" x2="12" y2="12"/>
+                    <line x1="12" y1="8" x2="12" y2="3"/>
+                    <line x1="20" y1="21" x2="20" y2="16"/>
+                    <line x1="20" y1="12" x2="20" y2="3"/>
+                    <line x1="1" y1="14" x2="7" y2="14"/>
+                    <line x1="9" y1="8" x2="15" y2="8"/>
+                    <line x1="17" y1="16" x2="23" y2="16"/>
+                </svg>
+                <span>Analysis Toggles</span>
+            </button>
+            <span class="status-pill active-pill">Local Processing</span>
+            <span class="status-pill dpa-pill">RA 10173 Compliant</span>
         </div>
     </header>
+
+    <!-- Universal Analysis Toggles Drawer (CS-102) -->
+    <div id="analysis-toggles-drawer" class="analysis-drawer hidden">
+        <div class="drawer-header">
+            <div class="drawer-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E10600" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span>Universal Analysis Engine Toggles</span>
+            </div>
+            <button type="button" class="drawer-close-btn" onclick="toggleAnalysisPanel()" aria-label="Close Analysis Toggles">×</button>
+        </div>
+        <div class="drawer-grid">
+            <!-- Group 1: Statistical Engines -->
+            <div class="toggle-group">
+                <div class="toggle-group-title">Statistical Engines</div>
+                <label class="toggle-row">
+                    <span class="toggle-label">Second-Order Rao-Scott (RS2)</span>
+                    <input type="checkbox" id="toggle-stat-rs2" checked onchange="updateAnalysisToggle('stats', 'rao_scott_2', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Omnibus Chi-Square Independence</span>
+                    <input type="checkbox" id="toggle-stat-chisq" checked onchange="updateAnalysisToggle('stats', 'chi_square', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">One-Way ANOVA & Welch F-Test</span>
+                    <input type="checkbox" id="toggle-stat-welch" checked onchange="updateAnalysisToggle('stats', 'welch_anova', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Benjamini-Hochberg FDR Control</span>
+                    <input type="checkbox" id="toggle-stat-fdr" checked onchange="updateAnalysisToggle('stats', 'fdr_benjamini_hochberg', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+
+            <!-- Group 2: Sample Hygiene & Weighting -->
+            <div class="toggle-group">
+                <div class="toggle-group-title">Sample Hygiene & Weighting</div>
+                <label class="toggle-row">
+                    <span class="toggle-label">Rim Weighting (IPF)</span>
+                    <input type="checkbox" id="toggle-hygiene-rim" checked onchange="updateAnalysisToggle('hygiene', 'rim_weighting', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Quarantine Straight-Liners</span>
+                    <input type="checkbox" id="toggle-hygiene-straight" checked onchange="updateAnalysisToggle('hygiene', 'quarantine_straightliners', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Quarantine Speeders (&lt; 1/3 median)</span>
+                    <input type="checkbox" id="toggle-hygiene-speeders" checked onchange="updateAnalysisToggle('hygiene', 'quarantine_speeders', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+
+            <!-- Group 3: Taglish NLP Processing -->
+            <div class="toggle-group">
+                <div class="toggle-group-title">Taglish NLP Processing</div>
+                <label class="toggle-row">
+                    <span class="toggle-label">Contextual PII Masking (RA 10173)</span>
+                    <input type="checkbox" id="toggle-nlp-pii" checked onchange="updateAnalysisToggle('nlp', 'pii_masking', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Contrastive Clause Weighting</span>
+                    <input type="checkbox" id="toggle-nlp-contrast" checked onchange="updateAnalysisToggle('nlp', 'contrastive_clause_weighting', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+                <label class="toggle-row">
+                    <span class="toggle-label">Needs Review Queue Routing</span>
+                    <input type="checkbox" id="toggle-nlp-review" checked onchange="updateAnalysisToggle('nlp', 'review_queue_routing', this.checked)">
+                    <span class="toggle-switch"></span>
+                </label>
+            </div>
+        </div>
+    </div>
 
     <h1 class="visually-hidden">ClearSight Survey Tabulation & Analytics</h1>
 
@@ -62,12 +166,28 @@
                 <p>Zero-cloud local processing. Works with Google Forms, Excel (.xlsx), CSV, and SPSS (.sav).</p>
                 
                 <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()" ondrop="handleFileDrop(event)" ondragover="event.preventDefault(); event.stopPropagation();">
-                    <div class="upload-icon">📥</div>
+                    <div class="upload-icon">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#E10600" stroke-width="1.8">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
                     <div class="drop-title">Drop your survey file here or click to browse</div>
                     <div class="drop-meta">Google Forms CSV, Excel (.xlsx), or SPSS (.sav) — Data never leaves your computer.</div>
                     <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
-                        <button type="button" class="primary-btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">📂 Select Data File</button>
-                        <button type="button" class="action-btn-green" onclick="event.stopPropagation(); loadSampleDataset()">⚡ Load Sample Philippine Consumer Survey (n=412)</button>
+                        <button type="button" class="primary-btn" onclick="event.stopPropagation(); document.getElementById('file-input').click()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            </svg>
+                            <span>Select Data File</span>
+                        </button>
+                        <button type="button" class="action-btn-green" onclick="event.stopPropagation(); loadSampleDataset()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                            <span>Load Sample Survey (n = 412)</span>
+                        </button>
                     </div>
                 </div>
 
@@ -78,19 +198,19 @@
                     </div>
                     <div class="summary-stats-grid">
                         <div class="stat-box">
-                            <div class="stat-number" id="detected-respondents">412</div>
+                            <div class="stat-number" id=\"detected-respondents\">412</div>
                             <div class="stat-desc">Total Respondents</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number" id="detected-multi">3</div>
+                            <div class="stat-number" id=\"detected-multi\">3</div>
                             <div class="stat-desc">Multi-Select (Resolved Comma Delimiters)</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number" id="detected-scales">4</div>
+                            <div class="stat-number" id=\"detected-scales\">4</div>
                             <div class="stat-desc">Rating Scale Batteries</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-number" id="detected-open">2</div>
+                            <div class="stat-number" id=\"detected-open\">2</div>
                             <div class="stat-desc">Taglish Open-Ends</div>
                         </div>
                     </div>
@@ -166,7 +286,12 @@
                             </div>
                             <input type="range" min="90" max="99" value="95" class="range-slider" id="trim-slider" aria-label="Soft Mean-Shift Weight Trimming Percentile" oninput="updateTrim(this.value)">
                         </div>
-                        <button class="primary-btn" onclick="executeWeighting()">Calculate Raking Weights & Kish Base</button>
+                        <button class="primary-btn" onclick="executeWeighting()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                            </svg>
+                            <span>Calculate Raking Weights & Kish Base</span>
+                        </button>
                     </div>
 
                     <div id="weighting-results" class="weight-metrics-card">
@@ -194,7 +319,12 @@
         <section id="step-3" class="step-pane" role="tabpanel">
             <!-- Conversational Prompt-to-Table Bar -->
             <form onsubmit="event.preventDefault(); executePromptToTable();" class="prompt-bar-container">
-                <div class="prompt-icon">✨</div>
+                <div class="prompt-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E10600" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                </div>
                 <input type="text" id="prompt-input" class="prompt-input" placeholder="Ask ClearSight in English or Taglish (e.g. 'Cross-tabulate brand satisfaction by age for NCR buyers only')...">
                 <button type="submit" class="prompt-btn">Generate Custom Table</button>
             </form>
@@ -240,28 +370,13 @@
                             </div>
                         </div>
 
-                        <!-- Gender -->
-                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Gender" title="Drag to Banner (expands Male & Female) or Stubs">
+                        <!-- Socioeconomic Class (SEC) -->
+                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Socioeconomic Class (SEC)" title="Drag to Banner or Stubs">
                             <div class="var-card-header">
-                                <span class="var-card-title"><span class="pill-dot blue"></span> Gender</span>
+                                <span class="var-card-title"><span class="pill-dot blue"></span> Monthly Income Class (SEC)</span>
                                 <div class="var-actions">
-                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Gender')" title="Add Male & Female as banner columns">+ Col</button>
-                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Gender')" title="Add as rows in table">+ Row</button>
-                                </div>
-                            </div>
-                            <div class="var-chips-row">
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Male')">Male</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Female')">Female</span>
-                            </div>
-                        </div>
-
-                        <!-- SEC -->
-                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Monthly Income Class" title="Drag to Banner (expands Class ABC, D, E) or Stubs">
-                            <div class="var-card-header">
-                                <span class="var-card-title"><span class="pill-dot blue"></span> Socioeconomic Class (SEC)</span>
-                                <div class="var-actions">
-                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Monthly Income Class')" title="Add Class ABC, D, E as banner columns">+ Col</button>
-                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Monthly Income Class')" title="Add as rows in table">+ Row</button>
+                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Socioeconomic Class (SEC)')">+ Col</button>
+                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Socioeconomic Class (SEC)')">+ Row</button>
                                 </div>
                             </div>
                             <div class="var-chips-row">
@@ -270,204 +385,138 @@
                                 <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Class E')">Class E</span>
                             </div>
                         </div>
-
-                        <!-- Brand Preference -->
-                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Brand Preference" title="Drag to Banner or Stubs">
-                            <div class="var-card-header">
-                                <span class="var-card-title"><span class="pill-dot purple"></span> Brand Preference</span>
-                                <div class="var-actions">
-                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Brand Preference')" title="Add all brands as banner columns">+ Col</button>
-                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Brand Preference')" title="Add as rows in table">+ Row</button>
-                                </div>
-                            </div>
-                            <div class="var-chips-row">
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand A (Premium Nanotech)')">Brand A</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand B (Standard Market)')">Brand B</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand C (Bio-Oil Formulation)')">Brand C</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Brand D (Local Artisan Batch)')">Brand D</span>
-                            </div>
-                        </div>
-
-                        <!-- Overall CSAT -->
-                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Overall CSAT" title="Drag to Banner or Stubs">
-                            <div class="var-card-header">
-                                <span class="var-card-title"><span class="pill-dot green"></span> Overall CSAT (1-5 Likert)</span>
-                                <div class="var-actions">
-                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Overall CSAT')" title="Add CSAT ratings as banner columns">+ Col</button>
-                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Overall CSAT (T2B)')" title="Add as rows in table">+ Row</button>
-                                </div>
-                            </div>
-                            <div class="var-chips-row">
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('5 - Very Satisfied')">5 - Very Sat</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('4 - Somewhat Satisfied')">4 - Sat</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('3 - Neutral')">3 - Neutral</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('1-2 - Dissatisfied')">1-2 - Dissat</span>
-                            </div>
-                        </div>
-
-                        <!-- Repurchase Intent -->
-                        <div class="var-card" draggable="true" ondragstart="drag(event)" data-var="Repurchase Intent" title="Drag to Banner or Stubs">
-                            <div class="var-card-header">
-                                <span class="var-card-title"><span class="pill-dot green"></span> Repurchase Intent (1-5)</span>
-                                <div class="var-actions">
-                                    <button type="button" class="var-add-btn var-add-col" onclick="event.stopPropagation(); addBannerPill('Repurchase Intent')" title="Add Repurchase categories as banner columns">+ Col</button>
-                                    <button type="button" class="var-add-btn var-add-row" onclick="event.stopPropagation(); addStubPill('Repurchase Intent')" title="Add as rows in table">+ Row</button>
-                                </div>
-                            </div>
-                            <div class="var-chips-row">
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Definitely Will (5)')">Definitely (5)</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Probably Will (4)')">Probably (4)</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Might or Might Not (3)')">Neutral (3)</span>
-                                <span class="var-chip" onclick="event.stopPropagation(); addBannerPill('Unlikely (1-2)')">Unlikely (1-2)</span>
-                            </div>
-                        </div>
                     </div>
                 </aside>
 
-                <!-- Interactive Table Canvas -->
-                <div class="table-canvas">
-                    <div class="drop-tray-container">
-                        <div class="tray-row">
-                            <div style="display: flex; flex-direction: column; width: 130px; gap: 4px;">
-                                <span class="tray-label">Banner (Columns):</span>
-                                <span class="col-count-badge" id="col-count-badge">5 Columns</span>
-                            </div>
-                            <div style="flex: 1;">
-                                <div class="drop-tray" id="banner-tray" ondrop="dropBanner(event)" ondragover="allowDrop(event)">
-                                    <span class="tag-pill" data-name="Total"><span class="pill-label">Total</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Total')">&times;</span></span>
-                                    <span class="tag-pill" data-name="NCR"><span class="pill-label">NCR (A)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'NCR')">&times;</span></span>
-                                    <span class="tag-pill" data-name="Balance Luzon"><span class="pill-label">Balance Luzon (B)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Balance Luzon')">&times;</span></span>
-                                    <span class="tag-pill" data-name="Visayas"><span class="pill-label">Visayas (C)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Visayas')">&times;</span></span>
-                                    <span class="tag-pill" data-name="Mindanao"><span class="pill-label">Mindanao (D)</span> <span class="pill-remove" onclick="removeBannerPill(event, 'Mindanao')">&times;</span></span>
-                                </div>
-                                <div class="tray-input-wrapper">
-                                    <input type="text" id="banner-input" class="tray-input" placeholder="+ Type banner category or column(s) (e.g. 'Age', 'Gender', 'SEC', 'Gen Z', 'Metro Manila')..." onkeydown="handleBannerInputKey(event)">
-                                    <button class="tray-add-btn" onclick="addBannerFromInput()">+ Add Column / Category</button>
-                                </div>
+                <!-- Interactive Tabulation Canvas -->
+                <div class="tabulation-canvas">
+                    <div class="canvas-card">
+                        <!-- Banner Drop Zone -->
+                        <div class="tray-container">
+                            <div class="tray-label">Banner Breakdown (Columns):</div>
+                            <div class="tag-tray" id="banner-tray" ondrop="drop(event, 'banner')" ondragover="allowDrop(event)">
+                                <span class="tag-pill" data-name="Total"><span class="pill-label">Total</span><span class="pill-remove" onclick="removeBannerPill(event, 'Total')">×</span></span>
+                                <span class="tag-pill" data-name="NCR"><span class="pill-label">NCR (A)</span><span class="pill-remove" onclick="removeBannerPill(event, 'NCR')">×</span></span>
+                                <span class="tag-pill" data-name="Balance Luzon"><span class="pill-label">Balance Luzon (B)</span><span class="pill-remove" onclick="removeBannerPill(event, 'Balance Luzon')">×</span></span>
+                                <span class="tag-pill" data-name="Visayas"><span class="pill-label">Visayas (C)</span><span class="pill-remove" onclick="removeBannerPill(event, 'Visayas')">×</span></span>
+                                <span class="tag-pill" data-name="Mindanao"><span class="pill-label">Mindanao (D)</span><span class="pill-remove" onclick="removeBannerPill(event, 'Mindanao')">×</span></span>
                             </div>
                         </div>
-                        <div class="preset-pills-row">
-                            <span class="preset-label">Quick Banners:</span>
-                            <button class="preset-btn" onclick="addBannerPreset('region')" title="Add/Append all 4 region columns">+ Region (NCR, BL, Vis, Min)</button>
-                            <button class="preset-btn" onclick="addBannerPreset('age')" title="Add/Append all 3 age groups">+ Age (Gen Z, Mill, Gen X)</button>
-                            <button class="preset-btn" onclick="addBannerPreset('gender')" title="Add/Append Male and Female">+ Gender (Male, Female)</button>
-                            <button class="preset-btn" onclick="addBannerPreset('sec')" title="Add/Append Class ABC, D, E">+ SEC (Class ABC, D, E)</button>
-                            <button class="preset-btn preset-btn-all" onclick="addAllDemographicsPreset()" title="Stack all 12 demographic columns side-by-side">⚡ All Demographics (12 Cols)</button>
-                            <button class="preset-btn clear-btn" onclick="clearBanners()" title="Reset columns to Total">Clear Columns</button>
-                        </div>
 
-                        <div class="tray-row" style="margin-top: 10px;">
-                            <span class="tray-label">Stub (Rows):</span>
-                            <div style="flex: 1;">
-                                <div class="drop-tray" id="stub-tray" ondrop="dropStub(event)" ondragover="allowDrop(event)">
-                                    <span class="tag-pill" data-name="Brand Preference">Brand Preference <span class="pill-remove" onclick="removeStubPill(event, 'Brand Preference')">&times;</span></span>
-                                </div>
-                                <div class="tray-input-wrapper">
-                                    <input type="text" id="stub-input" class="tray-input" placeholder="+ Type stub variable/question and press Enter (e.g. 'Overall CSAT', 'Repurchase Intent')..." onkeydown="handleStubInputKey(event)">
-                                    <button class="tray-add-btn" onclick="addStubFromInput()">+ Add Stub</button>
-                                </div>
+                        <!-- Stub Drop Zone -->
+                        <div class="tray-container">
+                            <div class="tray-label">Question Stubs (Rows):</div>
+                            <div class="tag-tray" id="stub-tray" ondrop="drop(event, 'stub')" ondragover="allowDrop(event)">
+                                <span class="tag-pill" data-name="Brand Preference"><span class="pill-label">Brand Preference</span><span class="pill-remove" onclick="removeStubPill(event, 'Brand Preference')">×</span></span>
                             </div>
                         </div>
-                        <div class="preset-pills-row">
-                            <span class="preset-label">Quick Stubs:</span>
-                            <button class="preset-btn" onclick="setStubPreset('brand')">Brand Preference</button>
-                            <button class="preset-btn" onclick="setStubPreset('csat')">Overall CSAT (T2B)</button>
-                            <button class="preset-btn" onclick="setStubPreset('repurchase')">Repurchase Intent</button>
-                            <button class="preset-btn" onclick="setStubPreset('sec')">SEC / Income</button>
-                            <button class="preset-btn clear-btn" onclick="clearStubs()">Clear Stubs</button>
-                        </div>
-                    </div>
 
-                    <!-- Significance & Display Controls -->
-                    <div class="canvas-controls">
-                        <div class="control-cluster">
-                            <span>Dual Sig Display:</span>
-                            <button class="pill-toggle active-toggle" id="btn-sig-both" onclick="setSigDisplayMode('both')">Both Rows</button>
-                            <button class="pill-toggle" id="btn-sig-letters" onclick="setSigDisplayMode('letters')">Letters (Col)</button>
-                            <button class="pill-toggle" id="btn-sig-bench" onclick="setSigDisplayMode('bench')">vs Total (+/-, ++/--)</button>
+                        <!-- Table Control Ribbon -->
+                        <div class="table-controls-ribbon">
+                            <div class="metric-selector">
+                                <button type="button" class="metric-btn active" id="btn-metric-pct" onclick="setMetric('pct')">% Column</button>
+                                <button type="button" class="metric-btn" id="btn-metric-t2b" onclick="setMetric('t2b')">Top-2-Box</button>
+                                <button type="button" class="metric-btn" id="btn-metric-mean" onclick="setMetric('mean')">Scale Mean</button>
+                            </div>
+                            <div class="conf-selector">
+                                <span class="conf-lbl">Confidence:</span>
+                                <button type="button" class="conf-btn" id="btn-conf-90" onclick="setConfidence(90)">90%</button>
+                                <button type="button" class="conf-btn active" id="btn-conf-95" onclick="setConfidence(95)">95%</button>
+                                <button type="button" class="conf-btn" id="btn-conf-99" onclick="setConfidence(99)">99%</button>
+                            </div>
+                            <div class="fdr-toggle-box">
+                                <label class="switch-mini">
+                                    <input type="checkbox" id="fdr-toggle" checked onchange="toggleFDR(this.checked)" aria-label="Toggle FDR Significance Control">
+                                    <span class="slider-mini"></span>
+                                </label>
+                                <span class="fdr-label" id="fdr-label-text">FDR Correction (Benjamini-Hochberg)</span>
+                            </div>
                         </div>
-                        <div class="control-cluster">
-                            <span>Confidence:</span>
-                            <button class="pill-toggle" onclick="setConfidence(90)">90% (a/b/c, +/-)</button>
-                            <button class="pill-toggle active-toggle" onclick="setConfidence(95)">95% (A/B/C, ++/--)</button>
-                        </div>
-                        <div class="control-cluster">
-                            <span>Metric:</span>
-                            <button class="pill-toggle active-toggle" onclick="setMetric('pct')">Column %</button>
-                            <button class="pill-toggle" onclick="setMetric('t2b')">Top-2-Box (T2B)</button>
-                            <button class="pill-toggle" onclick="setMetric('mean')">Scale Mean</button>
-                        </div>
-                        <div class="control-cluster">
-                            <span>FDR Control:</span>
-                            <button class="pill-toggle active-toggle" id="btn-fdr" onclick="toggleFDR()">BH FDR: ON</button>
-                        </div>
-                    </div>
 
-                    <!-- Live Crosstab Matrix with Dual Significance Rows -->
-                    <div class="table-scroll-wrapper">
-                        <table class="agency-table" id="crosstab-table">
-                            <thead>
-                                <tr>
-                                    <th class="stub-header">Category / Brand Option</th>
-                                    <th>Total</th>
-                                    <th>NCR (A)</th>
-                                    <th>Balance Luzon (B)</th>
-                                    <th>Visayas (C)</th>
-                                    <th>Mindanao (D)</th>
-                                </tr>
-                                <tr class="meta-row">
-                                    <td>Column Names</td>
-                                    <td>Total</td>
-                                    <td>A</td>
-                                    <td>B</td>
-                                    <td>C</td>
-                                    <td>D</td>
-                                </tr>
-                                <tr class="meta-row">
-                                    <td>Column Sample Size (N)</td>
-                                    <td>412</td>
-                                    <td>120</td>
-                                    <td>150</td>
-                                    <td>72</td>
-                                    <td>70</td>
-                                </tr>
-                                <tr class="meta-row">
-                                    <td>Kish Effective Base (Neff)</td>
-                                    <td>389.2</td>
-                                    <td>113.8</td>
-                                    <td>141.6</td>
-                                    <td>68.1</td>
-                                    <td>65.7</td>
-                                </tr>
-                            </thead>
-                            <tbody id="table-body">
-                                <!-- Populated dynamically by app.js -->
-                            </tbody>
-                        </table>
+                        <!-- Data Presentation Table -->
+                        <div class="data-table-scroll">
+                            <table class="agency-crosstab-table" id="crosstab-table">
+                                <thead id="table-head">
+                                    <tr class="banner-title-row">
+                                        <th rowspan="2" class="stub-col-header" id="stub-header-cell">Brand Preference</th>
+                                        <th colspan="5" class="banner-group-header">Geographic Region</th>
+                                    </tr>
+                                    <tr class="banner-labels-row">
+                                        <th>Total</th>
+                                        <th>NCR</th>
+                                        <th>Balance Luzon</th>
+                                        <th>Visayas</th>
+                                        <th>Mindanao</th>
+                                    </tr>
+                                    <tr class="sig-letters-row">
+                                        <td></td>
+                                        <td>A</td>
+                                        <td>B</td>
+                                        <td>C</td>
+                                        <td>D</td>
+                                    </tr>
+                                    <tr class="meta-row">
+                                        <td>Column Sample Size (N)</td>
+                                        <td>412</td>
+                                        <td>120</td>
+                                        <td>150</td>
+                                        <td>72</td>
+                                        <td>70</td>
+                                    </tr>
+                                    <tr class="meta-row">
+                                        <td>Kish Effective Base (Neff)</td>
+                                        <td>389.2</td>\n                                        <td>113.8</td>
+                                        <td>141.6</td>
+                                        <td>68.1</td>
+                                        <td>65.7</td>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body">
+                                    <!-- Populated dynamically by app.js -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Taglish Qualitative Coder with Human Lock-Step -->
+            <!-- Taglish Qualitative Coder with Human Lock-Step (Directive 02, CS-103) -->
             <div class="qual-studio-card">
                 <div class="qual-header">
                     <div>
                         <h4>Taglish Qualitative Verbatim Analysis (Preview / Experimental)</h4>
                         <div class="qual-sub">Automatic morphosyntax disambiguation with Human Lock-Step verification.</div>
                     </div>
-                    <div class="lock-status" style="display: flex; gap: 0.75rem; align-items: center;">
+                    <div class="lock-status" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
                         <span id="agreement-score">Heuristic Qualitative Coder (Preview)</span>
-                        <label for="codeframe-file-input" class="lock-btn" id="upload-codeframe-label" style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; user-select: none; margin-right: 4px;">
-                            📁 Import DP Codeframe (.xlsx / .json)
-                        </label>
-                        <input type="file" id="codeframe-file-input" accept=".xlsx,.xls,.json,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;" onchange="uploadProjectCodeframe(event)">
-                        <span id="active-codeframe-label" style="font-size: 0.85rem; color: #64748B; margin-right: 8px;">Active: Default FMCG Taxonomy (16 Themes)</span>
-                        <button type="button" class="lock-btn" id="export-codeframe-btn" onclick="downloadVerticalCodeframe()" style="cursor: pointer; margin-right: 4px;">📊 Export Vertical Codeframe (.xlsx)</button>
-                        <button class="lock-btn" id="lock-btn" onclick="toggleLock()">🔒 Lock Codeframe</button>
+                        
+                        <!-- Native Semantic File Input & Label (CS-103) -->
+                        <div class="upload-control-group" style="display: inline-flex; align-items: center;">
+                            <input type="file" id="codeframe-upload" accept=".json,.xlsx,.xls,.csv" style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;" onchange="handleCodeframeUpload(event)">
+                            <label for="codeframe-upload" class="lock-btn" id="upload-codeframe-label" style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; user-select: none; margin-right: 4px;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                <span>Import DP Codeframe</span>
+                            </label>
+                        </div>
+
+                        <span id="active-codeframe-label" style="font-size: 0.85rem; color: #4B5563; margin-right: 8px;">Active: Default FMCG Taxonomy (16 Themes)</span>
+                        <button type="button" class="lock-btn" id="export-codeframe-btn" onclick="downloadVerticalCodeframe()" style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 4px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span>Export Vertical Codeframe (.xlsx)</span>
+                        </button>
+                        <button class="lock-btn" id="lock-btn" onclick="toggleLock()">Lock Codeframe</button>
                     </div>
                 </div>
 
-                <!-- Coder v2: Needs-review queue (analyst corrections are stored locally) -->
+                <!-- Coder v2/v3: Needs-review queue (analyst corrections are stored locally) -->
                 <div id="coder-review" class="coder-review" hidden></div>
 
                 <div class="codeframe-grid" id="codeframe-grid">
@@ -507,25 +556,76 @@
                 <p>One-click delivery in agency formats. All formulas, significance markers, and quotes preserved.</p>
                 
                 <div class="export-grid">
+                    <!-- Deliverable 1: Excel Banner Book -->
                     <div class="export-card">
-                        <div class="card-icon">📊</div>
+                        <div class="card-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E10600" stroke-width="2">
+                                <line x1="18" y1="20" x2="18" y2="10"/>
+                                <line x1="12" y1="20" x2="12" y2="4"/>
+                                <line x1="6" y1="20" x2="6" y2="14"/>
+                            </svg>
+                        </div>
                         <h3>Excel Banner Book (.xlsx)</h3>
                         <p>Multi-tab workbook with <b>Dual Significance rows</b> (Letters + Benchmark <code>+/++</code>, <code>-/--</code>), effective base sizes, and executive layout.</p>
-                        <button class="download-btn" id="btn-dl-excel" onclick="downloadExcel()">📥 Download Excel Banner Book</button>
+                        <button class="download-btn" id="btn-dl-excel" onclick="downloadExcel()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span>Download Excel Banner Book</span>
+                        </button>
                     </div>
 
+                    <!-- Deliverable 2: Customer Voice Snapshot -->
                     <div class="export-card">
-                        <div class="card-icon">📄</div>
-                        <h3>Customer Voice Snapshot (A4 HTML, print to PDF)</h3>
+                        <div class="card-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E10600" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                                <polyline points="10 9 9 9 8 9"/>
+                            </svg>
+                        </div>
+                        <h3>Customer Voice Snapshot (A4 HTML)</h3>
                         <p>1-Page executive brief featuring KPIs, statistically verified highlights, and customer voice themes.</p>
-                        <button class="download-btn" id="btn-dl-snapshot" onclick="downloadSnapshot()">📥 Download 1-Page A4 Snapshot</button>
+                        <button class="download-btn" id="btn-dl-snapshot" onclick="downloadSnapshot()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span>Download 1-Page A4 Snapshot</span>
+                        </button>
                     </div>
 
+                    <!-- Deliverable 3: Academic Tables & Thesis Package (UNLOCKED in CS-104) -->
                     <div class="export-card">
-                        <div class="card-icon">🎓</div>
-                        <h3>Thesis Chapter 4 Package</h3>
-                        <p>Formatted academic tables with automated statistical interpretation lines ready for defense panels.</p>
-                        <button class="download-btn" id="btn-dl-thesis" disabled style="opacity: 0.6; cursor: not-allowed;" title="Academic Tables are currently under peer-review calibration — Coming Soon">🔒 Academic Tables (Calibrating)</button>
+                        <div class="card-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E10600" stroke-width="2">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                            </svg>
+                        </div>
+                        <h3>Thesis Chapter 4 & APA Academic Tables</h3>
+                        <p>Formatted APA 7th Edition tables (.xlsx) and academic statistical narrative package ready for thesis panel defense.</p>
+                        <button class="download-btn" id="btn-dl-thesis-tables" onclick="downloadThesisTables()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span>Download APA 7th Tables (.xlsx)</span>
+                        </button>
+                        <button class="download-btn" id="btn-dl-thesis-docx" onclick="downloadThesisDocx()" style="margin-top: 8px;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span>Download Chapter 4 Narrative (.html)</span>
+                        </button>
                     </div>
                 </div>
 
