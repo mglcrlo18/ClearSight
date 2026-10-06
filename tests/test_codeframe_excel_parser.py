@@ -10,7 +10,7 @@ import io
 import unittest
 import openpyxl
 
-from engine.codeframe_excel_parser import parse_excel_codeframe
+from engine.codeframe_excel_parser import parse_excel_codeframe, CodeframeNormalizer
 from engine.codeframe_loader import CodeframeError
 
 
@@ -103,6 +103,34 @@ class TestCodeframeExcelParser(unittest.TestCase):
 
         t81 = next(t for t in cf["topics"] if 81 in [c["code_id"] for c in t["codes"].values()])
         self.assertEqual(t81["net"], "Packaging (NET)")
+
+    def test_codeframe_normalizer_csv_bom(self):
+        """Verify CodeframeNormalizer handles UTF-8 BOM (\\xef\\xbb\\xbf) and alternative header keys."""
+        csv_bytes = (
+            "\ufeffTheme,Category,Code,Quotes\n"
+            "Affordable Price,Economic Relief,101,Mura at sulit talaga\n"
+            "Slow Service,Operational Delays,201,Napakabagal ng pila sa cashier\n"
+        ).encode("utf-8-sig")
+
+        cf = CodeframeNormalizer.parse_tabular_codeframe(csv_bytes, filename="test_subsidy_codeframe.csv")
+        self.assertEqual(cf["schema_version"], 1)
+        self.assertEqual(len(cf["topics"]), 2)
+
+        t101 = next(t for t in cf["topics"] if 101 in [c["code_id"] for c in t["codes"].values()])
+        self.assertEqual(t101["codes"]["pos"]["label"], "Affordable Price")
+        self.assertIn("Economic Relief (Subnet)", t101["subnet"])
+        self.assertIn("mura", t101["keywords"])
+
+    def test_codeframe_normalizer_cp1252(self):
+        """Verify CodeframeNormalizer decodes Windows-1252 encoded CSV codeframes."""
+        csv_text = "label,net_group,code_id,exemplars\nClean Store,Store Environment,111,Malinis ang sahig\n"
+        csv_bytes = csv_text.encode("cp1252")
+
+        cf = CodeframeNormalizer.parse_tabular_codeframe(csv_bytes, filename="cp1252_test.csv")
+        self.assertEqual(len(cf["topics"]), 1)
+        t = cf["topics"][0]
+        self.assertEqual(t["codes"]["pos"]["code_id"], 111)
+        self.assertEqual(t["codes"]["pos"]["label"], "Clean Store")
 
 
 if __name__ == "__main__":

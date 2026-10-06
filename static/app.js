@@ -946,10 +946,15 @@ function updateVariableDrawerFromSchema(schema, columns) {
 
         const titleSpan = document.createElement('span');
         titleSpan.className = 'var-card-title';
+        titleSpan.title = colName;
         const dotSpan = document.createElement('span');
         dotSpan.className = `pill-dot ${dotColor}`;
         titleSpan.appendChild(dotSpan);
-        titleSpan.appendChild(document.createTextNode(' ' + colName));
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'var-name-text';
+        nameSpan.textContent = colName;
+        nameSpan.title = colName;
+        titleSpan.appendChild(nameSpan);
         header.appendChild(titleSpan);
 
         const actions = document.createElement('div');
@@ -1335,6 +1340,9 @@ async function loadReviewQueue() {
         if (!res.ok) { box.hidden = true; return; }
         const data = await res.json();
         renderReviewQueue(box, data);
+        if (data && data.options) {
+            updateThemeFilterDropdown(data.options);
+        }
     } catch (err) {
         box.hidden = true;
     }
@@ -1350,6 +1358,9 @@ function renderReviewQueue(box, data) {
     head.textContent = `Needs review: ${data.count} answer(s). Pick the right theme and sentiment; corrections stay on this computer and teach the coder.`;
     box.appendChild(head);
     const options = data.options || [];
+    if (options.length > 0) {
+        updateThemeFilterDropdown(options);
+    }
     items.slice(0, 20).forEach(item => {
         const row = document.createElement('div');
         row.className = 'coder-review-row';
@@ -1363,7 +1374,10 @@ function renderReviewQueue(box, data) {
         sel.className = 'coder-review-theme';
         sel.setAttribute('aria-label', 'Correct theme');
         sel.add(new Option('Theme…', ''));
-        options.forEach(o => sel.add(new Option(`${o.code_id} ${o.label}`, String(o.code_id))));
+        options.forEach(o => {
+            const displayLabel = o.subnet ? `[${o.subnet}] ${o.label}` : o.label;
+            sel.add(new Option(`${o.code_id ? o.code_id + ' ' : ''}${displayLabel}`, String(o.code_id || o.label)));
+        });
         const sent = document.createElement('select');
         sent.className = 'coder-review-sent';
         sent.setAttribute('aria-label', 'Correct sentiment');
@@ -1566,9 +1580,9 @@ async function handleCodeframeUpload(event) {
     if (!file) return;
 
     showToast(`Reading "${file.name}"...`);
-    const isExcel = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+    const isTabular = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls') || file.name.toLowerCase().endsWith('.csv');
 
-    if (isExcel) {
+    if (isTabular) {
         try {
             const arrayBuffer = await file.arrayBuffer();
             const res = await fetch('/api/upload-codeframe', {
@@ -1584,13 +1598,14 @@ async function handleCodeframeUpload(event) {
                 const count = data.topics_count || (data.codeframe && data.codeframe.topics ? data.codeframe.topics.length : 'Custom');
                 const lbl = document.getElementById('active-codeframe-label');
                 if (lbl) lbl.textContent = `Active: ${escapeHtml((data.codeframe && data.codeframe.name) || file.name)} (${count} Categories)`;
-                showToast(`Dynamic Excel codeframe loaded: ${count} categories parsed.`);
+                showToast(`Dynamic codeframe loaded: ${count} categories parsed.`);
                 loadTaglishCoding();
+                loadReviewQueue();
             } else {
                 showToast('Codeframe upload failed: ' + (data.message || 'Unknown error'), true);
             }
         } catch (err) {
-            showToast('Failed to upload Excel codeframe: ' + err.message, true);
+            showToast('Failed to upload codeframe: ' + err.message, true);
         } finally {
             event.target.value = '';
         }
@@ -1793,6 +1808,62 @@ function renderCodedHierarchyTable(data) {
             tbody.appendChild(tr);
         }
     }
+function updateThemeFilterDropdown(options) {
+    const sel = document.getElementById('oe-theme-filter');
+    if (!sel) return;
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="ALL">✓ All Themes</option>';
+    (options || []).forEach(o => {
+        const displayLabel = o.subnet ? `[${o.subnet}] ${o.label}` : o.label;
+        const opt = document.createElement('option');
+        opt.value = String(o.code_id || o.label);
+        opt.textContent = `${o.code_id ? o.code_id + ' ' : ''}${displayLabel}`;
+        sel.appendChild(opt);
+    });
+    if (currentVal && sel.querySelector(`option[value="${currentVal}"]`)) {
+        sel.value = currentVal;
+    }
+}
+
+function filterVerbatimsByTheme(themeVal) {
+    const filterKey = (themeVal || '').trim().toLowerCase();
+
+    // 1. Filter Review Queue rows
+    const reviewRows = document.querySelectorAll('.coder-review-row');
+    reviewRows.forEach(row => {
+        if (!filterKey || filterKey === 'all') {
+            row.style.display = 'grid';
+        } else {
+            const sel = row.querySelector('.coder-review-theme');
+            const meta = row.querySelector('.coder-review-meta');
+            const metaText = meta ? meta.textContent.toLowerCase() : '';
+            const valMatch = sel && sel.value.toLowerCase() === filterKey;
+            const textMatch = metaText.includes(filterKey);
+            row.style.display = (valMatch || textMatch) ? 'grid' : 'none';
+        }
+    });
+
+    // 2. Filter Coded Hierarchy Table rows
+    const tableRows = document.querySelectorAll('#coded-hierarchy-table-body tr');
+    tableRows.forEach(row => {
+        if (!filterKey || filterKey === 'all') {
+            row.style.display = '';
+        } else {
+            const rowText = row.textContent.toLowerCase();
+            row.style.display = rowText.includes(filterKey) ? '' : 'none';
+        }
+    });
+
+    // 3. Filter Theme Cards
+    const cards = document.querySelectorAll('#codeframe-grid .code-item');
+    cards.forEach(card => {
+        if (!filterKey || filterKey === 'all') {
+            card.style.display = 'block';
+        } else {
+            const cardText = card.textContent.toLowerCase();
+            card.style.display = cardText.includes(filterKey) ? 'block' : 'none';
+        }
+    });
 }
 
 function uploadProjectCodeframe(event) {

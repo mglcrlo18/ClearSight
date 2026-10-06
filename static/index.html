@@ -618,6 +618,9 @@
                         </div>
 
                         <span id="active-codeframe-label" style="font-size: 0.85rem; color: #4B5563; margin-right: 8px;">Active: Default FMCG Taxonomy (16 Themes)</span>
+                        <select id="oe-theme-filter" onchange="filterVerbatimsByTheme(this.value)" style="padding: 4px 10px; font-size: 0.8rem; font-weight: 600; border: 1px solid #CBD5E1; border-radius: 4px; background: #FFFFFF; color: #0F172A; max-width: 220px; cursor: pointer; margin-right: 8px;" aria-label="Filter by coded theme">
+                            <option value="ALL">✓ All Themes</option>
+                        </select>
                         <button type="button" class="lock-btn" id="export-codeframe-btn" onclick="downloadVerticalCodeframe()" style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 4px;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>

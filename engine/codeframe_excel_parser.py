@@ -84,6 +84,174 @@ def _extract_keywords_from_text(label: str, exemplars: List[str]) -> List[str]:
     return sorted([p for p in phrases if len(p) <= 80])[:200]
 
 
+class CodeframeNormalizer:
+    """
+    Normalizes diverse survey codeframe files (CSV with BOM/CP1252, XLSX, XLS)
+    with non-standardized column headers (e.g. Theme, Category, Net, Subnet, Code, Label, ID)
+    into validated ClearSight codeframe entities.
+    """
+    SYNONYM_MAP = {
+        "id": ["theme_id", "code_id", "id", "tag_id", "code", "codes", "item_id"],
+        "name": ["theme", "theme_name", "label", "tag", "concept", "theme_standardized_label", "sub_category"],
+        "net_group": ["net", "subnet", "parent", "parent_theme", "group", "net_group", "thematic_group", "section", "category", "category_name"],
+        "description": ["description", "definition", "notes", "criteria", "dp_instructions", "instructions", "dp_instruction"],
+        "exemplars": ["anchored_verbatims", "exemplars", "quotes", "verbatims", "raw_quotes", "examples", "sample_verbatims"]
+    }
+
+    @classmethod
+    def parse_tabular_codeframe(
+        cls,
+        file_input: Union[str, Path, bytes, io.BytesIO],
+        filename: str = "codeframe.csv",
+        codeframe_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        import pandas as pd
+
+        if isinstance(file_input, bytes):
+            buf = io.BytesIO(file_input)
+        elif isinstance(file_input, (str, Path)):
+            with open(file_input, "rb") as f:
+                buf = io.BytesIO(f.read())
+        elif isinstance(file_input, io.BytesIO):
+            buf = file_input
+        else:
+            raise CodeframeError("Invalid input for CodeframeNormalizer.")
+
+        fn_lower = filename.lower()
+        if fn_lower.endswith(".csv"):
+            try:
+                buf.seek(0)
+                df = pd.read_csv(buf, encoding="utf-8-sig")
+            except Exception:
+                try:
+                    buf.seek(0)
+                    df = pd.read_csv(buf, encoding="cp1252")
+                except Exception as e:
+                    raise CodeframeError(f"Failed to read CSV codeframe: {e}")
+        elif fn_lower.endswith((".xlsx", ".xls")) or (len(buf.getvalue()) > 4 and buf.getvalue()[:4] == b"PK\x03\x04"):
+            try:
+                buf.seek(0)
+                df = pd.read_excel(buf)
+            except Exception as e:
+                raise CodeframeError(f"Failed to read Excel codeframe: {e}")
+        else:
+            try:
+                buf.seek(0)
+                df = pd.read_csv(buf, encoding="utf-8-sig")
+            except Exception:
+                try:
+                    buf.seek(0)
+                    df = pd.read_excel(buf)
+                except Exception as e:
+                    raise CodeframeError(f"Unsupported codeframe file format: {e}")
+
+        if df is None or len(df) == 0:
+            raise CodeframeError("Uploaded codeframe contains no data.")
+
+        # Normalize column names using SYNONYM_MAP
+        normalized_cols: Dict[str, str] = {}
+        used_keys = set()
+        for col in df.columns:
+            clean_col = re.sub(r"[^\w\s]", "", str(col)).strip().lower().replace(" ", "_")
+            for standard_key, synonyms in cls.SYNONYM_MAP.items():
+                if standard_key not in used_keys and (clean_col in synonyms or any(s == clean_col for s in synonyms)):
+                    normalized_cols[col] = standard_key
+                    used_keys.add(standard_key)
+                    break
+
+        df = df.rename(columns=normalized_cols)
+        if "name" not in df.columns:
+            text_cols = df.select_dtypes(include=["object"]).columns
+            if len(text_cols) > 0:
+                df = df.rename(columns={text_cols[0]: "name"})
+            else:
+                df["name"] = df.iloc[:, 0].astype(str)
+
+        topics = []
+        cf_title = codeframe_name or Path(filename).stem.replace("_", " ").title()
+
+        current_net = "General Feedback (NET)"
+        current_subnet = "Responses (Subnet)"
+
+        for idx, row in df.iterrows():
+            name_val = str(row.get("name", "")).strip()
+            if not name_val or name_val.lower() == "nan":
+                continue
+
+            if RE_NET.search(name_val):
+                current_net = name_val
+                continue
+            if RE_SUBNET.search(name_val):
+                current_subnet = name_val
+                continue
+
+            net_val = str(row.get("net_group", "")).strip() if pd.notna(row.get("net_group")) else current_net
+            if net_val and net_val.lower() != "nan":
+                if not net_val.endswith("(NET)") and not net_val.endswith("(Subnet)"):
+                    net_val = f"{net_val} (Subnet)"
+            else:
+                net_val = current_subnet
+
+            raw_id = row.get("id")
+            cid = None
+            if pd.notna(raw_id):
+                try:
+                    cid = int(float(str(raw_id).strip()))
+                except (ValueError, TypeError):
+                    cid = idx + 101
+            else:
+                cid = idx + 101
+
+            exemplars_val = row.get("exemplars")
+            exs = []
+            if pd.notna(exemplars_val) and str(exemplars_val).strip() and str(exemplars_val).lower() != "nan":
+                exs = [str(exemplars_val).strip()]
+
+            desc_val = str(row.get("description", "")).strip() if pd.notna(row.get("description")) else ""
+            if desc_val.lower() == "nan":
+                desc_val = ""
+
+            slug = _slugify(name_val, code_id=cid)
+            keywords = _extract_keywords_from_text(name_val, exs)
+
+            pol = "pos" if (RE_FAVORABLE.search(name_val) or RE_FAVORABLE.search(net_val)) else ("neg" if (RE_UNFAVORABLE.search(name_val) or RE_UNFAVORABLE.search(net_val)) else "pos")
+
+            topics.append({
+                "id": slug,
+                "net": current_net,
+                "subnet": net_val,
+                "codes": {
+                    pol: {"code_id": cid, "label": name_val}
+                },
+                "keywords": keywords,
+                "pos_keywords": keywords[:5] if pol == "pos" else [],
+                "neg_keywords": keywords[:5] if pol == "neg" else [],
+                "exemplars": exs,
+                "dp_instruction": desc_val
+            })
+
+        if not topics:
+            raise CodeframeError("Could not extract any valid category topics from the codeframe file.")
+
+        cf_dict = {
+            "schema_version": 1,
+            "id": _slugify(cf_title),
+            "name": cf_title,
+            "domain": "survey",
+            "topics": topics,
+            "special": {
+                "general_pos": {"code_id": 980, "label": "General Favorable Comment"},
+                "general_neg": {"code_id": 981, "label": "General Unfavorable Comment"},
+                "needs_review": {"code_id": 995, "label": "Needs Review"},
+                "dont_know": {"code_id": 996, "label": "Don't Know / No Opinion"},
+                "neutral": {"code_id": 901, "label": "General Neutral Comment"},
+                "none": {"code_id": 999, "label": "None / No Particular Reason"},
+                "other": {"code_id": 900, "label": "Other Unspecified"}
+            }
+        }
+        return cf_dict
+
+
 def parse_excel_codeframe(
     file_source: Union[str, Path, bytes, io.BytesIO],
     codeframe_id: Optional[str] = None,

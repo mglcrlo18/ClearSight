@@ -1458,23 +1458,37 @@ body {
 }
 
 .var-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
 }
 
 .var-card-title {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    min-width: 0 !important; /* CRITICAL: Enables text-overflow truncation within CSS grid */
     font-size: 12px;
     font-weight: 800;
     color: var(--off-white);
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    overflow: hidden !important;
+}
+
+.var-name-text, .var-name {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
+    min-width: 0 !important;
 }
 
 .var-actions {
-    display: flex;
-    gap: 4px;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    flex-shrink: 0 !important; /* Prevents button compression */
 }
 
 .var-add-btn {

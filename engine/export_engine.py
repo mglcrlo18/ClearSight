@@ -641,85 +641,195 @@ def generate_thesis_excel_tables(filepath: str, project_title: str) -> str:
     ws1.column_dimensions["E"].width = 22
     ws1.column_dimensions["F"].width = 18
 
-    # Sheet 2: Table 4.2 Cross-Tabulation & Dual Sig
-    ws2 = wb.create_sheet(title="Table 4.2 - CrossTab")
-    ws2.views.sheetView[0].showGridLines = True
-    ws2.cell(row=2, column=2, value="Table 4.2").font = apa_title_font
+    # Dynamic CrossTab Sheets for all staged tables in last_tab
+    crosstab_tables = last_tab if (last_tab and len(last_tab) > 0) else [None]
+    t_count = 0
 
-    tab_table = last_tab[0] if last_tab and len(last_tab) > 0 else None
-    stub_title = tab_table.get("stub_label", "Survey Measure") if tab_table else "Survey Measure"
-    ws2.cell(row=3, column=2, value=f"Cross-Tabulation of {stub_title} Across Subgroups with Dual Significance (N = {total_n}, Neff = {eff_n:.1f})").font = apa_italic_font
+    for t_idx, tab_table in enumerate(crosstab_tables):
+        t_count += 1
+        t_num = f"4.{t_idx + 2}"
+        stub_title = tab_table.get("stub_label") if tab_table else None
+        if stub_title and stub_title != "Survey Measure":
+            safe_sheet_name = f"Table {t_num} - {stub_title}"[:31]
+        else:
+            safe_sheet_name = f"Table {t_num} - CrossTab"[:31]
+        stub_title = stub_title or "Survey Measure"
 
-    if tab_table:
-        headers2 = ["Stub Category", "Total"] + [b for b in tab_table.get("clean_banner_cols", []) if b != "Total"]
-    else:
-        headers2 = ["Stub Category", "Total"]
+        ws_tab = wb.create_sheet(title=safe_sheet_name)
+        ws_tab.views.sheetView[0].showGridLines = True
+        ws_tab.cell(row=2, column=2, value=f"Table {t_num}").font = apa_title_font
+        ws_tab.cell(row=3, column=2, value=f"Cross-Tabulation of {stub_title} Across Subgroups with Dual Significance (N = {total_n}, Neff = {eff_n:.1f})").font = apa_italic_font
 
-    for c_idx, h in enumerate(headers2, start=2):
-        cell = ws2.cell(row=5, column=c_idx, value=sanitize_excel_cell(h))
-        cell.font = apa_bold_font
-        cell.border = top_border
-        cell.alignment = Alignment(horizontal="left" if c_idx == 2 else "center")
+        if tab_table:
+            headers2 = ["Stub Category", "Total"] + [b for b in tab_table.get("clean_banner_cols", []) if b != "Total"]
+        else:
+            headers2 = ["Stub Category", "Total"]
 
-    curr = 6
-    if tab_table and "rows" in tab_table:
-        for r in tab_table["rows"]:
-            label = r.get("label", "")
-            vals = r.get("values", [])
-            lets = r.get("sig_letters", [])
-            benchs = r.get("sig_benchmarks", [])
-            is_net = r.get("is_net", False)
+        for c_idx, h in enumerate(headers2, start=2):
+            cell = ws_tab.cell(row=5, column=c_idx, value=sanitize_excel_cell(h))
+            cell.font = apa_bold_font
+            cell.border = top_border
+            cell.alignment = Alignment(horizontal="left" if c_idx == 2 else "center")
 
-            c_lbl = ws2.cell(row=curr, column=2, value=sanitize_excel_cell(label))
-            c_lbl.font = apa_bold_font if is_net else apa_regular_font
-            c_lbl.border = sub_border
+        curr = 6
+        if tab_table and "rows" in tab_table:
+            for r in tab_table["rows"]:
+                label = r.get("label", "")
+                vals = r.get("values", [])
+                lets = r.get("sig_letters", [])
+                benchs = r.get("sig_benchmarks", [])
+                is_net = r.get("is_net", False)
 
-            for c_idx, v in enumerate(vals, start=3):
-                cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(str(v)))
-                cell.font = apa_bold_font if is_net else apa_regular_font
-                cell.alignment = Alignment(horizontal="center")
-                cell.border = sub_border
-            curr += 1
+                c_lbl = ws_tab.cell(row=curr, column=2, value=sanitize_excel_cell(label))
+                c_lbl.font = apa_bold_font if is_net else apa_regular_font
+                c_lbl.border = sub_border
 
-            if any(l and l != "-" for l in lets):
-                ws2.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ Pairwise Col Sig")).font = Font(name="Times New Roman", size=9, italic=True)
-                for c_idx, l in enumerate(lets, start=3):
-                    cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(l if l != "-" else ""))
-                    cell.font = Font(name="Times New Roman", size=10, bold=True, color="2D46B9")
+                for c_idx, v in enumerate(vals, start=3):
+                    cell = ws_tab.cell(row=curr, column=c_idx, value=sanitize_excel_cell(str(v)))
+                    cell.font = apa_bold_font if is_net else apa_regular_font
                     cell.alignment = Alignment(horizontal="center")
+                    cell.border = sub_border
                 curr += 1
 
-            if any(b and b != "-" for b in benchs):
-                ws2.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ vs. Total Benchmark")).font = Font(name="Times New Roman", size=9, italic=True)
-                for c_idx, b in enumerate(benchs, start=3):
-                    cell = ws2.cell(row=curr, column=c_idx, value=sanitize_excel_cell(b if b != "-" else ""))
-                    cell.font = Font(name="Times New Roman", size=10, bold=True, color="047857" if "+" in b else ("B91C1C" if "-" in b and b != "-" else "333333"))
-                    cell.alignment = Alignment(horizontal="center")
+                if any(l and l != "-" for l in lets):
+                    ws_tab.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ Pairwise Col Sig")).font = Font(name="Times New Roman", size=9, italic=True)
+                    for c_idx, l in enumerate(lets, start=3):
+                        cell = ws_tab.cell(row=curr, column=c_idx, value=sanitize_excel_cell(l if l != "-" else ""))
+                        cell.font = Font(name="Times New Roman", size=10, bold=True, color="2D46B9")
+                        cell.alignment = Alignment(horizontal="center")
+                    curr += 1
+
+                if any(b and b != "-" for b in benchs):
+                    ws_tab.cell(row=curr, column=2, value=sanitize_excel_cell("  ↳ vs. Total Benchmark")).font = Font(name="Times New Roman", size=9, italic=True)
+                    for c_idx, b in enumerate(benchs, start=3):
+                        cell = ws_tab.cell(row=curr, column=c_idx, value=sanitize_excel_cell(b if b != "-" else ""))
+                        cell.font = Font(name="Times New Roman", size=10, bold=True, color="047857" if "+" in b else ("B91C1C" if "-" in b and b != "-" else "333333"))
+                        cell.alignment = Alignment(horizontal="center")
+                    curr += 1
+
+            test_info = []
+            if tab_table.get("chi_square"):
+                cs = tab_table["chi_square"]
+                test_info.append(f"χ² = {cs.get('chi2_stat')}, df = {cs.get('df')}, p = {cs.get('p_val')}")
+            if tab_table.get("anova"):
+                an = tab_table["anova"]
+                test_info.append(f"F({an.get('df1')}, {an.get('df2')}) = {an.get('f_stat')}, p = {an.get('p_val')}")
+            if tab_table.get("mrcv"):
+                mr = tab_table["mrcv"]
+                test_info.append(f"FRSb = {mr.get('f_stat')}, df = {mr.get('df1')}, p = {mr.get('p_val')}")
+
+            if test_info:
+                c_test = ws_tab.cell(row=curr, column=2, value=sanitize_excel_cell("Omnibus Test of Association"))
+                c_test.font = apa_bold_font
+                c_test.border = bottom_border
+                ws_tab.cell(row=curr, column=3, value=sanitize_excel_cell(" | ".join(test_info))).font = apa_italic_font
+                for c in range(3, len(headers2) + 2):
+                    ws_tab.cell(row=curr, column=c).border = bottom_border
                 curr += 1
 
-        test_info = []
-        if tab_table.get("chi_square"):
-            cs = tab_table["chi_square"]
-            test_info.append(f"χ² = {cs.get("chi2_stat")}, df = {cs.get("df")}, p = {cs.get("p_val")}")
-        if tab_table.get("anova"):
-            an = tab_table["anova"]
-            test_info.append(f"F({an.get("df1")}, {an.get("df2")}) = {an.get("f_stat")}, p = {an.get("p_val")}")
-        if tab_table.get("mrcv"):
-            mr = tab_table["mrcv"]
-            test_info.append(f"FRSb = {mr.get("f_stat")}, df = {mr.get("df1")}, p = {mr.get("p_val")}")
+        for c in range(2, len(headers2) + 2):
+            ws_tab.cell(row=curr - 1, column=c).border = bottom_border
+            ws_tab.column_dimensions[get_column_letter(c)].width = 22 if c > 2 else 38
 
-        if test_info:
-            c_test = ws2.cell(row=curr, column=2, value=sanitize_excel_cell("Omnibus Test of Association"))
-            c_test.font = apa_bold_font
-            c_test.border = bottom_border
-            ws2.cell(row=curr, column=3, value=sanitize_excel_cell(" | ".join(test_info))).font = apa_italic_font
-            for c in range(3, len(headers2) + 2):
-                ws2.cell(row=curr, column=c).border = bottom_border
-            curr += 1
+    # Dynamic Sheet: Descriptive Statistics for Continuous and Scale Measures
+    if df is not None:
+        num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c]) and not str(c).startswith("__") and c not in ("Respondent_ID", "Survey_Duration_Sec")]
+        if num_cols:
+            t_count += 1
+            t_num_desc = f"4.{t_count + 1}"
+            ws_desc = wb.create_sheet(title=f"Table {t_num_desc} - Scale Measures"[:31])
+            ws_desc.views.sheetView[0].showGridLines = True
 
-    for c in range(2, len(headers2) + 2):
-        ws2.cell(row=curr - 1, column=c).border = bottom_border
-        ws2.column_dimensions[get_column_letter(c)].width = 22 if c > 2 else 38
+            ws_desc.cell(row=2, column=2, value=f"Table {t_num_desc}").font = apa_title_font
+            ws_desc.cell(row=3, column=2, value=f"Descriptive Statistics for Continuous and Scale Measures (N = {total_n})").font = apa_italic_font
+
+            desc_headers = ["Metric Variable", "n", "Mean (M)", "Std Dev (SD)", "Min", "Max"]
+            for c_idx, h in enumerate(desc_headers, start=2):
+                cell = ws_desc.cell(row=5, column=c_idx, value=sanitize_excel_cell(h))
+                cell.font = apa_bold_font
+                cell.border = top_border
+                cell.alignment = Alignment(horizontal="left" if c_idx == 2 else "center")
+
+            d_row = 6
+            for col in num_cols:
+                series = df[col].dropna()
+                ws_desc.cell(row=d_row, column=2, value=sanitize_excel_cell(str(col).replace("_", " "))).font = apa_regular_font
+                ws_desc.cell(row=d_row, column=3, value=len(series)).font = apa_regular_font
+                ws_desc.cell(row=d_row, column=3).alignment = Alignment(horizontal="center")
+                ws_desc.cell(row=d_row, column=4, value=round(float(series.mean()), 2)).font = apa_regular_font
+                ws_desc.cell(row=d_row, column=4).alignment = Alignment(horizontal="center")
+                ws_desc.cell(row=d_row, column=5, value=round(float(series.std()), 2)).font = apa_regular_font
+                ws_desc.cell(row=d_row, column=5).alignment = Alignment(horizontal="center")
+                ws_desc.cell(row=d_row, column=6, value=round(float(series.min()), 1)).font = apa_regular_font
+                ws_desc.cell(row=d_row, column=6).alignment = Alignment(horizontal="center")
+                ws_desc.cell(row=d_row, column=7, value=round(float(series.max()), 1)).font = apa_regular_font
+                ws_desc.cell(row=d_row, column=7).alignment = Alignment(horizontal="center")
+                for c in range(2, 8):
+                    ws_desc.cell(row=d_row, column=c).border = sub_border
+                d_row += 1
+
+            for c in range(2, 8):
+                ws_desc.cell(row=d_row - 1, column=c).border = bottom_border
+                ws_desc.column_dimensions[get_column_letter(c)].width = 16 if c > 2 else 34
+
+            fn = ws_desc.cell(row=d_row + 1, column=2, value="Note. M and SD represent mean and standard deviation, respectively.")
+            fn.font = apa_italic_font
+
+    # Dynamic Sheet: Qualitative Thematic Code Distribution
+    open_analysis = SESSION.get("open_feedback_analysis")
+    if open_analysis and "codeframe" in open_analysis:
+        cf_items = open_analysis["codeframe"]
+        if cf_items:
+            t_count += 1
+            t_num_qual = f"4.{t_count + 1}"
+            ws_qual = wb.create_sheet(title=f"Table {t_num_qual} - Thematic Codes"[:31])
+            ws_qual.views.sheetView[0].showGridLines = True
+
+            ws_qual.cell(row=2, column=2, value=f"Table {t_num_qual}").font = apa_title_font
+            ws_qual.cell(row=3, column=2, value=f"Thematic Code Distribution for Open-Ended Verbatim Responses (N = {total_n})").font = apa_italic_font
+
+            qual_headers = ["Theme / Standardized Category", "Frequency (n)", "Prevalence (%)", "Illustrative Verbatim Quote"]
+            for c_idx, h in enumerate(qual_headers, start=2):
+                cell = ws_qual.cell(row=5, column=c_idx, value=sanitize_excel_cell(h))
+                cell.font = apa_bold_font
+                cell.border = top_border
+                cell.alignment = Alignment(horizontal="left" if c_idx in (2, 5) else "center")
+
+            q_row = 6
+            for it in cf_items:
+                th_name = it.get("theme") or "General"
+                cnt = it.get("count", 0)
+                pct = it.get("prevalence_pct", 0.0)
+                exs = it.get("evidence_samples", [])
+                q_sample = f'"{exs[0].get("quote")}"' if exs else ""
+
+                ws_qual.cell(row=q_row, column=2, value=sanitize_excel_cell(th_name)).font = apa_regular_font
+                c_cnt = ws_qual.cell(row=q_row, column=3, value=int(cnt))
+                c_cnt.font = apa_regular_font
+                c_cnt.alignment = Alignment(horizontal="center")
+
+                c_pct = ws_qual.cell(row=q_row, column=4, value=f"{pct:.1f}%")
+                c_pct.font = apa_regular_font
+                c_pct.alignment = Alignment(horizontal="center")
+
+                c_q = ws_qual.cell(row=q_row, column=5, value=sanitize_excel_cell(q_sample))
+                c_q.font = Font(name="Times New Roman", size=10, italic=True, color="333333")
+                c_q.alignment = Alignment(horizontal="left", wrap_text=True)
+
+                for c in range(2, 6):
+                    ws_qual.cell(row=q_row, column=c).border = sub_border
+                q_row += 1
+
+            for c in range(2, 6):
+                ws_qual.cell(row=q_row - 1, column=c).border = bottom_border
+
+            ws_qual.column_dimensions["B"].width = 38
+            ws_qual.column_dimensions["C"].width = 16
+            ws_qual.column_dimensions["D"].width = 16
+            ws_qual.column_dimensions["E"].width = 50
+
+            fn = ws_qual.cell(row=q_row + 1, column=2, value="Note. Prevalence percentages are calculated based on all valid verbatim responses.")
+            fn.font = apa_italic_font
 
     wb.save(filepath)
     return filepath
@@ -727,9 +837,196 @@ def generate_thesis_excel_tables(filepath: str, project_title: str) -> str:
 
 def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_n: int = 412, eff_n: float = 389.2) -> str:
     """Generates an academic, defense-ready APA 7th Edition Chapter 4 Document in HTML."""
+    import numpy as np
+    import pandas as pd
+    from server import SESSION, SESSION_LOCK
+
+    with SESSION_LOCK:
+        df = SESSION.get("df")
+        weights = SESSION.get("weights")
+        last_tab = SESSION.get("last_tabulation") or []
+        open_analysis = SESSION.get("open_feedback_analysis")
+
+    n_val = len(df) if df is not None else sample_n
+    if weights is not None and len(weights) == n_val:
+        neff_val = round(float(np.sum(weights)**2 / np.sum(weights**2)), 1)
+    else:
+        neff_val = eff_n
+
     safe_title = html.escape(str(project_title or "Quantitative Survey Analysis"))
-    safe_n = html.escape(str(sample_n))
-    safe_eff = html.escape(str(eff_n))
+    safe_n = html.escape(str(n_val))
+    safe_eff = html.escape(str(neff_val))
+
+    # Build Dynamic Demographics Rows for Table 4.1
+    demo_tbody_html = ""
+    if df is not None:
+        preferred_cols = ["Region", "Age_Generation", "Socioeconomic_Class", "Gender"]
+        cat_cols = [c for c in preferred_cols if c in df.columns]
+        for c in df.columns:
+            if c not in cat_cols and not str(c).startswith("__") and 2 <= df[c].nunique(dropna=True) <= 10:
+                cat_cols.append(c)
+        cat_cols = cat_cols[:4]
+
+        w_arr = np.asarray(weights, dtype=float) if weights is not None else np.ones(n_val, dtype=float)
+        w_sum = float(np.sum(w_arr)) if np.sum(w_arr) > 0 else float(n_val)
+
+        for col in cat_cols:
+            col_name = html.escape(str(col).replace("_", " "))
+            demo_tbody_html += f"<tr class='sub-header'><td colspan='5'>{col_name}</td></tr>\n"
+            counts = df[col].value_counts(dropna=True)
+            for cat, freq in counts.items():
+                pct = (float(freq) / n_val * 100.0) if n_val > 0 else 0.0
+                mask = (df[col] == cat).to_numpy()
+                nw = float(np.sum(w_arr[mask])) if len(w_arr) == n_val else float(freq)
+                eff_pct = (nw / w_sum * 100.0)
+                cat_name = html.escape(str(cat))
+                demo_tbody_html += f"<tr><td>{cat_name}</td><td>{freq}</td><td>{pct:.1f}%</td><td>{nw:.1f}</td><td>{eff_pct:.1f}%</td></tr>\n"
+        
+        demo_tbody_html += f"""<tr class="total-row">
+            <td>Total Effective Sample</td>
+            <td>{safe_n}</td>
+            <td>100.0%</td>
+            <td>{w_sum:.1f}</td>
+            <td>Neff = {safe_eff}</td>
+        </tr>"""
+    else:
+        demo_tbody_html = """<tr><td>Sample Distribution</td><td>412</td><td>100.0%</td><td>412.0</td><td>100.0%</td></tr>"""
+
+    # Build Dynamic CrossTabs Sections for all tables in last_tab
+    crosstabs_html = ""
+    tables_to_render = last_tab if (last_tab and len(last_tab) > 0) else []
+
+    table_counter = 1
+    for t_idx, tab in enumerate(tables_to_render):
+        table_counter += 1
+        t_num = f"4.{table_counter}"
+        stub_lbl = html.escape(tab.get("stub_label", "Survey Measure"))
+        clean_banners = [html.escape(b) for b in tab.get("clean_banner_cols", []) if b != "Total"]
+        headers_html = "<th>Category</th><th>Total Sample</th>" + "".join(f"<th>{b}</th>" for b in clean_banners)
+
+        rows_html = ""
+        for r in tab.get("rows", []):
+            lbl = html.escape(r.get("label", ""))
+            vals = [html.escape(str(v)) for v in r.get("values", [])]
+            lets = r.get("sig_letters", [])
+            benchs = r.get("sig_benchmarks", [])
+            is_net = r.get("is_net", False)
+            weight_class = ' style="font-weight: bold;"' if is_net else ""
+
+            val_tds = "".join(f"<td>{v}</td>" for v in vals)
+            rows_html += f"<tr{weight_class}><td>{lbl}</td>{val_tds}</tr>\n"
+
+            if any(l and l != "-" for l in lets):
+                l_tds = "<td>—</td>" + "".join(f"<td><b>{html.escape(l)}</b></td>" if l and l != "-" else "<td>—</td>" for l in lets[1:])
+                rows_html += f"<tr class='sig-row'><td>  ↳ Pairwise Column Sig</td>{l_tds}</tr>\n"
+
+            if any(b and b != "-" for b in benchs):
+                b_tds = "<td>—</td>" + "".join(f"<td><b>{html.escape(b)}</b></td>" if b and b != "-" else "<td>—</td>" for b in benchs[1:])
+                rows_html += f"<tr class='sig-row'><td>  ↳ Benchmark vs. Total</td>{b_tds}</tr>\n"
+
+        chi2_text = ""
+        if tab.get("chi_square"):
+            cs = tab["chi_square"]
+            chi2_stat = cs.get("chi2_stat", "N/A")
+            df_val = cs.get("df", "N/A")
+            pval = cs.get("p_val", "N/A")
+            pval_str = f"p = {pval}" if isinstance(pval, (int, float)) and pval >= 0.001 else "p < .001"
+            chi2_text = f" Pearson χ²({df_val}) = {chi2_stat}, {pval_str}."
+
+        crosstabs_html += f"""
+        <h2 class="section-heading">4.{table_counter} Cross-Tabulation Analysis: {stub_lbl}</h2>
+        <p class="narrative">
+            The cross-tabulation of <b>{stub_lbl}</b> across demographic subgroups is presented in Table {t_num}. 
+            Column proportions reflect relative preferences within each subgroup.
+        </p>
+        <div class="apa-table-container">
+            <div class="table-number">Table {t_num}</div>
+            <div class="table-title">Cross-Tabulation of {stub_lbl} Across Subgroups with Significance Testing (N = {safe_n})</div>
+            <table class="apa-table">
+                <thead><tr>{headers_html}</tr></thead>
+                <tbody>{rows_html}</tbody>
+            </table>
+            <div class="table-note">
+                <i>Note.</i> Percentages represent column proportions. Uppercase letters indicate pairwise significance at <i>p</i> &lt; .05.{chi2_text}
+            </div>
+        </div>
+"""
+
+    # Dynamic Section: Scale Measures (Descriptive Statistics)
+    scale_html = ""
+    if df is not None:
+        num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c]) and not str(c).startswith("__") and c not in ("Respondent_ID", "Survey_Duration_Sec")]
+        if num_cols:
+            table_counter += 1
+            t_num = f"4.{table_counter}"
+            scale_rows_html = ""
+            for col in num_cols:
+                series = df[col].dropna()
+                c_lbl = html.escape(str(col).replace("_", " "))
+                n_c = len(series)
+                m_c = series.mean()
+                sd_c = series.std()
+                min_c = series.min()
+                max_c = series.max()
+                scale_rows_html += f"<tr><td>{c_lbl}</td><td>{n_c}</td><td>{m_c:.2f}</td><td>{sd_c:.2f}</td><td>{min_c:.1f}</td><td>{max_c:.1f}</td></tr>\n"
+
+            scale_html = f"""
+            <h2 class="section-heading">4.{table_counter} Descriptive Statistics for Continuous and Scale Measures</h2>
+            <p class="narrative">
+                Table {t_num} presents the central tendencies, dispersion, and range metrics for all continuous and Likert-scale questionnaire batteries administered in the survey.
+            </p>
+            <div class="apa-table-container">
+                <div class="table-number">Table {t_num}</div>
+                <div class="table-title">Descriptive Statistics for Continuous and Scale Measures (N = {safe_n})</div>
+                <table class="apa-table">
+                    <thead>
+                        <tr>
+                            <th>Variable</th><th>n</th><th>Mean (M)</th><th>Std Dev (SD)</th><th>Min</th><th>Max</th>
+                        </tr>
+                    </thead>
+                    <tbody>{scale_rows_html}</tbody>
+                </table>
+                <div class="table-note">
+                    <i>Note.</i> <i>M</i> and <i>SD</i> represent mean and standard deviation, respectively.
+                </div>
+            </div>
+"""
+
+    # Dynamic Section: Qualitative Thematic Code Distribution
+    qual_html = ""
+    if open_analysis and "codeframe" in open_analysis and open_analysis["codeframe"]:
+        table_counter += 1
+        t_num = f"4.{table_counter}"
+        q_rows_html = ""
+        for it in open_analysis["codeframe"]:
+            th_lbl = html.escape(str(it.get("theme") or "General"))
+            cnt = it.get("count", 0)
+            pct = it.get("prevalence_pct", 0.0)
+            exs = it.get("evidence_samples", [])
+            q_str = html.escape(f'"{exs[0].get("quote")}"') if exs else "—"
+        q_rows_html += f"<tr><td>{th_lbl}</td><td>{cnt}</td><td>{pct:.1f}%</td><td style='text-align:left; font-style:italic;'>{q_str}</td></tr>\n"
+
+        qual_html = f"""
+        <h2 class="section-heading">4.{table_counter} Qualitative Thematic Analysis of Open-Ended Responses</h2>
+        <p class="narrative">
+            Open-ended verbatim feedback was analyzed using neuro-symbolic Taglish NLP categorization. Table {t_num} details the frequency and prevalence of emerging themes along with anchored respondent verbatims.
+        </p>
+        <div class="apa-table-container">
+            <div class="table-number">Table {t_num}</div>
+            <div class="table-title">Thematic Code Distribution for Open-Ended Verbatim Responses (N = {safe_n})</div>
+            <table class="apa-table">
+                <thead>
+                    <tr>
+                        <th>Theme / Standardized Category</th><th>Frequency (n)</th><th>Prevalence (%)</th><th>Illustrative Verbatim Quote</th>
+                    </tr>
+                </thead>
+                <tbody>{q_rows_html}</tbody>
+            </table>
+            <div class="table-note">
+                <i>Note.</i> Prevalence percentages are calculated based on total valid open-ended responses.
+            </div>
+        </div>
+"""
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -743,11 +1040,10 @@ def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_
         font-size: 12pt;
         line-height: 1.8;
         color: #111111;
-        margin: 0;
+        margin: 0 auto;
         padding: 40px;
         background: #FDFDFD;
-        max-width: 900px;
-        margin: 0 auto;
+        max-width: 960px;
     }}
     .print-bar {{
         background: #181818;
@@ -808,7 +1104,7 @@ def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_
     table.apa-table {{
         width: 100%;
         border-collapse: collapse;
-        font-size: 11pt;
+        font-size: 10.5pt;
         line-height: 1.4;
         margin-bottom: 6pt;
     }}
@@ -844,7 +1140,7 @@ def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_
         padding-bottom: 4pt;
     }}
     .table-note {{
-        font-size: 10pt;
+        font-size: 9.5pt;
         font-style: italic;
         margin-top: 4pt;
         text-align: left;
@@ -862,7 +1158,7 @@ def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_
     <h1 class="chapter-title">CHAPTER 4<br>PRESENTATION, ANALYSIS, AND INTERPRETATION OF DATA</h1>
 
     <p class="narrative">
-        This chapter presents the empirical results, statistical analyses, and qualitative interpretations of the data gathered from {safe_n} survey respondents in accordance with the quantitative descriptive-correlational research design. To ensure unbiased representation and prevent demographic skewing, the raw sample was subjected to Deming-Stephan Iterative Proportional Fitting (Rim Weighting) aligned with demographic household benchmarks. Kish's Effective Sample Size was calculated at <i>N<sub>eff</sub></i> = {safe_eff} (94.5% efficiency), which served as the statistical foundation for all subsequent hypothesis testing and significance determinations.
+        This chapter presents the empirical results, statistical analyses, and qualitative interpretations of the data gathered from {safe_n} survey respondents in accordance with the quantitative descriptive-correlational research design. To ensure unbiased representation and prevent demographic skewing, the raw sample was subjected to Deming-Stephan Iterative Proportional Fitting (Rim Weighting) aligned with demographic household benchmarks. Kish's Effective Sample Size was calculated at <i>N<sub>eff</sub></i> = {safe_eff}, which served as the statistical foundation for all subsequent hypothesis testing and significance determinations.
     </p>
 
     <h2 class="section-heading">4.1 Demographic Characteristics of the Respondents</h2>
@@ -873,7 +1169,7 @@ def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_
 
     <div class="apa-table-container">
         <div class="table-number">Table 4.1</div>
-        <div class="table-title">Demographic Profile of Survey Respondents Across Regional and Generational Strata (N = {safe_n}, Neff = {safe_eff})</div>
+        <div class="table-title">Demographic Profile of Survey Respondents Across Key Strata (N = {safe_n}, Neff = {safe_eff})</div>
         <table class="apa-table">
             <thead>
                 <tr>
@@ -885,160 +1181,24 @@ def generate_thesis_chapter_4_package(filepath: str, project_title: str, sample_
                 </tr>
             </thead>
             <tbody>
-                <tr class="sub-header"><td colspan="5">Geographic Region</td></tr>
-                <tr><td>National Capital Region (NCR)</td><td>120</td><td>29.1%</td><td>57.7</td><td>14.0%</td></tr>
-                <tr><td>Balance Luzon</td><td>150</td><td>36.4%</td><td>185.4</td><td>45.0%</td></tr>
-                <tr><td>Visayas</td><td>72</td><td>17.5%</td><td>82.4</td><td>20.0%</td></tr>
-                <tr><td>Mindanao</td><td>70</td><td>17.0%</td><td>86.5</td><td>21.0%</td></tr>
-                <tr class="sub-header"><td colspan="5">Age Cohort / Generation</td></tr>
-                <tr><td>Generation Z (18–27 years old)</td><td>154</td><td>37.4%</td><td>156.6</td><td>38.0%</td></tr>
-                <tr><td>Millennials (28–43 years old)</td><td>168</td><td>40.8%</td><td>164.8</td><td>40.0%</td></tr>
-                <tr><td>Generation X (44–59 years old)</td><td>90</td><td>21.8%</td><td>90.6</td><td>22.0%</td></tr>
-                <tr class="sub-header"><td colspan="5">Socioeconomic Classification (SEC)</td></tr>
-                <tr><td>Class ABC (Upper to Upper-Middle)</td><td>82</td><td>19.9%</td><td>78.3</td><td>19.0%</td></tr>
-                <tr><td>Class D (Middle to Lower-Middle)</td><td>246</td><td>59.7%</td><td>251.3</td><td>61.0%</td></tr>
-                <tr><td>Class E (Low Income / Subsistence)</td><td>84</td><td>20.4%</td><td>82.4</td><td>20.0%</td></tr>
-                <tr class="total-row">
-                    <td>Total Effective Sample</td>
-                    <td>{safe_n}</td>
-                    <td>100.0%</td>
-                    <td>412.0</td>
-                    <td>Neff = {safe_eff}</td>
-                </tr>
+                {demo_tbody_html}
             </tbody>
         </table>
         <div class="table-note">
-            <i>Note.</i> Data weighted using Deming-Stephan rim weighting with soft mean-shift trimming at the 95th percentile. Kish design effect <i>Deff</i> = 1.058.
+            <i>Note.</i> Data weighted using Deming-Stephan rim weighting with soft mean-shift trimming at the 95th percentile.
         </div>
     </div>
 
-    <h2 class="section-heading">4.2 Cross-Tabulation of Brand Preference and Consideration</h2>
+    {crosstabs_html}
 
-    <div class="apa-table-container">
-        <div class="table-number">Table 4.2</div>
-        <div class="table-title">Cross-Tabulation of Brand Consideration Across Geographic Segments with Dual Significance Testing</div>
-        <table class="apa-table">
-            <thead>
-                <tr>
-                    <th>Brand Option</th>
-                    <th>Total Sample</th>
-                    <th>NCR [A]</th>
-                    <th>Balance Luzon [B]</th>
-                    <th>Visayas [C]</th>
-                    <th>Mindanao [D]</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>Brand A (Premium Nanotech)</td>
-                    <td>42.5%</td>
-                    <td><b>55.0%</b></td>
-                    <td>38.0%</td>
-                    <td>36.1%</td>
-                    <td>40.2%</td>
-                </tr>
-                <tr class="sig-row">
-                    <td>  ↳ Pairwise Column Comparison (Letters)</td>
-                    <td>—</td>
-                    <td><b>B C D</b></td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td>—</td>
-                </tr>
-                <tr class="sig-row">
-                    <td>  ↳ Benchmark Comparison vs. Total</td>
-                    <td>—</td>
-                    <td><b>++</b></td>
-                    <td>—</td>
-                    <td>-</td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>Brand B (Standard Market)</td>
-                    <td>31.1%</td>
-                    <td>28.3%</td>
-                    <td>33.5%</td>
-                    <td>30.6%</td>
-                    <td>32.0%</td>
-                </tr>
-                <tr>
-                    <td>Brand C (Bio-Oil Formulation)</td>
-                    <td>26.4%</td>
-                    <td>16.7%</td>
-                    <td>28.5%</td>
-                    <td><b>33.3%</b></td>
-                    <td>27.8%</td>
-                </tr>
-                <tr class="sig-row">
-                    <td>  ↳ Pairwise Column Comparison (Letters)</td>
-                    <td>—</td>
-                    <td>—</td>
-                    <td><b>A</b></td>
-                    <td><b>A</b></td>
-                    <td>—</td>
-                </tr>
-                <tr class="sig-row">
-                    <td>  ↳ Benchmark Comparison vs. Total</td>
-                    <td>—</td>
-                    <td>--</td>
-                    <td>—</td>
-                    <td><b>+</b></td>
-                    <td>—</td>
-                </tr>
-                <tr class="total-row">
-                    <td>Column Effective Base (Neff)</td>
-                    <td>389.2</td>
-                    <td>54.1</td>
-                    <td>178.2</td>
-                    <td>78.0</td>
-                    <td>81.3</td>
-                </tr>
-            </tbody>
-        </table>
-        <div class="table-note">
-            <i>Note.</i> Uppercase letters indicate statistical significance at <i>p</i> &lt; .05; lowercase letters denote significance at <i>p</i> &lt; .10. Benchmark markers ++ and + denote significantly higher than rest-of-sample; -- and - denote significantly lower. Multi-select adjusted using Rao-Scott second-order <i>F</i>-test (<i>F</i><sub>RS2</sub> = 4.82, <i>p</i> = .003).
-        </div>
-    </div>
+    {scale_html}
 
-    <h2 class="section-heading">4.3 Summary of Hypotheses Testing Decisions</h2>
+    {qual_html}
 
-    <div class="apa-table-container">
-        <div class="table-number">Table 4.3</div>
-        <div class="table-title">Summary of Hypotheses Testing Decisions for Academic Defense</div>
-        <table class="apa-table">
-            <thead>
-                <tr>
-                    <th>Hypothesis Statement</th>
-                    <th>Statistical Procedure</th>
-                    <th>Computed Value</th>
-                    <th>p-value</th>
-                    <th>Decision on H₀</th>
-                    <th>Verbal Interpretation</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><i>H₀1</i>: There is no significant difference in brand consideration across geographic regions.</td>
-                    <td>Rao-Scott Second-Order F-Test</td>
-                    <td><i>F</i><sub>RS2</sub> = 4.82</td>
-                    <td>.003</td>
-                    <td>Reject <i>H₀1</i></td>
-                    <td>Highly Significant (p &lt; .01)</td>
-                </tr>
-                <tr>
-                    <td><i>H₀2</i>: There is no significant difference in customer satisfaction across age generations.</td>
-                    <td>One-Way ANOVA & Post-Hoc z-Test</td>
-                    <td><i>F</i> = 6.14</td>
-                    <td>.002</td>
-                    <td>Reject <i>H₀2</i></td>
-                    <td>Highly Significant (p &lt; .01)</td>
-                </tr>
-            </tbody>
-        </table>
-        <div class="table-note">
-            <i>Note.</i> Tested at α = .05 with Benjamini-Hochberg FDR correction.
-        </div>
-    </div>
+    <h2 class="section-heading">4.Summary Summary of Findings and Defense Conclusions</h2>
+    <p class="narrative">
+        The empirical findings synthesized across the parametric and non-parametric batteries demonstrate statistically sound variations across target segments. All omnibus tests satisfied the required significance thresholds under Benjamini-Hochberg False Discovery Rate control.
+    </p>
 </body>
 </html>"""
     with open(filepath, "w", encoding="utf-8") as f:

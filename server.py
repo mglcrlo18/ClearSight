@@ -355,6 +355,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.coder_review_queue()
         elif path == "/api/coder/codeframes":
             self.send_json_response({"status": "success", "default_coder": CODER_DEFAULT, "codeframes": list_codeframes()})
+        elif path == "/api/coder/themes":
+            self.handle_get_coder_themes()
         elif path == "/api/coder/telemetry":
             from engine.coder_v2 import telemetry_snapshot
             store = get_feedback_store()
@@ -833,16 +835,51 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         items = [{"response_id": r["response_id"], "text": r.get("raw_text", ""), "themes": r.get("assigned_themes", []),
                   "sentiment": r.get("sentiment"), "confidence": r.get("confidence"), "reasons": r.get("reasons", [])}
                  for r in analysis.get("records", []) if r.get("response_id") in queue][:200]
-        options = []
-        cf_id = analysis.get("codeframe_id")
-        if cf_id:
-            try:
-                cf = load_codeframe(cf_id)
-                options = [{"code_id": c["code_id"], "label": c["label"], "subnet": t["subnet"]}
-                           for t in cf["topics"] for c in t["codes"].values()]
-            except CodeframeError:
-                options = []
+        options = self._extract_codeframe_options(analysis)
+        cf_id = analysis.get("codeframe_id") or "custom"
         self.send_json_response({"status": "success", "codeframe_id": cf_id, "count": len(queue), "items": items, "options": options})
+
+    def _extract_codeframe_options(self, analysis=None):
+        if analysis is None:
+            analysis = SESSION.get("open_feedback_analysis") or {}
+        with SESSION_LOCK:
+            custom_codeframe = SESSION.get("custom_codeframe")
+        cf = None
+        if custom_codeframe and isinstance(custom_codeframe, dict):
+            cf = custom_codeframe
+        elif custom_codeframe and isinstance(custom_codeframe, list):
+            cf = {"topics": custom_codeframe}
+        else:
+            cf_id = analysis.get("codeframe_id")
+            if cf_id:
+                try:
+                    cf = load_codeframe(cf_id)
+                except Exception:
+                    cf = None
+
+        options = []
+        if cf and "topics" in cf:
+            for t in cf["topics"]:
+                sub = t.get("subnet") or t.get("net") or "General"
+                codes_dict = t.get("codes", {})
+                if isinstance(codes_dict, dict) and codes_dict:
+                    for c in codes_dict.values():
+                        options.append({
+                            "code_id": c.get("code_id"),
+                            "label": c.get("label"),
+                            "subnet": sub
+                        })
+                else:
+                    options.append({
+                        "code_id": t.get("id"),
+                        "label": t.get("label") or t.get("name") or t.get("id"),
+                        "subnet": sub
+                    })
+        return options
+
+    def handle_get_coder_themes(self):
+        options = self._extract_codeframe_options()
+        self.send_json_response({"status": "success", "themes": options})
 
     def stream_export_file(self, filename: str, mime_type: str):
         """Streams generated file fresh on demand, eliminating stale caching (CS-N03)."""
@@ -940,15 +977,22 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             if filename.lower().endswith((".xlsx", ".xls")) or (len(body_bytes) > 4 and body_bytes[:4] == b"PK\x03\x04"):
                 from engine.codeframe_excel_parser import parse_excel_codeframe
                 cf = parse_excel_codeframe(body_bytes, codeframe_name=filename)
+            elif filename.lower().endswith(".csv"):
+                from engine.codeframe_excel_parser import CodeframeNormalizer
+                cf = CodeframeNormalizer.parse_tabular_codeframe(body_bytes, filename=filename)
             else:
-                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+                try:
+                    req_data = json.loads(body_bytes.decode("utf-8-sig")) if body_bytes else {}
+                except Exception:
+                    req_data = None
+
                 if isinstance(req_data, dict) and "topics" in req_data:
                     cf = load_codeframe_from_dict(req_data)
                 elif isinstance(req_data, list):
                     cf = validate_codeframe({"schema_version": 1, "id": "custom_dp", "name": "Custom Uploaded Codeframe", "topics": req_data})
                 else:
-                    self.send_json_response({"status": "error", "message": "Invalid codeframe payload."}, 400)
-                    return
+                    from engine.codeframe_excel_parser import CodeframeNormalizer
+                    cf = CodeframeNormalizer.parse_tabular_codeframe(body_bytes, filename=filename)
 
             with SESSION_LOCK:
                 SESSION["custom_codeframe"] = cf

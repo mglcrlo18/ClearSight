@@ -16,7 +16,7 @@ import tempfile
 import server
 from engine.codeframe_excel_parser import parse_excel_codeframe
 from engine.tabulation_engine import build_crosstab_table
-from engine.export_engine import generate_thesis_excel_tables
+from engine.export_engine import generate_thesis_excel_tables, generate_thesis_chapter_4_package
 from engine.stats_engine import calculate_chi_square_df, chi_square_independence
 from engine.statistical_suite import (
     run_independent_ttest,
@@ -37,6 +37,10 @@ class TestDefectResolutions(unittest.TestCase):
 
     def setUp(self):
         server.load_bundled_sample()
+        with server.SESSION_LOCK:
+            server.SESSION["custom_codeframe"] = None
+            server.SESSION["open_feedback_analysis"] = None
+            server.SESSION["last_tabulation"] = None
 
     def test_cs_def_01_codeframe_parser_fstring_syntax(self):
         """CS-DEF-01: Ensure parser parses NET and Subnet headers without f-string backslash errors."""
@@ -319,6 +323,111 @@ class TestDefectResolutions(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertEqual(resp.get("status"), "error")
         self.assertIn("coder must be 'v1', 'v2', or 'v3'", resp.get("message", ""))
+
+    def test_cs_codeframe_csv_upload_and_theme_binding(self):
+        """Verify uploading CSV codeframe populates themes in review queue and themes endpoint."""
+        csv_bytes = (
+            "\ufeffTheme,Category,Code,Quotes\n"
+            "Budget Relief,Economic Aid,101,Napakalaking tipid sa pagkain\n"
+            "Long Lines,Operational Delays,201,Tatlong oras kami sa pila\n"
+        ).encode("utf-8-sig")
+
+        handler = server.ClearSightRequestHandler.__new__(server.ClearSightRequestHandler)
+        captured = []
+        handler.send_json_response = lambda data, status=200: captured.append((status, data))
+        handler.validate_host_header = lambda: True
+        handler.validate_origin_header = lambda: True
+
+        # 1. Upload CSV codeframe
+        handler.headers = {"X-Filename": "subsidy_codeframe.csv"}
+        handler.handle_upload_codeframe(csv_bytes)
+
+        self.assertTrue(len(captured) > 0)
+        status, resp = captured.pop()
+        self.assertEqual(status, 200)
+        self.assertEqual(resp.get("status"), "success")
+        self.assertEqual(resp.get("topics_count"), 2)
+
+        # 2. Check /api/coder/themes endpoint
+        handler.handle_get_coder_themes()
+        self.assertTrue(len(captured) > 0)
+        status, resp = captured.pop()
+        self.assertEqual(status, 200)
+        self.assertEqual(resp.get("status"), "success")
+        theme_labels = [t["label"] for t in resp.get("themes", [])]
+        self.assertIn("Budget Relief", theme_labels)
+        self.assertIn("Long Lines", theme_labels)
+
+        # 3. Check coder_review_queue returns populated theme options
+        server.SESSION["open_feedback_analysis"] = {
+            "review_queue": [1],
+            "records": [{"response_id": 1, "raw_text": "Mahabang pila", "assigned_themes": ["Long Lines"]}]
+        }
+        handler.coder_review_queue()
+        self.assertTrue(len(captured) > 0)
+        status, resp = captured.pop()
+        self.assertEqual(status, 200)
+        opt_labels = [o["label"] for o in resp.get("options", [])]
+        self.assertIn("Budget Relief", opt_labels)
+        self.assertIn("Long Lines", opt_labels)
+
+    def test_dynamic_apa_multi_table_generation(self):
+        """Verify dynamic APA export constructs sheets and narrative for multiple staged stubs."""
+        server.load_bundled_sample()
+        with server.SESSION_LOCK:
+            server.SESSION["last_tabulation"] = [
+                {
+                    "stub_label": "Brand Preference",
+                    "clean_banner_cols": ["Total", "NCR (A)", "Balance Luzon (B)"],
+                    "rows": [{"label": "Brand A", "values": ["40%", "50%", "30%"]}],
+                    "chi_square": {"chi2_stat": 12.5, "df": 4, "p_val": 0.014}
+                },
+                {
+                    "stub_label": "Overall CSAT",
+                    "clean_banner_cols": ["Total", "NCR (A)", "Balance Luzon (B)"],
+                    "rows": [{"label": "Top 2 Box", "values": ["85%", "90%", "80%"]}],
+                    "anova": {"f_stat": 4.32, "df1": 2, "df2": 409, "p_val": 0.014}
+                }
+            ]
+            server.SESSION["open_feedback_analysis"] = {
+                "total_analyzed": 412,
+                "codeframe": [
+                    {"theme": "Affordable Price", "count": 190, "prevalence_pct": 46.1, "evidence_samples": [{"quote": "Sulit ang bilihin"}]}
+                ]
+            }
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp_f:
+            xlsx_path = tmp_f.name
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp_f:
+            html_path = tmp_f.name
+
+        try:
+            generate_thesis_excel_tables(xlsx_path, "Dynamic Thesis Study")
+            generate_thesis_chapter_4_package(html_path, "Dynamic Thesis Study")
+
+            # Verify Excel
+            wb = openpyxl.load_workbook(xlsx_path)
+            self.assertIn("Table 4.1 - Demographics", wb.sheetnames)
+            self.assertIn("Table 4.2 - Brand Preference", wb.sheetnames)
+            self.assertIn("Table 4.3 - Overall CSAT", wb.sheetnames)
+            self.assertTrue(any("Scale Measures" in s for s in wb.sheetnames))
+            self.assertTrue(any("Thematic Codes" in s for s in wb.sheetnames))
+
+            # Verify HTML
+            with open(html_path, "r", encoding="utf-8") as f:
+                html_text = f.read()
+            self.assertIn("CHAPTER 4", html_text)
+            self.assertIn("Table 4.1", html_text)
+            self.assertIn("Brand Preference", html_text)
+            self.assertIn("Overall CSAT", html_text)
+            self.assertIn("Affordable Price", html_text)
+        finally:
+            for p in (xlsx_path, html_path):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
 
 
 if __name__ == "__main__":
