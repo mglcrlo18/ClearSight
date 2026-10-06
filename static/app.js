@@ -1261,7 +1261,7 @@ async function loadTaglishCoding() {
         }
         if (data.status === 'success' && data.codeframe) {
             renderTaglishCodeframe(data);
-            if (data.coder === 'v2') {
+            if (data.coder === 'v2' || data.coder === 'v3') {
                 loadReviewQueue();
             }
         } else {

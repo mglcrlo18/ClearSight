@@ -15,6 +15,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from collections import Counter
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import threading
@@ -40,11 +41,11 @@ from engine.driver_analysis import compute_johnsons_relative_weights
 from engine.taglish_nlp import batch_code_open_ends, scrub_pii
 from engine.codeframe_loader import CodeframeError, list_codeframes, load_codeframe, load_codeframe_from_dict, validate_codeframe
 
-# Coder feature flag: "v2" (default; beat v1 on the held-out client test set, see
-# Coder_Improvement_Plan.md) or "v1" (legacy rule coder). Per request: {"coder": "v1"|"v2"}.
-CODER_DEFAULT = os.environ.get("CLEARSIGHT_CODER", "v2").strip().lower()
-if CODER_DEFAULT not in ("v1", "v2"):
-    CODER_DEFAULT = "v2"
+# Coder feature flag: "v3" (default SetFit embeddings & PA-II active learning),
+# "v2" (syntax-aware negation & contrast coder), or "v1" (legacy rule coder).
+CODER_DEFAULT = os.environ.get("CLEARSIGHT_CODER", "v3").strip().lower()
+if CODER_DEFAULT not in ("v1", "v2", "v3"):
+    CODER_DEFAULT = "v3"
 _FEEDBACK_STORE = None
 
 
@@ -597,22 +598,91 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
                 verbatims = df[open_col].dropna().astype(str).tolist()
                 coder = str(req_data.get("coder") or CODER_DEFAULT).lower()
-                if coder not in ("v1", "v2"):
-                    self.send_json_response({"status": "error", "message": "coder must be 'v1' or 'v2'."}, 400)
+                if coder not in ("v1", "v2", "v3"):
+                    self.send_json_response({"status": "error", "message": "coder must be 'v1', 'v2', or 'v3'."}, 400)
                     return
 
                 with SESSION_LOCK:
                     custom_codeframe = SESSION.get("custom_codeframe")
 
-                if coder == "v2":
+                if coder == "v3":
+                    from engine.coder_v3 import CoderV3Engine
+                    try:
+                        if custom_codeframe and isinstance(custom_codeframe, dict):
+                            cf = custom_codeframe
+                        elif custom_codeframe and isinstance(custom_codeframe, list):
+                            cf = {"topics": custom_codeframe}
+                        else:
+                            picked = pick_codeframe(req_data)
+                            if not picked:
+                                self.send_json_response({
+                                    "status": "needs_codeframe",
+                                    "message": "No codeframe selected. Please choose or upload a domain codeframe.",
+                                    "column": open_col
+                                })
+                                return
+                            cf = load_codeframe(picked)
+                    except CodeframeError as e:
+                        self.send_json_response({"status": "error", "message": f"Invalid codeframe: {e}"}, 400)
+                        return
+
+                    topics_list = cf.get("topics", []) if isinstance(cf, dict) else (cf if isinstance(cf, list) else [])
+                    coder_instance = CoderV3Engine(codeframe=topics_list)
+                    records = coder_instance.batch_code(verbatims)
+                    counts = Counter()
+                    cites = {}
+                    for r in records:
+                        for th in (r.get("assigned_themes") or [r.get("predicted_label")]):
+                            if th:
+                                counts[th] += 1
+                                c = cites.setdefault(th, [])
+                                if len(c) < 5:
+                                    c.append({"response_id": r.get("response_id", 1), "quote": r.get("raw_text") or r.get("text", "")})
+                    n_tot = len(records)
+                    frame = []
+                    for th, cnt in counts.most_common():
+                        frame.append({
+                            "theme": th,
+                            "count": cnt,
+                            "prevalence_pct": round(100.0 * cnt / n_tot, 1) if n_tot else 0.0,
+                            "evidence_samples": cites.get(th, [])
+                        })
+                    if not frame:
+                        for t in topics_list:
+                            th_name = t.get("name") or t.get("subnet") or t.get("id") if isinstance(t, dict) else str(t)
+                            frame.append({
+                                "theme": th_name,
+                                "count": 0,
+                                "prevalence_pct": 0.0,
+                                "evidence_samples": []
+                            })
+
+                    coding_results = {
+                        "coder_version": "v3",
+                        "total_analyzed": len(verbatims),
+                        "codeframe": frame if frame else topics_list,
+                        "codeframe_id": cf.get("id", "custom") if isinstance(cf, dict) else "custom",
+                        "records": records,
+                        "review_queue": [r["response_id"] if isinstance(r, dict) else r for r in records if r.get("needs_review")],
+                        "sentiment_counts": {
+                            "positive": sum(1 for r in records if r.get("sentiment") == "positive"),
+                            "negative": sum(1 for r in records if r.get("sentiment") == "negative"),
+                            "neutral": sum(1 for r in records if r.get("sentiment") == "neutral"),
+                            "mixed": sum(1 for r in records if r.get("sentiment") == "mixed")
+                        }
+                    }
+                elif coder == "v2":
                     from engine.coder_v2 import Coder, CoderConfig, batch_code_v2
                     try:
                         if custom_codeframe and isinstance(custom_codeframe, list):
                             from engine.codeframe_loader import validate_codeframe
                             cf = validate_codeframe({"schema_version": 1, "id": "custom", "name": "Custom Uploaded Codeframe", "topics": custom_codeframe})
                         elif custom_codeframe and isinstance(custom_codeframe, dict):
-                            from engine.codeframe_loader import load_codeframe_from_dict
-                            cf = load_codeframe_from_dict(custom_codeframe)
+                            if "topics" in custom_codeframe and "special" in custom_codeframe:
+                                cf = custom_codeframe
+                            else:
+                                from engine.codeframe_loader import load_codeframe_from_dict
+                                cf = load_codeframe_from_dict(custom_codeframe)
                         else:
                             picked = pick_codeframe(req_data)
                             if not picked:
@@ -743,7 +813,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
     def coder_review_queue(self):
         analysis = SESSION.get("open_feedback_analysis") or {}
-        queue = set(analysis.get("review_queue", []))
+        raw_queue = analysis.get("review_queue", [])
+        queue = set(r["response_id"] if isinstance(r, dict) else r for r in raw_queue)
         items = [{"response_id": r["response_id"], "text": r.get("raw_text", ""), "themes": r.get("assigned_themes", []),
                   "sentiment": r.get("sentiment"), "confidence": r.get("confidence"), "reasons": r.get("reasons", [])}
                  for r in analysis.get("records", []) if r.get("response_id") in queue][:200]

@@ -157,7 +157,7 @@ class _LocalNumpyEmbedder:
 class CoderV3Engine:
     """Production NLP categorization engine integrating SetFit embeddings and PA-II active learning."""
 
-    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"):
+    def __init__(self, model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2", codeframe: Optional[Any] = None):
         logger.info("Initializing Coder v3 Engine...")
         self.preprocessor = TaglishPreProcessor()
 
@@ -178,7 +178,11 @@ class CoderV3Engine:
             self.online_classifier = _LocalNumpyPA(C=1.0, random_state=42)
 
         self.codeframe_labels: List[str] = []
+        self.codeframe_topics: List[Dict[str, Any]] = []
         self.is_fitted: bool = False
+
+        if codeframe is not None:
+            self.load_codeframe(codeframe)
 
     def quantize_encoder(self):
         """Apply dynamic INT8 CPU quantization to lower inference latency."""
@@ -198,6 +202,63 @@ class CoderV3Engine:
         """Register DP Codeframe categories."""
         self.codeframe_labels = list(labels)
         logger.info(f"Codeframe loaded with {len(labels)} unique categories.")
+
+    def load_codeframe(self, codeframe: Any):
+        """Loads and bootstraps codeframe categories and seed training data."""
+        topics = []
+        if isinstance(codeframe, dict):
+            topics = codeframe.get("topics", [])
+        elif isinstance(codeframe, list):
+            topics = codeframe
+
+        labels: List[str] = []
+        seed_texts: List[str] = []
+        seed_labels: List[int] = []
+
+        if topics and isinstance(topics[0], dict):
+            self.codeframe_topics = topics
+            for idx, t in enumerate(topics):
+                label = t.get("subnet") or t.get("net") or t.get("name") or t.get("id") or f"Category_{idx+1}"
+                if label not in labels:
+                    labels.append(label)
+                label_idx = labels.index(label)
+
+                exemplars = t.get("exemplars", [])
+                pos_kw = t.get("pos_keywords", [])
+                neg_kw = t.get("neg_keywords", [])
+                kw = t.get("keywords", [])
+
+                collected_seeds = []
+                if exemplars:
+                    collected_seeds.extend(exemplars)
+                if pos_kw:
+                    collected_seeds.extend(pos_kw[:3])
+                if neg_kw:
+                    collected_seeds.extend(neg_kw[:3])
+                if not collected_seeds and kw:
+                    collected_seeds.extend(kw[:3])
+                if not collected_seeds:
+                    collected_seeds.append(label)
+
+                for s in collected_seeds:
+                    if isinstance(s, str) and s.strip():
+                        seed_texts.append(s.strip())
+                        seed_labels.append(label_idx)
+        elif topics and isinstance(topics[0], str):
+            labels = list(dict.fromkeys(topics))
+            seed_texts = list(labels)
+            seed_labels = list(range(len(labels)))
+        else:
+            labels = ["General Feedback", "Product & Pricing", "Service & Support", "Logistics & Delivery"]
+            seed_texts = list(labels)
+            seed_labels = list(range(len(labels)))
+
+        self.set_codeframe(labels)
+        if len(seed_texts) >= 2 and len(set(seed_labels)) >= 2:
+            try:
+                self.train_baseline(seed_texts, seed_labels)
+            except Exception as e:
+                logger.warning(f"Could not auto-train baseline with seed texts: {e}")
 
     def extract_embeddings(self, texts: List[str]) -> np.ndarray:
         """Clean input text and extract normalized dense vector embeddings."""
@@ -262,6 +323,93 @@ class CoderV3Engine:
         else:
             self.online_classifier.fit(X, y)
         logger.info(f"Online weight update complete for {len(texts)} samples.")
+
+    def analyze_sentiment(self, text: str) -> str:
+        """Determines sentiment (positive, negative, neutral, mixed) for Taglish verbatims."""
+        if not text or not isinstance(text, str):
+            return "neutral"
+        clean_text = self.preprocessor.mask_pii(text).lower()
+        tokens = clean_text.split()
+
+        pos_words = {
+            "maganda", "ganda", "sulit", "mura", "mabait", "maayos", "satisfied",
+            "satisfaction", "good", "great", "excellent", "best", "love", "like",
+            "tulong", "salamat", "happy", "mabilis", "sarap", "matibay", "bawas",
+            "discount", "free", "libre", "ok", "okay", "ayos", "bilis"
+        }
+        neg_words = {
+            "mahal", "pangit", "lugi", "tagal", "matagal", "delayed", "delay",
+            "bagal", "mabagal", "gulo", "magulo", "baho", "sira", "masira",
+            "hirap", "mahirap", "dusa", "pila", "traffic", "init", "initan",
+            "singit", "panis", "bulok", "scam", "bad", "terrible", "worst",
+            "hate", "disappointed", "problema", "kulang", "siksikan"
+        }
+
+        pos_score = 0.0
+        neg_score = 0.0
+        has_contrast = any(c in tokens for c in self.preprocessor.CONTRAST_WORDS)
+
+        i = 0
+        while i < len(tokens):
+            w = tokens[i]
+            is_negated = False
+            if w in self.preprocessor.NEGATION_WORDS and i + 1 < len(tokens):
+                is_negated = True
+                i += 1
+                w = tokens[i]
+
+            if w in pos_words:
+                if is_negated:
+                    neg_score += 1.2
+                else:
+                    pos_score += 1.0
+            elif w in neg_words:
+                if is_negated:
+                    pos_score += 0.8
+                else:
+                    neg_score += 1.2
+            i += 1
+
+        if has_contrast and pos_score >= 0.8 and neg_score >= 0.8:
+            return "mixed"
+        if pos_score > neg_score + 0.3:
+            return "positive"
+        if neg_score > pos_score + 0.3:
+            return "negative"
+        return "neutral"
+
+    def batch_code(self, verbatims: List[str]) -> List[Dict[str, Any]]:
+        """Batch code open-ended responses with sentiment, category prediction, and review queue flags."""
+        if not verbatims:
+            return []
+
+        if not self.is_fitted:
+            if self.codeframe_labels and len(self.codeframe_labels) >= 2:
+                seeds = list(self.codeframe_labels)
+                labels = list(range(len(seeds)))
+                self.train_baseline(seeds, labels)
+            else:
+                default_cats = ["General Feedback", "Product & Pricing", "Service & Support", "Logistics & Delivery"]
+                self.set_codeframe(default_cats)
+                self.train_baseline(default_cats, list(range(len(default_cats))))
+
+        predictions = self.predict_with_uncertainty(verbatims)
+        records = []
+        for idx, (raw_v, pred) in enumerate(zip(verbatims, predictions)):
+            sentiment = self.analyze_sentiment(raw_v)
+            label = pred.get("predicted_label", "General Feedback")
+            records.append({
+                "response_id": idx + 1,
+                "raw_text": raw_v,
+                "text": raw_v,
+                "predicted_label": label,
+                "assigned_themes": [label],
+                "confidence": pred.get("confidence", 0.5),
+                "margin": pred.get("margin", 0.0),
+                "needs_review": pred.get("needs_review", False),
+                "sentiment": sentiment
+            })
+        return records
 
 
 # --- Verification & Module Execution Unit Test ---

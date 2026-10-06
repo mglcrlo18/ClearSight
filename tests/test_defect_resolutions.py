@@ -270,5 +270,56 @@ class TestDefectResolutions(unittest.TestCase):
             self.assertGreater(item["derived_importance_pct"], 0)
 
 
+    def test_cs_coder_v3_router(self):
+        """CS-CODER-V3-ROUTER: Verify Coder v3 environment flag, endpoint routing, and batch execution."""
+        # 1. Verify default environment flag
+        self.assertEqual(server.CODER_DEFAULT, "v3")
+
+        # 2. Verify /api/code-open-ends dispatches coder v3 successfully
+        handler = server.ClearSightRequestHandler.__new__(server.ClearSightRequestHandler)
+        captured = []
+        handler.send_json_response = lambda data, status=200: captured.append((status, data))
+        handler.validate_host_header = lambda: True
+        handler.validate_origin_header = lambda: True
+
+        # Simulate POST to /api/code-open-ends without codeframe -> returns needs_codeframe prompt
+        handler.path = "/api/code-open-ends"
+        handler.headers = {"Content-Length": "15"}
+        handler.rfile = io.BytesIO(b'{"coder": "v3"}')
+        handler.do_POST()
+        self.assertTrue(len(captured) > 0)
+        status, resp = captured.pop()
+        self.assertEqual(status, 200)
+        self.assertEqual(resp.get("status"), "needs_codeframe")
+
+        # Simulate POST to /api/code-open-ends with domain codeframe
+        payload = json.dumps({"coder": "v3", "codeframe": "consumer_default"}).encode("utf-8")
+        handler.headers = {"Content-Length": str(len(payload))}
+        handler.rfile = io.BytesIO(payload)
+        handler.do_POST()
+
+        self.assertTrue(len(captured) > 0)
+        status, resp = captured.pop()
+        self.assertEqual(status, 200)
+        self.assertEqual(resp.get("status"), "success")
+        self.assertEqual(resp.get("coder"), "v3")
+        self.assertEqual(resp.get("coder_version"), "v3")
+        self.assertIn("records", resp)
+        self.assertIn("sentiment_counts", resp)
+        self.assertIn("codeframe", resp)
+        self.assertGreater(resp.get("total_analyzed", 0), 0)
+
+        # 3. Verify validation rejects invalid coder like "v4"
+        captured.clear()
+        handler.rfile = io.BytesIO(b'{"coder": "v4"}')
+        handler.headers = {"Content-Length": "15"}
+        handler.do_POST()
+        self.assertTrue(len(captured) > 0)
+        status, resp = captured.pop()
+        self.assertEqual(status, 400)
+        self.assertEqual(resp.get("status"), "error")
+        self.assertIn("coder must be 'v1', 'v2', or 'v3'", resp.get("message", ""))
+
+
 if __name__ == "__main__":
     unittest.main()
