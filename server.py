@@ -369,6 +369,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.stream_export_file("ClearSight_APA_Academic_Tables.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         elif path == "/api/export/vertical-codeframe":
             self.handle_export_vertical_codeframe()
+        elif path in ("/api/export/coded-hierarchy-excel", "/api/export/vertical-frequency-table"):
+            self.handle_export_coded_hierarchy_excel()
         elif path == "/api/settings/analysis":
             with SESSION_LOCK:
                 cfg = SESSION.get("analysis_config", DEFAULT_ANALYSIS_CONFIG)
@@ -709,6 +711,10 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 with SESSION_LOCK:
                     SESSION["open_feedback_analysis"] = coding_results
 
+                from engine.export_engine import build_coded_hierarchy_table
+                active_cf = cf if 'cf' in locals() else custom_codeframe
+                coded_hierarchy = build_coded_hierarchy_table(coding_results.get("records", []), active_cf, len(verbatims))
+
                 self.send_json_response({
                     "status": "success",
                     "column": open_col,
@@ -717,6 +723,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     "codeframe_id": coding_results.get("codeframe_id"),
                     "total_analyzed": coding_results.get("total_analyzed", len(verbatims)),
                     "codeframe": coding_results.get("codeframe", []),
+                    "coded_hierarchy": coded_hierarchy,
                     "records": coding_results.get("records", [])[:50],
                     "review_queue_count": len(coding_results.get("review_queue", [])),
                     "sentiment_counts": coding_results.get("sentiment_counts", {}),
@@ -984,6 +991,51 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Vertical_Codeframe.xlsx"')
+        self.send_header("Content-Length", str(len(xlsx_bytes)))
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+        self.end_headers()
+        self.wfile.write(xlsx_bytes)
+
+    def handle_export_coded_hierarchy_excel(self):
+        """Streams a vertical hierarchical codeframe table with percentage column (.xlsx)."""
+        with SESSION_LOCK:
+            analysis = SESSION.get("open_feedback_analysis") or {}
+            records = analysis.get("records", [])
+            cf = SESSION.get("custom_codeframe")
+            if not cf:
+                try:
+                    cf_id = analysis.get("codeframe_id") or "governance_default"
+                    cf = load_codeframe(cf_id)
+                except Exception:
+                    cf = load_codeframe("governance_default")
+            proj_title = SESSION.get("filename", "ClearSight Survey Study")
+            total_n = analysis.get("total_analyzed") or (len(SESSION["df"]) if SESSION.get("df") is not None else len(records))
+
+        from engine.export_engine import build_coded_hierarchy_table, generate_coded_hierarchy_percent_excel
+        hierarchy_rows = build_coded_hierarchy_table(records, cf, total_base=total_n)
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp_f:
+            tmp_path = tmp_f.name
+        try:
+            generate_coded_hierarchy_percent_excel(
+                tmp_path,
+                hierarchy_rows,
+                project_title=proj_title,
+                question_text="Open-Ended Feedback Analysis",
+                total_n=total_n
+            )
+            with open(tmp_path, "rb") as f:
+                xlsx_bytes = f.read()
+        finally:
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+        self.send_response(200)
+        self.send_header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.send_header("Content-Disposition", 'attachment; filename="ClearSight_Coded_Hierarchy_Percent_Table.xlsx"')
         self.send_header("Content-Length", str(len(xlsx_bytes)))
         self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
         self.end_headers()

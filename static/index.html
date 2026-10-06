@@ -626,6 +626,14 @@
                             </svg>
                             <span>Export Vertical Codeframe (.xlsx)</span>
                         </button>
+                        <button type="button" class="lock-btn" id="export-coded-hierarchy-btn" onclick="downloadCodedHierarchyExcel()" style="cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; margin-right: 4px; background: #FFFBEB; border: 1.5px solid #FCD34D; color: #92400E; font-weight: 700;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span>Export Coded Hierarchy (% Table) (.xlsx)</span>
+                        </button>
                         <button class="lock-btn" id="lock-btn" onclick="toggleLock()">Lock Codeframe</button>
                     </div>
                 </div>
@@ -633,7 +641,32 @@
                 <!-- Coder v2/v3: Needs-review queue (analyst corrections are stored locally) -->
                 <div id="coder-review" class="coder-review" hidden></div>
 
-                <div class="codeframe-grid" id="codeframe-grid">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; margin-top: 14px;">
+                    <div class="qual-view-switcher" style="display: inline-flex; background: #F1F5F9; border: 1px solid #CBD5E1; border-radius: 6px; padding: 2px;">
+                        <button type="button" id="btn-view-hierarchy" class="qual-toggle-btn active-toggle" onclick="setQualitativeView('hierarchy')" style="padding: 6px 14px; font-size: 0.8rem; font-weight: 700; border: none; border-radius: 4px; cursor: pointer; background: #0F172A; color: #FFFFFF;">📋 Hierarchical % Table</button>
+                        <button type="button" id="btn-view-cards" class="qual-toggle-btn" onclick="setQualitativeView('cards')" style="padding: 6px 14px; font-size: 0.8rem; font-weight: 600; border: none; border-radius: 4px; cursor: pointer; background: transparent; color: #475569;">🃏 Theme Cards</button>
+                    </div>
+                    <div id="oe-hierarchy-meta" style="font-size: 0.82rem; color: #64748B; font-weight: 600;"></div>
+                </div>
+
+                <!-- Hierarchical Coded % Table View -->
+                <div id="coded-hierarchy-view" class="coded-hierarchy-card" style="margin-bottom: 24px;">
+                    <table class="coded-hierarchy-table" style="width: 100%; border-collapse: collapse; background: #FFFFFF; font-size: 0.85rem;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #0F172A;">
+                                <th style="padding: 10px 14px; text-align: left; font-weight: 700; color: #0F172A; width: 85%;">Theme / Standardized Response Hierarchy</th>
+                                <th style="padding: 10px 14px; text-align: center; font-weight: 800; color: #92400E; background: #FEF9C3; border-left: 2px solid #0F172A; width: 15%;">%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="coded-hierarchy-table-body">
+                            <tr>
+                                <td colspan="2" style="padding: 24px; text-align: center; color: #64748B;">No open-ended responses coded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="codeframe-grid" id="codeframe-grid" style="display: none;">
                     <div class="code-item">
                         <div class="code-title">
                             <b>Affordable / High Value (Sulit)</b>

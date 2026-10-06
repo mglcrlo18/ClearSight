@@ -1215,3 +1215,291 @@ def generate_vertical_codeframe_excel(
     wb.save(filepath)
     return filepath
 
+
+def build_coded_hierarchy_table(
+    records: list,
+    codeframe: Any,
+    total_base: Optional[int] = None
+) -> list:
+    """
+    Constructs a 3-level hierarchical coded frequency table (NET -> Subnet -> Leaf)
+    with deduplicated net percentages, following market research standards.
+    """
+    total_n = total_base if total_base is not None else len(records)
+    if total_n <= 0:
+        total_n = max(1, len(records))
+
+    topics = []
+    if isinstance(codeframe, dict):
+        topics = codeframe.get("topics", [])
+    elif isinstance(codeframe, list):
+        topics = codeframe
+
+    if not topics:
+        seen_themes = []
+        for r in records:
+            for th in (r.get("assigned_themes") or [r.get("predicted_label")]):
+                if th and th not in seen_themes:
+                    seen_themes.append(th)
+        topics = [{"net": "General Feedback (NET)", "subnet": "Responses (Subnet)", "codes": {"pos": {"label": th}}} for th in seen_themes]
+
+    net_map = {}
+    for t in topics:
+        if isinstance(t, str):
+            n_name = "General Themes (NET)"
+            s_name = "Feedback Categories (Subnet)"
+            leaf_items = [(t, None)]
+        else:
+            n_name = t.get("net") or "General (NET)"
+            s_name = t.get("subnet") or "General (Subnet)"
+            codes_dict = t.get("codes", {})
+            leaf_items = []
+            if isinstance(codes_dict, dict) and codes_dict:
+                for pol, c_info in codes_dict.items():
+                    leaf_items.append((c_info.get("label") or t.get("id"), c_info.get("code_id")))
+            else:
+                leaf_items.append((t.get("label") or t.get("name") or t.get("id"), t.get("id")))
+
+        if not n_name.strip().endswith("(NET)"):
+            n_name = f"{n_name.strip()} (NET)"
+        if not s_name.strip().endswith("(Subnet)"):
+            s_name = f"{s_name.strip()} (Subnet)"
+
+        if n_name not in net_map:
+            net_map[n_name] = {}
+        if s_name not in net_map[n_name]:
+            net_map[n_name][s_name] = []
+
+        for lbl, cid in leaf_items:
+            net_map[n_name][s_name].append({"label": lbl, "code_id": cid, "topic": t if isinstance(t, dict) else {}})
+
+    resp_data = []
+    for idx, r in enumerate(records):
+        themes = set(str(th).strip().lower() for th in (r.get("assigned_themes") or []))
+        if r.get("predicted_label"):
+            themes.add(str(r.get("predicted_label")).strip().lower())
+        codes = set(str(c).strip() for c in (r.get("assigned_codes") or []))
+        text = str(r.get("raw_text") or r.get("text") or "").lower()
+        resp_data.append({"id": idx, "themes": themes, "codes": codes, "text": text})
+
+    def format_mr_pct(count: int, n_base: int):
+        pct = (count / n_base * 100.0) if n_base > 0 else 0.0
+        if count == 0 or pct < 0.5:
+            return round(pct, 1), "*"
+        return round(pct, 1), str(int(round(pct)))
+
+    net_items = []
+    for net_name, subnets in net_map.items():
+        net_resp_set = set()
+        subnet_items = []
+
+        for subnet_name, leaves in subnets.items():
+            subnet_resp_set = set()
+            leaf_items = []
+
+            for leaf in leaves:
+                lbl = leaf["label"]
+                cid = str(leaf["code_id"]) if leaf["code_id"] is not None else ""
+                lbl_lower = str(lbl).lower()
+
+                matched_resps = set()
+                for resp in resp_data:
+                    is_match = False
+                    if cid and cid in resp["codes"]:
+                        is_match = True
+                    elif lbl_lower in resp["themes"]:
+                        is_match = True
+                    elif any(lbl_lower in th or th in lbl_lower for th in resp["themes"]):
+                        is_match = True
+                    if is_match:
+                        matched_resps.add(resp["id"])
+
+                cnt = len(matched_resps)
+                pct_val, pct_str = format_mr_pct(cnt, total_n)
+                leaf_items.append({
+                    "type": "leaf",
+                    "level": "leaf",
+                    "label": lbl,
+                    "code_id": leaf["code_id"],
+                    "count": cnt,
+                    "pct": pct_val,
+                    "pct_str": pct_str
+                })
+                subnet_resp_set |= matched_resps
+
+            sub_cnt = len(subnet_resp_set)
+            sub_pct_val, sub_pct_str = format_mr_pct(sub_cnt, total_n)
+            leaf_items.sort(key=lambda x: (x["count"], x["pct"]), reverse=True)
+
+            subnet_items.append({
+                "type": "subnet",
+                "level": "subnet",
+                "label": subnet_name,
+                "count": sub_cnt,
+                "pct": sub_pct_val,
+                "pct_str": sub_pct_str,
+                "leaves": leaf_items
+            })
+            net_resp_set |= subnet_resp_set
+
+        net_cnt = len(net_resp_set)
+        net_pct_val, net_pct_str = format_mr_pct(net_cnt, total_n)
+        subnet_items.sort(key=lambda x: (x["count"], x["pct"]), reverse=True)
+
+        net_items.append({
+            "type": "net",
+            "level": "net",
+            "label": net_name,
+            "count": net_cnt,
+            "pct": net_pct_val,
+            "pct_str": net_pct_str,
+            "subnets": subnet_items
+        })
+
+    net_items.sort(key=lambda x: (x["count"], x["pct"]), reverse=True)
+
+    output_rows = []
+    for n in net_items:
+        output_rows.append({
+            "type": "net",
+            "level": "net",
+            "label": n["label"],
+            "count": n["count"],
+            "pct": n["pct"],
+            "pct_str": n["pct_str"]
+        })
+        for s in n["subnets"]:
+            output_rows.append({
+                "type": "subnet",
+                "level": "subnet",
+                "label": s["label"],
+                "count": s["count"],
+                "pct": s["pct"],
+                "pct_str": s["pct_str"]
+            })
+            for l in s["leaves"]:
+                output_rows.append({
+                    "type": "leaf",
+                    "level": "leaf",
+                    "label": l["label"],
+                    "code_id": l["code_id"],
+                    "count": l["count"],
+                    "pct": l["pct"],
+                    "pct_str": l["pct_str"]
+                })
+
+    return output_rows
+
+
+def generate_coded_hierarchy_percent_excel(
+    filepath: str,
+    hierarchy_rows: list,
+    project_title: str = "ClearSight Survey Study",
+    question_text: str = "",
+    total_n: int = 0
+) -> str:
+    """
+    Generates a vertical hierarchical codeframe table with percentage column
+    in Microsoft Excel (.xlsx), matching executive research agency presentation standards.
+    """
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Coded Hierarchy (%)"
+    ws.views.sheetView[0].showGridLines = True
+
+    font_project = Font(name="Arial", size=12, bold=True, color="0F172A")
+    font_question = Font(name="Arial", size=10, bold=True, italic=True, color="334155")
+    font_base = Font(name="Arial", size=9.5, italic=True, color="64748B")
+
+    font_header = Font(name="Arial", size=11, bold=True, color="0F172A")
+    fill_header_col_a = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    fill_header_col_b = PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid")
+    fill_data_pct = PatternFill(start_color="FFFDE7", end_color="FFFDE7", fill_type="solid")
+
+    border_row = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='E2E8F0'),
+        bottom=Side(style='thin', color='E2E8F0')
+    )
+    border_pct_col = Border(
+        left=Side(style='medium', color='0F172A'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='E2E8F0'),
+        bottom=Side(style='thin', color='E2E8F0')
+    )
+    border_header_pct = Border(
+        left=Side(style='medium', color='0F172A'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='medium', color='0F172A')
+    )
+    border_header_lbl = Border(
+        left=Side(style='thin', color='CBD5E1'),
+        right=Side(style='thin', color='CBD5E1'),
+        top=Side(style='thin', color='CBD5E1'),
+        bottom=Side(style='medium', color='0F172A')
+    )
+
+    ws.cell(row=1, column=1, value=sanitize_excel_cell(f"PROJECT: {project_title}")).font = font_project
+    q_str = question_text or "Open-Ended Feedback Analysis"
+    ws.cell(row=2, column=1, value=sanitize_excel_cell(f"QUESTION: {q_str}")).font = font_question
+    n_display = str(total_n) if total_n > 0 else "Total Respondents"
+    ws.cell(row=3, column=1, value=f"Base: N = {n_display}").font = font_base
+
+    header_row = 5
+    ws.row_dimensions[header_row].height = 24.0
+
+    c_h1 = ws.cell(row=header_row, column=1, value="Theme / Standardized Response Hierarchy")
+    c_h1.font = font_header
+    c_h1.fill = fill_header_col_a
+    c_h1.alignment = Alignment(horizontal="left", vertical="center")
+    c_h1.border = border_header_lbl
+
+    c_h2 = ws.cell(row=header_row, column=2, value="%")
+    c_h2.font = font_header
+    c_h2.fill = fill_header_col_b
+    c_h2.alignment = Alignment(horizontal="center", vertical="center")
+    c_h2.border = border_header_pct
+
+    curr_row = 6
+    for item in hierarchy_rows:
+        itype = item.get("type", "leaf")
+        label = item.get("label", "")
+        pct_str = str(item.get("pct_str", "*"))
+
+        ws.row_dimensions[curr_row].height = 20.0
+
+        is_net = (itype == "net")
+        is_subnet = (itype == "subnet")
+
+        font_size = 11 if is_net else (10.5 if is_subnet else 10)
+        is_bold = (is_net or is_subnet)
+        text_color = "0F172A" if (is_net or is_subnet) else "1E293B"
+
+        safe_lbl = sanitize_excel_cell(label)
+        indent_space = "" if is_net else ("  " if is_subnet else "    ")
+        cell_a = ws.cell(row=curr_row, column=1, value=f"{indent_space}{safe_lbl}")
+        cell_a.font = Font(name="Arial", size=font_size, bold=is_bold, color=text_color)
+        cell_a.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        cell_a.border = border_row
+
+        val_b = int(pct_str) if pct_str.isdigit() else pct_str
+        cell_b = ws.cell(row=curr_row, column=2, value=val_b)
+        cell_b.font = Font(name="Arial", size=font_size, bold=is_bold, color=text_color)
+        cell_b.fill = fill_data_pct
+        cell_b.alignment = Alignment(horizontal="center", vertical="center")
+        cell_b.border = border_pct_col
+
+        curr_row += 1
+
+    curr_row += 1
+    fn_cell = ws.cell(row=curr_row, column=1, value="* Note: An asterisk (*) indicates a non-zero frequency less than 0.5% of total respondents.")
+    fn_cell.font = Font(name="Arial", size=8.5, italic=True, color="64748B")
+
+    ws.column_dimensions['A'].width = 52
+    ws.column_dimensions['B'].width = 12
+
+    wb.save(filepath)
+    return filepath
+

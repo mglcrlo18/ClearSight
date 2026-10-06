@@ -1615,3 +1615,71 @@ body {
 .modal-close-btn:hover {
     color: #0F172A;
 }
+
+/* ---------------------------------------------------------------------------
+ * Executive Coded Hierarchy (%) Table (MR Industry Standard)
+ * --------------------------------------------------------------------------- */
+.coded-hierarchy-card {
+    background: #FFFFFF;
+    border: 1px solid #CBD5E1;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.coded-hierarchy-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.coded-hierarchy-table th {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+}
+.coded-hierarchy-table td {
+    padding: 7px 14px;
+    border-bottom: 1px solid #E2E8F0;
+    line-height: 1.45;
+}
+.coded-hierarchy-table td.col-pct {
+    background-color: #FFFDE7 !important;
+    border-left: 2px solid #0F172A !important;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.coded-hierarchy-table tr.row-net td {
+    font-weight: 800;
+    color: #0F172A;
+    font-size: 0.9rem;
+    background-color: #F8FAFC;
+    border-top: 1.5px solid #CBD5E1;
+}
+.coded-hierarchy-table tr.row-net td.col-pct {
+    font-weight: 800;
+    color: #0F172A;
+    font-size: 0.95rem;
+}
+.coded-hierarchy-table tr.row-subnet td {
+    font-weight: 700;
+    color: #1E293B;
+    padding-left: 26px;
+    font-size: 0.85rem;
+}
+.coded-hierarchy-table tr.row-subnet td.col-pct {
+    font-weight: 700;
+    color: #1E293B;
+}
+.coded-hierarchy-table tr.row-leaf td {
+    font-weight: 400;
+    color: #334155;
+    padding-left: 44px;
+    font-size: 0.82rem;
+}
+.coded-hierarchy-table tr.row-leaf td.col-pct {
+    font-weight: 500;
+    color: #334155;
+}
+.coded-hierarchy-table tr:hover td {
+    background-color: #F1F5F9;
+}
+.coded-hierarchy-table tr:hover td.col-pct {
+    background-color: #FEF9C3 !important;
+}
