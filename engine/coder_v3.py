@@ -398,12 +398,75 @@ class CoderV3Engine:
         for idx, (raw_v, pred) in enumerate(zip(verbatims, predictions)):
             sentiment = self.analyze_sentiment(raw_v)
             label = pred.get("predicted_label", "General Feedback")
+            v_clean = self.preprocessor.mask_pii(raw_v).lower()
+
+            assigned_codes = []
+            assigned_themes = [label]
+
+            # 1. Map verbatims to specific leaf codes using topic keyword and exemplar dictionaries
+            if self.codeframe_topics:
+                for t in self.codeframe_topics:
+                    kws = t.get("keywords", []) + t.get("pos_keywords", []) + t.get("neg_keywords", [])
+                    exemplars = t.get("exemplars", [])
+                    all_triggers = kws + exemplars
+                    matched = False
+                    for w in all_triggers:
+                        w_str = str(w).strip().lower()
+                        if len(w_str) >= 3 and (re.search(r'\b' + re.escape(w_str) + r'\b', v_clean) or w_str in v_clean):
+                            matched = True
+                            break
+
+                    if matched:
+                        codes_dict = t.get("codes", {})
+                        if isinstance(codes_dict, dict) and codes_dict:
+                            pol_key = "pos" if sentiment == "positive" else ("neg" if sentiment == "negative" else None)
+                            if pol_key and pol_key in codes_dict:
+                                c_info = codes_dict[pol_key]
+                                if c_info.get("code_id") is not None:
+                                    assigned_codes.append(c_info.get("code_id"))
+                                if c_info.get("label"):
+                                    assigned_themes.append(c_info.get("label"))
+                            else:
+                                for pol, c_info in codes_dict.items():
+                                    if c_info.get("code_id") is not None:
+                                        assigned_codes.append(c_info.get("code_id"))
+                                    if c_info.get("label"):
+                                        assigned_themes.append(c_info.get("label"))
+                        else:
+                            if t.get("id") is not None:
+                                assigned_codes.append(t.get("id"))
+                            t_lbl = t.get("label") or t.get("name") or t.get("id")
+                            if t_lbl:
+                                assigned_themes.append(t_lbl)
+
+            # 2. Fallback: if no keyword triggered, resolve from the predicted_label topic
+            if not assigned_codes and self.codeframe_topics:
+                for t in self.codeframe_topics:
+                    t_name = t.get("subnet") or t.get("net") or t.get("name") or t.get("id")
+                    if t_name == label:
+                        codes_dict = t.get("codes", {})
+                        if isinstance(codes_dict, dict) and codes_dict:
+                            pol_key = "pos" if sentiment == "positive" else ("neg" if sentiment == "negative" else None)
+                            c_info = codes_dict.get(pol_key) or next(iter(codes_dict.values()))
+                            if c_info.get("code_id") is not None:
+                                assigned_codes.append(c_info.get("code_id"))
+                            if c_info.get("label"):
+                                assigned_themes.append(c_info.get("label"))
+                        else:
+                            if t.get("id") is not None:
+                                assigned_codes.append(t.get("id"))
+                            t_lbl = t.get("label") or t.get("name") or t.get("id")
+                            if t_lbl:
+                                assigned_themes.append(t_lbl)
+                        break
+
             records.append({
                 "response_id": idx + 1,
                 "raw_text": raw_v,
                 "text": raw_v,
                 "predicted_label": label,
-                "assigned_themes": [label],
+                "assigned_themes": list(dict.fromkeys(assigned_themes)),
+                "assigned_codes": list(dict.fromkeys(assigned_codes)),
                 "confidence": pred.get("confidence", 0.5),
                 "margin": pred.get("margin", 0.0),
                 "needs_review": pred.get("needs_review", False),

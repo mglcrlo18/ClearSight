@@ -772,10 +772,34 @@ body {
 }
 
 .tray-label {
-    width: 120px;
+    width: auto !important;
+    min-width: 140px;
     font-size: 12px;
-    font-weight: 800;
-    color: var(--volt-yellow);
+    font-weight: 700;
+    color: var(--color-text-primary, #0F172A);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-create-net {
+    font-size: 11px;
+    padding: 4px 10px;
+    height: 28px;
+    white-space: nowrap !important;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 4px;
+    border: 1px solid #CBD5E1;
+    background: #FFFFFF;
+    color: #0F172A;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.btn-create-net:hover {
+    background: #F8FAFC;
+    border-color: #94A3B8;
 }
 
 .drop-tray {

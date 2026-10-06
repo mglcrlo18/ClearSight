@@ -710,10 +710,17 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
                 with SESSION_LOCK:
                     SESSION["open_feedback_analysis"] = coding_results
+                    df_session = SESSION.get("df")
 
-                from engine.export_engine import build_coded_hierarchy_table
+                from engine.export_engine import build_coded_hierarchy_table, extract_banner_groups
                 active_cf = cf if 'cf' in locals() else custom_codeframe
-                coded_hierarchy = build_coded_hierarchy_table(coding_results.get("records", []), active_cf, len(verbatims))
+                banner_groups = extract_banner_groups(df_session)
+                coded_hierarchy = build_coded_hierarchy_table(
+                    coding_results.get("records", []),
+                    active_cf,
+                    total_base=len(verbatims),
+                    banner_groups=banner_groups
+                )
 
                 self.send_json_response({
                     "status": "success",
@@ -724,6 +731,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     "total_analyzed": coding_results.get("total_analyzed", len(verbatims)),
                     "codeframe": coding_results.get("codeframe", []),
                     "coded_hierarchy": coded_hierarchy,
+                    "banner_columns": list(banner_groups.keys()) if banner_groups else ["Total"],
                     "records": coding_results.get("records", [])[:50],
                     "review_queue_count": len(coding_results.get("review_queue", [])),
                     "sentiment_counts": coding_results.get("sentiment_counts", {}),
@@ -1010,9 +1018,11 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     cf = load_codeframe("governance_default")
             proj_title = SESSION.get("filename", "ClearSight Survey Study")
             total_n = analysis.get("total_analyzed") or (len(SESSION["df"]) if SESSION.get("df") is not None else len(records))
+            df_session = SESSION.get("df")
 
-        from engine.export_engine import build_coded_hierarchy_table, generate_coded_hierarchy_percent_excel
-        hierarchy_rows = build_coded_hierarchy_table(records, cf, total_base=total_n)
+        from engine.export_engine import build_coded_hierarchy_table, generate_coded_hierarchy_percent_excel, extract_banner_groups
+        banner_groups = extract_banner_groups(df_session)
+        hierarchy_rows = build_coded_hierarchy_table(records, cf, total_base=total_n, banner_groups=banner_groups)
 
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp_f:
             tmp_path = tmp_f.name

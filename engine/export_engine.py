@@ -1216,18 +1216,42 @@ def generate_vertical_codeframe_excel(
     return filepath
 
 
+def extract_banner_groups(df, max_cols: int = 5) -> dict:
+    """Extracts demographic banner groups mapping column label to row index sets."""
+    if df is None or len(df) == 0:
+        return {"Total": set()}
+    banners = {"Total": set(range(len(df)))}
+    # Find categorical demographic columns with 2 to 6 unique values
+    demo_cols = [c for c in df.columns if not str(c).startswith("__") and 2 <= df[c].nunique() <= 6]
+    if demo_cols:
+        target_col = demo_cols[0]
+        for idx, (cat_val, group_df) in enumerate(df.groupby(target_col, observed=True)):
+            if idx >= max_cols:
+                break
+            letter = chr(65 + idx)
+            banner_name = f"{cat_val} ({letter})"
+            banners[banner_name] = set(group_df.index)
+    return banners
+
+
 def build_coded_hierarchy_table(
     records: list,
     codeframe: Any,
-    total_base: Optional[int] = None
+    total_base: Optional[int] = None,
+    banner_groups: Optional[dict] = None
 ) -> list:
     """
     Constructs a 3-level hierarchical coded frequency table (NET -> Subnet -> Leaf)
-    with deduplicated net percentages, following market research standards.
+    with deduplicated net percentages across Total and optional Banner Columns.
     """
     total_n = total_base if total_base is not None else len(records)
     if total_n <= 0:
         total_n = max(1, len(records))
+
+    # Banner groups setup
+    banners = dict(banner_groups) if banner_groups else {"Total": set(range(len(records)))}
+    if "Total" not in banners:
+        banners = {"Total": set(range(len(records))), **banners}
 
     topics = []
     if isinstance(codeframe, dict):
@@ -1288,6 +1312,17 @@ def build_coded_hierarchy_table(
             return round(pct, 1), "*"
         return round(pct, 1), str(int(round(pct)))
 
+    def compute_banner_stats(matched_resps: set):
+        pcts = {}
+        counts = {}
+        for b_name, b_set in banners.items():
+            n_b = total_n if b_name == "Total" else (max(1, len(b_set)) if b_set else total_n)
+            cnt_b = len(matched_resps & b_set) if b_set else len(matched_resps)
+            _, p_str = format_mr_pct(cnt_b, n_b)
+            pcts[b_name] = p_str
+            counts[b_name] = cnt_b
+        return pcts, counts
+
     net_items = []
     for net_name, subnets in net_map.items():
         net_resp_set = set()
@@ -1302,33 +1337,52 @@ def build_coded_hierarchy_table(
                 cid = str(leaf["code_id"]) if leaf["code_id"] is not None else ""
                 lbl_lower = str(lbl).lower()
 
+                # Extract keyword triggers from topic
+                t_obj = leaf.get("topic", {})
+                triggers = []
+                if isinstance(t_obj, dict):
+                    triggers.extend(t_obj.get("keywords", []))
+                    triggers.extend(t_obj.get("pos_keywords", []))
+                    triggers.extend(t_obj.get("neg_keywords", []))
+                    triggers.extend(t_obj.get("exemplars", []))
+
                 matched_resps = set()
                 for resp in resp_data:
                     is_match = False
-                    if cid and cid in resp["codes"]:
+                    if cid and (cid in resp["codes"] or (cid.isdigit() and int(cid) in resp["codes"])):
                         is_match = True
                     elif lbl_lower in resp["themes"]:
                         is_match = True
                     elif any(lbl_lower in th or th in lbl_lower for th in resp["themes"]):
                         is_match = True
+                    elif triggers and any(w.lower() in resp["text"] for w in triggers if len(w) >= 3):
+                        is_match = True
+                    elif len(lbl_lower) >= 4 and lbl_lower in resp["text"]:
+                        is_match = True
+
                     if is_match:
                         matched_resps.add(resp["id"])
 
-                cnt = len(matched_resps)
-                pct_val, pct_str = format_mr_pct(cnt, total_n)
+                b_pcts, b_counts = compute_banner_stats(matched_resps)
+                cnt = b_counts.get("Total", len(matched_resps))
+                pct_val = (cnt / total_n * 100.0) if total_n > 0 else 0.0
+
                 leaf_items.append({
                     "type": "leaf",
                     "level": "leaf",
                     "label": lbl,
                     "code_id": leaf["code_id"],
                     "count": cnt,
-                    "pct": pct_val,
-                    "pct_str": pct_str
+                    "pct": round(pct_val, 1),
+                    "pct_str": b_pcts.get("Total", "*"),
+                    "banner_pcts": b_pcts,
+                    "banner_counts": b_counts
                 })
                 subnet_resp_set |= matched_resps
 
-            sub_cnt = len(subnet_resp_set)
-            sub_pct_val, sub_pct_str = format_mr_pct(sub_cnt, total_n)
+            sub_b_pcts, sub_b_counts = compute_banner_stats(subnet_resp_set)
+            sub_cnt = sub_b_counts.get("Total", len(subnet_resp_set))
+            sub_pct_val = (sub_cnt / total_n * 100.0) if total_n > 0 else 0.0
             leaf_items.sort(key=lambda x: (x["count"], x["pct"]), reverse=True)
 
             subnet_items.append({
@@ -1336,14 +1390,17 @@ def build_coded_hierarchy_table(
                 "level": "subnet",
                 "label": subnet_name,
                 "count": sub_cnt,
-                "pct": sub_pct_val,
-                "pct_str": sub_pct_str,
+                "pct": round(sub_pct_val, 1),
+                "pct_str": sub_b_pcts.get("Total", "*"),
+                "banner_pcts": sub_b_pcts,
+                "banner_counts": sub_b_counts,
                 "leaves": leaf_items
             })
             net_resp_set |= subnet_resp_set
 
-        net_cnt = len(net_resp_set)
-        net_pct_val, net_pct_str = format_mr_pct(net_cnt, total_n)
+        net_b_pcts, net_b_counts = compute_banner_stats(net_resp_set)
+        net_cnt = net_b_counts.get("Total", len(net_resp_set))
+        net_pct_val = (net_cnt / total_n * 100.0) if total_n > 0 else 0.0
         subnet_items.sort(key=lambda x: (x["count"], x["pct"]), reverse=True)
 
         net_items.append({
@@ -1351,8 +1408,10 @@ def build_coded_hierarchy_table(
             "level": "net",
             "label": net_name,
             "count": net_cnt,
-            "pct": net_pct_val,
-            "pct_str": net_pct_str,
+            "pct": round(net_pct_val, 1),
+            "pct_str": net_b_pcts.get("Total", "*"),
+            "banner_pcts": net_b_pcts,
+            "banner_counts": net_b_counts,
             "subnets": subnet_items
         })
 
@@ -1366,7 +1425,9 @@ def build_coded_hierarchy_table(
             "label": n["label"],
             "count": n["count"],
             "pct": n["pct"],
-            "pct_str": n["pct_str"]
+            "pct_str": n["pct_str"],
+            "banner_pcts": n["banner_pcts"],
+            "banner_counts": n["banner_counts"]
         })
         for s in n["subnets"]:
             output_rows.append({
@@ -1375,7 +1436,9 @@ def build_coded_hierarchy_table(
                 "label": s["label"],
                 "count": s["count"],
                 "pct": s["pct"],
-                "pct_str": s["pct_str"]
+                "pct_str": s["pct_str"],
+                "banner_pcts": s["banner_pcts"],
+                "banner_counts": s["banner_counts"]
             })
             for l in s["leaves"]:
                 output_rows.append({
@@ -1385,7 +1448,9 @@ def build_coded_hierarchy_table(
                     "code_id": l["code_id"],
                     "count": l["count"],
                     "pct": l["pct"],
-                    "pct_str": l["pct_str"]
+                    "pct_str": l["pct_str"],
+                    "banner_pcts": l["banner_pcts"],
+                    "banner_counts": l["banner_counts"]
                 })
 
     return output_rows
@@ -1399,8 +1464,9 @@ def generate_coded_hierarchy_percent_excel(
     total_n: int = 0
 ) -> str:
     """
-    Generates a vertical hierarchical codeframe table with percentage column
+    Generates a vertical hierarchical codeframe table with percentage column(s)
     in Microsoft Excel (.xlsx), matching executive research agency presentation standards.
+    Supports single Total % column or multi-column banner breakdowns.
     """
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -1413,7 +1479,7 @@ def generate_coded_hierarchy_percent_excel(
 
     font_header = Font(name="Arial", size=11, bold=True, color="0F172A")
     fill_header_col_a = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
-    fill_header_col_b = PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid")
+    fill_header_pct = PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid")
     fill_data_pct = PatternFill(start_color="FFFDE7", end_color="FFFDE7", fill_type="solid")
 
     border_row = Border(
@@ -1456,18 +1522,27 @@ def generate_coded_hierarchy_percent_excel(
     c_h1.alignment = Alignment(horizontal="left", vertical="center")
     c_h1.border = border_header_lbl
 
-    c_h2 = ws.cell(row=header_row, column=2, value="%")
-    c_h2.font = font_header
-    c_h2.fill = fill_header_col_b
-    c_h2.alignment = Alignment(horizontal="center", vertical="center")
-    c_h2.border = border_header_pct
+    # Determine banner columns
+    banner_cols = ["Total"]
+    if hierarchy_rows and "banner_pcts" in hierarchy_rows[0]:
+        banner_cols = list(hierarchy_rows[0]["banner_pcts"].keys())
+
+    is_multi_col = len(banner_cols) > 1
+
+    for c_idx, b_col in enumerate(banner_cols, start=2):
+        col_title = f"{b_col} %" if is_multi_col else "%"
+        cell = ws.cell(row=header_row, column=c_idx, value=col_title)
+        cell.font = font_header
+        cell.fill = fill_header_pct
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        cell.border = border_header_pct
+        col_letter = get_column_letter(c_idx)
+        ws.column_dimensions[col_letter].width = 14 if is_multi_col else 12
 
     curr_row = 6
     for item in hierarchy_rows:
         itype = item.get("type", "leaf")
         label = item.get("label", "")
-        pct_str = str(item.get("pct_str", "*"))
-
         ws.row_dimensions[curr_row].height = 20.0
 
         is_net = (itype == "net")
@@ -1484,12 +1559,18 @@ def generate_coded_hierarchy_percent_excel(
         cell_a.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
         cell_a.border = border_row
 
-        val_b = int(pct_str) if pct_str.isdigit() else pct_str
-        cell_b = ws.cell(row=curr_row, column=2, value=val_b)
-        cell_b.font = Font(name="Arial", size=font_size, bold=is_bold, color=text_color)
-        cell_b.fill = fill_data_pct
-        cell_b.alignment = Alignment(horizontal="center", vertical="center")
-        cell_b.border = border_pct_col
+        for c_idx, b_col in enumerate(banner_cols, start=2):
+            if "banner_pcts" in item:
+                val_str = str(item["banner_pcts"].get(b_col, "*"))
+            else:
+                val_str = str(item.get("pct_str", "*"))
+
+            val = int(val_str) if val_str.isdigit() else val_str
+            cell_b = ws.cell(row=curr_row, column=c_idx, value=val)
+            cell_b.font = Font(name="Arial", size=font_size, bold=is_bold, color=text_color)
+            cell_b.fill = fill_data_pct
+            cell_b.alignment = Alignment(horizontal="center", vertical="center")
+            cell_b.border = border_pct_col
 
         curr_row += 1
 
@@ -1498,7 +1579,6 @@ def generate_coded_hierarchy_percent_excel(
     fn_cell.font = Font(name="Arial", size=8.5, italic=True, color="64748B")
 
     ws.column_dimensions['A'].width = 52
-    ws.column_dimensions['B'].width = 12
 
     wb.save(filepath)
     return filepath

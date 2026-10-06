@@ -1289,51 +1289,7 @@ function renderTaglishCodeframe(data) {
     }
 
     // Render Hierarchical % Table matching MR industry standards
-    const hierTbody = document.getElementById('coded-hierarchy-table-body');
-    const hierMeta = document.getElementById('oe-hierarchy-meta');
-    if (hierMeta) {
-        hierMeta.textContent = `Base: N = ${total.toLocaleString()} Respondents`;
-    }
-
-    if (hierTbody) {
-        hierTbody.innerHTML = '';
-        const hierarchyRows = data.coded_hierarchy || [];
-        if (hierarchyRows.length > 0) {
-            hierarchyRows.forEach(item => {
-                const tr = document.createElement('tr');
-                if (item.type === 'net') tr.className = 'row-net';
-                else if (item.type === 'subnet') tr.className = 'row-subnet';
-                else tr.className = 'row-leaf';
-
-                const tdLabel = document.createElement('td');
-                tdLabel.textContent = item.label;
-
-                const tdPct = document.createElement('td');
-                tdPct.className = 'col-pct';
-                tdPct.textContent = item.pct_str || '*';
-
-                tr.appendChild(tdLabel);
-                tr.appendChild(tdPct);
-                hierTbody.appendChild(tr);
-            });
-        } else {
-            codeframe.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.className = 'row-leaf';
-
-                const tdLabel = document.createElement('td');
-                tdLabel.textContent = item.theme;
-
-                const tdPct = document.createElement('td');
-                tdPct.className = 'col-pct';
-                tdPct.textContent = item.prevalence_pct ? Math.round(item.prevalence_pct) : '*';
-
-                tr.appendChild(tdLabel);
-                tr.appendChild(tdPct);
-                hierTbody.appendChild(tr);
-            });
-        }
-    }
+    renderCodedHierarchyTable(data);
 
     codeframe.forEach(item => {
         const card = document.createElement('div');
@@ -1680,8 +1636,9 @@ function downloadVerticalCodeframe() {
 }
 
 function downloadCodedHierarchyExcel() {
+    const bannersParam = window.oeShowBanners ? "?banners=1" : "";
     showToast("Generating vertical coded hierarchy (% table) workbook (.xlsx)...");
-    window.location.href = "/api/export/coded-hierarchy-excel";
+    window.location.href = `/api/export/coded-hierarchy-excel${bannersParam}`;
 }
 
 function setQualitativeView(view) {
@@ -1715,6 +1672,125 @@ function setQualitativeView(view) {
             btnCards.style.background = '#0F172A';
             btnCards.style.color = '#FFFFFF';
             btnCards.style.fontWeight = '700';
+        }
+    }
+}
+
+function toggleOEBanners() {
+    window.oeShowBanners = !window.oeShowBanners;
+    const btnLbl = document.getElementById('btn-toggle-oe-banners-label');
+    const btn = document.getElementById('btn-toggle-oe-banners');
+    if (btnLbl) {
+        btnLbl.textContent = window.oeShowBanners ? 'Hide Banner Columns' : 'Show Banner Columns';
+    }
+    if (btn) {
+        btn.style.background = window.oeShowBanners ? '#0F172A' : '#FFFFFF';
+        btn.style.color = window.oeShowBanners ? '#FFFFFF' : '#0F172A';
+    }
+    if (window.lastCodedData) {
+        renderCodedHierarchyTable(window.lastCodedData);
+    }
+}
+
+function renderCodedHierarchyTable(data) {
+    if (!data) return;
+    window.lastCodedData = data;
+    const hierarchyRows = data.coded_hierarchy || [];
+    const total = data.total_analyzed || 0;
+    const showBanners = Boolean(window.oeShowBanners);
+    const bannerCols = (data.banner_columns && data.banner_columns.length > 0)
+        ? data.banner_columns
+        : (hierarchyRows.length > 0 && hierarchyRows[0].banner_pcts ? Object.keys(hierarchyRows[0].banner_pcts) : ['Total']);
+
+    const thead = document.getElementById('coded-hierarchy-thead');
+    const tbody = document.getElementById('coded-hierarchy-table-body');
+    const hierMeta = document.getElementById('oe-hierarchy-meta');
+
+    if (hierMeta) {
+        hierMeta.textContent = `Base: N = ${total.toLocaleString()} Respondents`;
+    }
+
+    if (thead) {
+        thead.innerHTML = '';
+        const trH = document.createElement('tr');
+        trH.style.borderBottom = '2px solid #0F172A';
+
+        const thLbl = document.createElement('th');
+        thLbl.style.padding = '10px 14px';
+        thLbl.style.textAlign = 'left';
+        thLbl.style.fontWeight = '700';
+        thLbl.style.color = '#0F172A';
+        thLbl.textContent = 'Theme / Standardized Response Hierarchy';
+        trH.appendChild(thLbl);
+
+        if (showBanners && bannerCols.length > 1) {
+            bannerCols.forEach(col => {
+                const th = document.createElement('th');
+                th.style.padding = '10px 12px';
+                th.style.textAlign = 'center';
+                th.style.fontWeight = '800';
+                th.style.color = '#92400E';
+                th.style.background = '#FEF9C3';
+                th.style.borderLeft = '1.5px solid #0F172A';
+                th.style.fontSize = '0.78rem';
+                th.style.whiteSpace = 'nowrap';
+                th.textContent = `${col} %`;
+                trH.appendChild(th);
+            });
+        } else {
+            const th = document.createElement('th');
+            th.style.padding = '10px 14px';
+            th.style.textAlign = 'center';
+            th.style.fontWeight = '800';
+            th.style.color = '#92400E';
+            th.style.background = '#FEF9C3';
+            th.style.borderLeft = '2px solid #0F172A';
+            th.style.width = '15%';
+            th.textContent = '%';
+            trH.appendChild(th);
+        }
+        thead.appendChild(trH);
+    }
+
+    if (tbody) {
+        tbody.innerHTML = '';
+        if (hierarchyRows.length > 0) {
+            hierarchyRows.forEach(item => {
+                const tr = document.createElement('tr');
+                if (item.type === 'net') tr.className = 'row-net';
+                else if (item.type === 'subnet') tr.className = 'row-subnet';
+                else tr.className = 'row-leaf';
+
+                const tdLabel = document.createElement('td');
+                tdLabel.textContent = item.label;
+                tr.appendChild(tdLabel);
+
+                if (showBanners && bannerCols.length > 1) {
+                    bannerCols.forEach(col => {
+                        const tdPct = document.createElement('td');
+                        tdPct.className = 'col-pct';
+                        const bPcts = item.banner_pcts || {};
+                        tdPct.textContent = bPcts[col] || '*';
+                        tr.appendChild(tdPct);
+                    });
+                } else {
+                    const tdPct = document.createElement('td');
+                    tdPct.className = 'col-pct';
+                    tdPct.textContent = item.pct_str || (item.banner_pcts && item.banner_pcts['Total']) || '*';
+                    tr.appendChild(tdPct);
+                }
+                tbody.appendChild(tr);
+            });
+        } else {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = (showBanners && bannerCols.length > 1) ? (1 + bannerCols.length) : 2;
+            td.style.padding = '24px';
+            td.style.textAlign = 'center';
+            td.style.color = '#64748B';
+            td.textContent = 'No open-ended responses coded yet.';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
         }
     }
 }

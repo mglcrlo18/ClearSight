@@ -228,7 +228,7 @@ class TestExportVerticalCodeframe(unittest.TestCase):
         wb = openpyxl.load_workbook(io.BytesIO(excel_bytes))
         self.assertIn("Coded Hierarchy (%)", wb.sheetnames)
         ws = wb["Coded Hierarchy (%)"]
-        self.assertEqual(ws.cell(row=5, column=2).value, "%")
+        self.assertIn("%", str(ws.cell(row=5, column=2).value))
 
 
 if __name__ == "__main__":
