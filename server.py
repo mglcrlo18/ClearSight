@@ -17,7 +17,8 @@ import pandas as pd
 from pathlib import Path
 from collections import Counter
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+import copy
+from urllib.parse import urlparse, parse_qs, unquote
 import threading
 
 SESSION_LOCK = threading.Lock()
@@ -416,29 +417,62 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 self.send_json_response({"status": "error", "message": "Bundled sample dataset not found."}, 404)
 
         elif path == "/api/upload":
-            filename = self.headers.get("X-Filename", "survey_data.csv")
+            raw_filename = self.headers.get("X-Filename", "survey_data.csv")
+            filename = unquote(raw_filename)
             try:
                 df, meta = read_survey_file(body_bytes, filename)
                 schema = autodetect_schema(df)
                 df_audited, audit_log = run_hygiene_audit(df)
                 
-                SESSION["df"] = df_audited
-                SESSION["filename"] = filename
-                SESSION["schema"] = schema
-                SESSION["weights"] = None
-                SESSION["weight_diagnostics"] = None
-                SESSION["hygiene_audit"] = audit_log
-                SESSION["last_tabulation"] = None
-                SESSION["open_feedback_analysis"] = None
-                SESSION["custom_codeframe"] = None
+                with SESSION_LOCK:
+                    SESSION["df"] = df_audited
+                    SESSION["filename"] = filename
+                    SESSION["schema"] = schema
+                    SESSION["weights"] = None
+                    SESSION["weight_diagnostics"] = None
+                    SESSION["hygiene_audit"] = audit_log
+                    SESSION["last_tabulation"] = None
+                    SESSION["open_feedback_analysis"] = None
+                    SESSION["custom_codeframe"] = None
+
+                    if meta.get("is_data_table") and meta.get("pretabulated_table"):
+                        SESSION["last_tabulation"] = [meta["pretabulated_table"]]
+                    elif meta.get("detected_weight_column") and meta["detected_weight_column"] in df.columns:
+                        try:
+                            detected_w = meta["detected_weight_column"]
+                            w_series = pd.to_numeric(df[detected_w], errors='coerce').fillna(1.0)
+                            w_arr = w_series.to_numpy(dtype=float)
+                            if len(w_arr) > 0 and np.nanmin(w_arr) > 0:
+                                SESSION["weights"] = w_arr
+                                w_sum = np.sum(w_arr)
+                                w_sq_sum = np.sum(w_arr ** 2)
+                                eff = float((w_sum ** 2) / (len(w_arr) * w_sq_sum)) if w_sq_sum > 0 else 1.0
+                                SESSION["weight_diagnostics"] = {
+                                    "pre_existing": True,
+                                    "column": detected_w,
+                                    "converged": True,
+                                    "iterations": 0,
+                                    "efficiency": round(eff * 100.0, 2),
+                                    "min_weight": float(round(float(np.min(w_arr)), 3)),
+                                    "max_weight": float(round(float(np.max(w_arr)), 3)),
+                                    "mean_weight": float(round(float(np.mean(w_arr)), 3))
+                                }
+                        except Exception as ex:
+                            logging.warning(f"Failed to auto-bind pre-existing weights: {ex}")
+
+                total_n = meta["pretabulated_table"]["unweighted_bases"][0] if (meta.get("is_data_table") and meta.get("pretabulated_table")) else len(df)
 
                 self.send_json_response({
                     "status": "success",
                     "filename": filename,
-                    "total_respondents": len(df),
+                    "total_respondents": total_n,
                     "columns": list(df.columns),
                     "schema": schema,
-                    "flagged_hygiene": len(audit_log)
+                    "flagged_hygiene": len(audit_log),
+                    "is_data_table": meta.get("is_data_table", False),
+                    "pretabulated_table": meta.get("pretabulated_table"),
+                    "weighted": SESSION["weights"] is not None,
+                    "diagnostics": SESSION["weight_diagnostics"]
                 })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 400)
@@ -496,6 +530,12 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             with SESSION_LOCK:
                 SESSION["quarantine_straight_liners"] = bool(req_data.get("filter_straight_liners", True))
                 SESSION["quarantine_speeders"] = bool(req_data.get("filter_speeders", True))
+                if "analysis_config" not in SESSION or SESSION["analysis_config"] is None:
+                    SESSION["analysis_config"] = copy.deepcopy(DEFAULT_ANALYSIS_CONFIG)
+                if "hygiene" not in SESSION["analysis_config"]:
+                    SESSION["analysis_config"]["hygiene"] = {}
+                SESSION["analysis_config"]["hygiene"]["quarantine_straightliners"] = SESSION["quarantine_straight_liners"]
+                SESSION["analysis_config"]["hygiene"]["quarantine_speeders"] = SESSION["quarantine_speeders"]
                 df = SESSION.get("df")
                 total_n = len(df) if df is not None else 0
                 active_n = total_n
@@ -1445,8 +1485,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         if not hygiene_cfg.get("rim_weighting", True):
             weights = None
 
-        q_straight = hygiene_cfg.get("quarantine_straightliners", SESSION.get("quarantine_straight_liners", True))
-        q_speeders = hygiene_cfg.get("quarantine_speeders", SESSION.get("quarantine_speeders", True))
+        q_straight = SESSION.get("quarantine_straight_liners", hygiene_cfg.get("quarantine_straightliners", True))
+        q_speeders = SESSION.get("quarantine_speeders", hygiene_cfg.get("quarantine_speeders", True))
 
         # Apply active hygiene quarantine filters to analytical sample (CS-045)
         flag_col = "__is_flagged" if df is not None and "__is_flagged" in df.columns else ("_is_flagged" if df is not None and "_is_flagged" in df.columns else None)

@@ -34,6 +34,198 @@ DEFAULT_LOG_FILEPATH = str(LOG_DIR / "cleaning_audit_trail.log")
 # 1. Multi-Format Survey Ingestion (CSV, Excel, SPSS .sav)
 # ---------------------------------------------------------------------------
 
+def detect_header_row_and_sheet(file_bytes: bytes) -> tuple[str, int, bool]:
+    """
+    Detects target worksheet, header row index, and whether file is a pre-tabulated banner table.
+    Skips cover / methodology sheets and sniffs for 'Total' alongside base summary rows.
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    sheet_names = wb.sheetnames
+
+    cover_pattern = re.compile(r'(?i)^(?:methodology|legend|readme|cover|toc|table of contents|notes|index)$')
+    non_cover_sheets = [s for s in sheet_names if not cover_pattern.match(s.strip())]
+    if not non_cover_sheets:
+        non_cover_sheets = sheet_names
+
+    for s_name in non_cover_sheets:
+        ws = wb[s_name]
+        for r in range(1, min(25, ws.max_row + 1)):
+            row_vals = [ws.cell(r, c).value for c in range(1, min(40, ws.max_column + 1))]
+            non_empty = [str(v).strip() for v in row_vals if v is not None]
+            if any(v.lower() == 'total' for v in non_empty):
+                sub_rows_text = []
+                for r_next in range(r + 1, min(r + 6, ws.max_row + 1)):
+                    sub_vals = [str(ws.cell(r_next, c).value).strip().lower() for c in range(1, min(10, ws.max_column + 1)) if ws.cell(r_next, c).value is not None]
+                    sub_rows_text.extend(sub_vals)
+                if any(any(k in txt for k in ['sample size', 'weighted base', 'effective base', 'kish', 'column names', 'unweighted base']) for txt in sub_rows_text):
+                    return s_name, r, True
+
+    best_sheet = non_cover_sheets[0]
+    ws = wb[best_sheet]
+    best_row = 1
+    max_cols = 0
+    for r in range(1, min(10, ws.max_row + 1)):
+        row_vals = [ws.cell(r, c).value for c in range(1, ws.max_column + 1)]
+        str_cells = [v for v in row_vals if v is not None and isinstance(v, str) and len(v.strip()) > 0]
+        if len(str_cells) > max_cols:
+            max_cols = len(str_cells)
+            best_row = r
+
+    return best_sheet, best_row, False
+
+
+def parse_pretabulated_banner_sheet(file_bytes: bytes, sheet_name: str, header_row: int) -> dict:
+    """
+    Parses a pre-tabulated agency crosstab banner sheet into standard ClearSight table schema.
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb[sheet_name]
+
+    title = sheet_name
+    for r in range(1, header_row):
+        vals = [ws.cell(r, c).value for c in range(1, ws.max_column + 1) if ws.cell(r, c).value is not None]
+        if vals and len(vals) == 1 and not any(k in str(vals[0]).lower() for k in ['clearsight', 'sukat', 'methodology', 'project:']):
+            title = str(vals[0]).strip()
+            break
+
+    total_col_idx = None
+    for c in range(1, ws.max_column + 1):
+        v = ws.cell(header_row, c).value
+        if v is not None and str(v).strip().lower() == 'total':
+            total_col_idx = c
+            break
+
+    stub_col_idx = (total_col_idx - 1) if (total_col_idx and total_col_idx > 1) else 1
+    raw_stub_label = ws.cell(header_row, stub_col_idx).value
+    stub_label = str(raw_stub_label).strip() if raw_stub_label is not None else 'Category'
+
+    banner_cols = []
+    col_indices = []
+    if total_col_idx:
+        for c in range(total_col_idx, ws.max_column + 1):
+            v = ws.cell(header_row, c).value
+            if v is not None and str(v).strip():
+                banner_cols.append(str(v).strip())
+                col_indices.append(c)
+            elif len(banner_cols) > 0:
+                next_vals = [ws.cell(header_row, c_n).value for c_n in range(c, min(c + 3, ws.max_column + 1))]
+                if not any(v is not None and str(v).strip() for v in next_vals):
+                    break
+
+    num_cols = len(banner_cols)
+    col_letters = ['Total'] + [chr(65 + i) for i in range(max(0, num_cols - 1))]
+    unweighted_bases = [400] * num_cols
+    weighted_bases = [400.0] * num_cols
+    effective_bases = [400.0] * num_cols
+
+    curr_r = header_row + 1
+    while curr_r <= min(header_row + 8, ws.max_row):
+        first_val = ws.cell(curr_r, stub_col_idx).value
+        first_str = str(first_val).strip() if first_val is not None else ''
+
+        c_vals = [ws.cell(curr_r, c).value for c in col_indices]
+        letter_matches = [v for v in c_vals[1:] if v is not None and str(v).strip().isalpha() and len(str(v).strip()) <= 2]
+        if len(letter_matches) >= max(1, (num_cols - 1) // 2):
+            col_letters = ['Total'] + [str(v).strip() if v is not None and str(v).strip() else chr(65 + i) for i, v in enumerate(c_vals[1:])]
+            curr_r += 1
+            continue
+
+        if any(k in first_str.lower() for k in ['sample size', 'column sample size', 'unweighted base', 'n =']):
+            unweighted_bases = [int(float(v)) if v is not None and str(v).strip().replace('.', '', 1).isdigit() else 0 for v in c_vals]
+            curr_r += 1
+            continue
+
+        if any(k in first_str.lower() for k in ['weighted base', 'nw']):
+            weighted_bases = [float(v) if v is not None and str(v).strip().replace('.', '', 1).isdigit() else 0.0 for v in c_vals]
+            curr_r += 1
+            continue
+
+        if any(k in first_str.lower() for k in ['kish', 'effective base', 'neff']):
+            effective_bases = [float(v) if v is not None and str(v).strip().replace('.', '', 1).isdigit() else 0.0 for v in c_vals]
+            curr_r += 1
+            continue
+
+        break
+
+    rows = []
+    while curr_r <= ws.max_row:
+        stub_val = ws.cell(curr_r, stub_col_idx).value
+        stub_str = str(stub_val).strip() if stub_val is not None else ''
+
+        c_vals = [ws.cell(curr_r, c).value for c in col_indices]
+        if not stub_str and all(v is None for v in c_vals):
+            curr_r += 1
+            continue
+
+        if stub_str and not any(k in stub_str.lower() for k in ['col comparison', 'letters', 'benchmark', 'vs. total']):
+            label = stub_str
+            is_net = label.upper().startswith('NET:')
+            val_strs = []
+            for v in c_vals:
+                if v is None:
+                    val_strs.append('-')
+                elif isinstance(v, (int, float)):
+                    if 0.0 <= v <= 1.0:
+                        val_strs.append(f'{v * 100.0:.1f}%')
+                    else:
+                        val_strs.append(f'{v:.2f}')
+                else:
+                    s = str(v).strip()
+                    val_strs.append(s if s else '-')
+
+            sig_letters = ['-'] + [''] * (num_cols - 1)
+            sig_benchmarks = ['-'] + [''] * (num_cols - 1)
+
+            next_r = curr_r + 1
+            while next_r <= ws.max_row:
+                next_stub = ws.cell(next_r, stub_col_idx).value
+                next_stub_str = str(next_stub).strip() if next_stub is not None else ''
+                next_c_vals = [ws.cell(next_r, c).value for c in col_indices]
+
+                clean_letters = [str(v).strip() for v in next_c_vals if v is not None and str(v).strip()]
+                has_letters = any(re.match(r'^[A-Za-z\s]+$', s) for s in clean_letters) and not any('+' in s or '-' in s for s in clean_letters)
+                has_benchmarks = any(any(ch in s for ch in "+-") for s in clean_letters)
+
+                if has_letters or 'col comparison' in next_stub_str.lower() or 'letters' in next_stub_str.lower():
+                    sig_letters = ['-'] + [str(v).strip() if v is not None else '' for v in next_c_vals[1:]]
+                    next_r += 1
+                elif has_benchmarks or "vs. total" in next_stub_str.lower() or "benchmark" in next_stub_str.lower():
+                    sig_benchmarks = ['-'] + [str(v).strip().strip("'") if v is not None else '' for v in next_c_vals[1:]]
+                    next_r += 1
+                else:
+                    break
+
+            rows.append({
+                'label': label,
+                'values': val_strs,
+                'sig_letters': sig_letters,
+                'sig_benchmarks': sig_benchmarks,
+                'is_net': is_net
+            })
+            curr_r = next_r
+        else:
+            curr_r += 1
+
+    table_dict = {
+        'title': f'Tabulation: {title}',
+        'stub_label': stub_label,
+        'banner_cols': banner_cols,
+        'clean_banner_cols': banner_cols,
+        'col_letters': col_letters,
+        'unweighted_bases': unweighted_bases,
+        'weighted_bases': weighted_bases,
+        'effective_bases': effective_bases,
+        'small_base': [n < 30 for n in unweighted_bases],
+        'anova': None,
+        'chi_square': None,
+        'mrcv': None,
+        'rows': rows
+    }
+    return table_dict
+
+
 def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, dict]:
     """
     Reads survey data from raw bytes supporting:
@@ -75,9 +267,28 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
             raise ValueError(f"Could not parse CSV file '{filename}' with supported encodings.")
 
     elif ext in [".xlsx", ".xls"]:
-        # P3-20: Read as string first to preserve leading zeros
-        df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
         metadata["encoding"] = "binary"
+        try:
+            sheet_name, header_row, is_data_table = detect_header_row_and_sheet(file_bytes)
+            if is_data_table:
+                tbl_dict = parse_pretabulated_banner_sheet(file_bytes, sheet_name, header_row)
+                metadata["is_data_table"] = True
+                metadata["pretabulated_table"] = tbl_dict
+                metadata["sheet_name"] = sheet_name
+                b_cols = tbl_dict.get("banner_cols", ["Total"])
+                rows_data = []
+                for r in tbl_dict.get("rows", []):
+                    row_dict = {tbl_dict.get("stub_label", "Category"): r["label"]}
+                    for idx, col_name in enumerate(b_cols):
+                        row_dict[col_name] = r["values"][idx] if idx < len(r["values"]) else "-"
+                    rows_data.append(row_dict)
+                df = pd.DataFrame(rows_data) if rows_data else pd.DataFrame(columns=[tbl_dict.get("stub_label", "Category")])
+            else:
+                header_idx = max(0, header_row - 1)
+                df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet_name, header=header_idx, dtype=str)
+                metadata["sheet_name"] = sheet_name
+        except Exception:
+            df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
 
     elif ext == ".sav":
         if HAS_PYREADSTAT:
@@ -112,7 +323,7 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
         raise ValueError(f"Unsupported file format '{ext}'. ClearSight supports .csv, .xlsx, .xls, and .sav.")
 
     # P3-20: Convert purely numeric columns without leading zeros to numeric
-    if ext in [".csv", ".xlsx", ".xls"]:
+    if ext in [".csv", ".xlsx", ".xls"] and not metadata.get("is_data_table"):
         for c in df.columns:
             s = df[c].dropna()
             # Do not convert if column has numbers with leading zero (e.g. '0042')
@@ -121,6 +332,16 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
                 conv = pd.to_numeric(s, errors='coerce')
                 if conv.notna().all():
                     df[c] = pd.to_numeric(df[c])
+
+    # CS-AUD-11: Detect pre-existing survey weight candidates
+    if not metadata.get("is_data_table") and df is not None:
+        w_candidates = [
+            c for c in df.columns
+            if re.search(r'(?i)^(?:weight|wgt|rim_weight|survey_weight)$', str(c))
+            or ('weight' in str(c).lower() and not any(k in str(c).lower() for k in ['body', 'birth', 'height', 'loss', 'gain', 'scale', 'lifting']))
+        ]
+        if w_candidates:
+            metadata["detected_weight_column"] = str(w_candidates[0])
 
     return df, metadata
 
@@ -273,7 +494,7 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
             elif (series.astype(str).str.match(r'^0\d+$').mean() > 0.3 or re.search(r'(?i)_(?:code|stub)$', str(col))) and uniques <= 500:
                 schema[col] = {
                     "type": "single_select",
-                    "categories": [str(x) for x in series.unique()[:20]],
+                    "categories": sorted([str(x) for x in series.unique()])[:20],
                     "sample": sample_vals
                 }
             else:
@@ -314,7 +535,7 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
         else:
             schema[col] = {
                 "type": "single_select",
-                "categories": [str(x) for x in str_series.unique()[:20]],
+                "categories": sorted([str(x) for x in str_series.unique()])[:20],
                 "sample": sample_vals
             }
 

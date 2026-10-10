@@ -141,5 +141,51 @@ def johnsons_relative_weights(
     }
 
 
-# Compatibility alias with engine/__init__.py
-compute_johnsons_relative_weights = johnsons_relative_weights
+def compute_johnsons_relative_weights(
+    data: Union[Any, np.ndarray, List[List[float]]],
+    criterion: Union[str, np.ndarray, List[float]],
+    predictors: Optional[List[str]] = None,
+    weights: Optional[Union[np.ndarray, List[float], str]] = None,
+    tikhonov_ridge: float = 1e-6
+) -> Dict[str, Any]:
+    """
+    Universal wrapper accepting either (DataFrame, y_col, [x_cols]) or raw numpy arrays.
+    Returns standardized keys matching both legacy test assertions and the analytical UI.
+    """
+    import pandas as pd
+    if isinstance(data, pd.DataFrame):
+        df = data
+        if not isinstance(criterion, str) or criterion not in df.columns:
+            raise ValueError(f"Criterion column '{criterion}' not found in DataFrame.")
+        if not predictors or not all(p in df.columns for p in predictors):
+            missing = [p for p in (predictors or []) if p not in df.columns]
+            raise ValueError(f"Predictor columns missing from DataFrame: {missing}")
+
+        X_mat = df[predictors].apply(pd.to_numeric, errors='coerce').to_numpy()
+        y_vec = pd.to_numeric(df[criterion], errors='coerce').to_numpy()
+        feat_names = list(predictors)
+
+        w_vec = None
+        if isinstance(weights, str) and weights in df.columns:
+            w_vec = pd.to_numeric(df[weights], errors='coerce').fillna(1.0).to_numpy()
+        elif weights is not None and not isinstance(weights, str):
+            w_vec = np.asarray(weights, dtype=float)
+    else:
+        X_mat = np.asarray(data, dtype=float)
+        y_vec = np.asarray(criterion, dtype=float)
+        feat_names = predictors if predictors is not None else [f"X{i+1}" for i in range(X_mat.shape[1])]
+        w_vec = np.asarray(weights, dtype=float) if weights is not None else None
+
+    # Call mathematical SVD engine
+    res = johnsons_relative_weights(
+        X=X_mat,
+        y=y_vec,
+        feature_names=feat_names,
+        weights=w_vec,
+        tikhonov_ridge=tikhonov_ridge
+    )
+
+    # Bridge schema keys for full backward and forward compatibility
+    res["weights"] = res["drivers"]
+    res["r_squared"] = res["model_r_squared"]
+    return res
