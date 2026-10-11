@@ -122,6 +122,16 @@ def test_taglish_orthographic_and_dialect_normalization():
     assert normalize_taglish_affixes("na-expose") == "expose"
     assert normalize_taglish_affixes("nag t-trigger") == "trigger"
 
+    # CS-026: English loanwords preserved; Tagalog infixes stripped
+    assert normalize_taglish_affixes("printer") == "printer"
+    assert normalize_taglish_affixes("dinner") == "dinner"
+    assert normalize_taglish_affixes("winner") == "winner"
+    assert normalize_taglish_affixes("drink") == "drink"
+    assert normalize_taglish_affixes("window") == "window"
+    assert normalize_taglish_affixes("binili") == "bili"
+    assert normalize_taglish_affixes("kumain") == "kain"
+    assert normalize_taglish_affixes("plinancha") == "plantsa"
+
 
 def test_taglish_compound_clause_multi_coding():
     """Verifies semantic chunking and multi-coding on compound verbatims (Harmony W3)."""

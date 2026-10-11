@@ -387,6 +387,29 @@
                             <label>Target Benchmark: Gender Distribution</label>
                             <div class="margin-row"><span>Female: 51%</span> | <span>Male: 49%</span></div>
                         </div>
+
+                        <!-- Custom Target Benchmark Matrix (CS-N04) -->
+                        <div class="custom-weighting-box" style="margin: 12px 0; padding: 12px; background: #0F172A; border: 1px solid #334155; border-radius: 6px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <b style="font-size: 0.82rem; color: #F1F5F9;">Custom Population Target Matrix</b>
+                                <span id="custom-weight-badge" class="badge-mini" style="display: none; background: #065F46; color: #6EE7B7; font-size: 0.7rem; padding: 2px 6px; border-radius: 3px;">Custom Active</span>
+                            </div>
+                            <p style="font-size: 0.74rem; color: #94A3B8; margin: 0 0 8px 0;">Configure specific category targets for your population marginals.</p>
+                            
+                            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                                <select id="weight-var-select" style="flex: 1; padding: 5px 8px; font-size: 0.78rem; background: #1E293B; color: #F1F5F9; border: 1px solid #475569; border-radius: 4px;" onchange="renderWeightTargetInputs()">
+                                    <option value="">-- Choose Weighting Variable --</option>
+                                </select>
+                                <button type="button" class="action-btn" style="padding: 5px 10px; font-size: 0.72rem;" onclick="resetCustomWeightTargets()">Reset</button>
+                            </div>
+
+                            <div id="weight-targets-container" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;"></div>
+
+                            <div id="weight-total-bar" style="display: none; justify-content: space-between; align-items: center; margin-top: 8px; padding: 6px 8px; background: #1E293B; border-radius: 4px; font-size: 0.78rem;">
+                                <span>Running Total: <b id="weight-total-val" style="color: #EF4444;">0.0%</b></span>
+                                <button id="btn-apply-targets" type="button" class="action-btn-green" style="padding: 3px 10px; font-size: 0.74rem;" disabled onclick="applyCustomWeightTargets()">Apply Targets</button>
+                            </div>
+                        </div>
                         <div class="trim-slider-box">
                             <div class="slider-label">
                                 <span>Soft Mean-Shift Weight Trimming:</span>

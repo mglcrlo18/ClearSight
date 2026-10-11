@@ -251,20 +251,43 @@ PROTECTED_ROOTS = {
     "tulong", "bigas", "pila", "init", "lamig", "amoy", "linis", "ganda"
 }
 
+# English loanwords & common vocabulary containing 'in' or 'um' that must not be corrupted (CS-026)
+ENGLISH_INFIX_ALLOWLIST = {
+    "printer", "dinner", "winner", "drink", "window", "winter", "finger",
+    "single", "simple", "minute", "cinema", "linear", "mineral", "spinach",
+    "vinegar", "clinic", "hint", "lint", "mint", "tint", "print", "spring",
+    "string", "bring", "ring", "king", "wing", "thing", "sing", "pink",
+    "sink", "link", "blink", "think", "brink", "shrink", "clink", "drink",
+    "admin", "internet", "online", "point", "joint", "line", "fine", "mine",
+    "wine", "shine", "spine", "combine", "engine", "machine", "routine",
+    "marine", "vaccine", "discipline", "examine", "determine", "imagine",
+    "famine", "genuine", "heroine", "medicine", "origin", "virgin", "margin",
+    "basin", "cousin", "cabin", "robin", "satin", "resin", "toxin", "insulin",
+    "protein", "vitamin", "grain", "train", "brain", "drain", "chain", "plain",
+    "stain", "pain", "gain", "main", "remain", "explain", "obtain", "contain",
+    "maintain", "attain", "sustain", "retain", "captain", "certain", "curtain",
+    "mountain", "fountain", "villain", "bargain", "humor", "human", "summer",
+    "number", "lumber", "slumber", "cucumber", "plumber", "alumni", "aluminum"
+}
+
+# Tagalog infix pattern: requires 1-2 consonants, 'in' or 'um', followed strictly by a vowel (CS-026)
+TAGALOG_INFIX_PATTERN = re.compile(r'^([bcdfghjklmnpqrstvwxyz]{1,2})(?:in|um)([aeiou]\w+)$')
+
 
 def normalize_taglish_affixes(token: str) -> str:
     """Strips Tagalog verbal affixes, loanword hyphens, circumfixes, and infixes to isolate root words without corrupting stems (CS-026)."""
     clean = token.lower().strip()
-    if clean in PROTECTED_ROOTS:
+    if clean in PROTECTED_ROOTS or clean in ENGLISH_INFIX_ALLOWLIST:
         return clean
     clean = re.sub(r'^(?:nag\s*t-|na-|i-|mag-)', '', clean)
     clean = re.sub(r'^(?:napa|pina|ipa)(.+?)(?:an|in)$', r'\1', clean)  # napafabconan -> fabcon
 
-    # Infix stripping: allows 1 or 2 consonants before infix (e.g. k-in-ain -> kain, pl-in-ancha -> plancha)
-    m_infix = re.match(r'^([bcdfghjklmnpqrstvwxyz]{1,2})(?:in|um)(.+)$', clean)
+    # Infix stripping: allows 1 or 2 consonants before infix, followed strictly by a root starting with a vowel
+    # e.g. k-in-ain -> kain, b-in-ili -> bili, pl-in-ancha -> plancha. Does NOT match printer, dinner, drink.
+    m_infix = TAGALOG_INFIX_PATTERN.match(clean)
     if m_infix:
         stem_candidate = m_infix.group(1) + m_infix.group(2)
-        if len(stem_candidate) >= 3 and clean not in PROTECTED_ROOTS:
+        if len(stem_candidate) >= 3 and clean not in PROTECTED_ROOTS and clean not in ENGLISH_INFIX_ALLOWLIST:
             clean = stem_candidate
 
     match = AFFIX_PATTERN.match(clean)

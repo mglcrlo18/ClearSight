@@ -243,10 +243,164 @@ function applyIngestedSummary(data) {
 
     if (data.schema) {
         updateVariableDrawerFromSchema(data.schema, data.columns);
+        populateWeightVariableSelector(data.schema);
     }
 }
 
-// 3. Weighting Controls (Connected to Engine Raking)
+// 3. Weighting Controls (Connected to Engine Raking) & Custom Targets Matrix (CS-N04)
+function populateWeightVariableSelector(schema) {
+    const sel = document.getElementById('weight-var-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- Choose Weighting Variable --</option>';
+    if (!schema) return;
+    Object.keys(schema).forEach(col => {
+        const item = schema[col];
+        if (item && item.type === 'single_select' && Array.isArray(item.categories) && item.categories.length >= 2 && item.categories.length <= 15) {
+            const opt = document.createElement('option');
+            opt.value = col;
+            opt.textContent = `${col} (${item.categories.length} categories)`;
+            sel.appendChild(opt);
+        }
+    });
+}
+
+function renderWeightTargetInputs() {
+    const sel = document.getElementById('weight-var-select');
+    const container = document.getElementById('weight-targets-container');
+    const bar = document.getElementById('weight-total-bar');
+    if (!sel || !container) return;
+
+    container.innerHTML = '';
+    const varName = sel.value;
+    if (!varName) {
+        if (bar) bar.style.display = 'none';
+        return;
+    }
+
+    const schema = (loadedDatasetInfo && loadedDatasetInfo.schema) || {};
+    const item = schema[varName];
+    if (!item || !Array.isArray(item.categories)) return;
+
+    item.categories.forEach(cat => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'center';
+        row.style.padding = '4px 6px';
+        row.style.background = '#1E293B';
+        row.style.borderRadius = '4px';
+
+        const lbl = document.createElement('span');
+        lbl.style.fontSize = '0.76rem';
+        lbl.style.color = '#E2E8F0';
+        lbl.style.flex = '1';
+        lbl.style.overflow = 'hidden';
+        lbl.style.textOverflow = 'ellipsis';
+        lbl.style.whiteSpace = 'nowrap';
+        lbl.textContent = String(cat);
+        lbl.title = String(cat);
+
+        const wrap = document.createElement('div');
+        wrap.style.display = 'flex';
+        wrap.style.alignItems = 'center';
+        wrap.style.gap = '4px';
+
+        const inp = document.createElement('input');
+        inp.type = 'number';
+        inp.min = '0';
+        inp.max = '100';
+        inp.step = '0.1';
+        inp.dataset.category = String(cat);
+        inp.className = 'weight-cat-input';
+        inp.style.width = '64px';
+        inp.style.padding = '3px 6px';
+        inp.style.fontSize = '0.76rem';
+        inp.style.background = '#0F172A';
+        inp.style.color = '#F8FAFC';
+        inp.style.border = '1px solid #475569';
+        inp.style.borderRadius = '3px';
+        inp.style.textAlign = 'right';
+        inp.oninput = updateWeightRunningTotal;
+
+        const pct = document.createElement('span');
+        pct.style.fontSize = '0.74rem';
+        pct.style.color = '#94A3B8';
+        pct.textContent = '%';
+
+        wrap.appendChild(inp);
+        wrap.appendChild(pct);
+        row.appendChild(lbl);
+        row.appendChild(wrap);
+        container.appendChild(row);
+    });
+
+    if (bar) bar.style.display = 'flex';
+    updateWeightRunningTotal();
+}
+
+function updateWeightRunningTotal() {
+    const inputs = document.querySelectorAll('.weight-cat-input');
+    const totalValDisp = document.getElementById('weight-total-val');
+    const applyBtn = document.getElementById('btn-apply-targets');
+    if (!totalValDisp) return;
+
+    let sum = 0;
+    inputs.forEach(inp => {
+        const v = parseFloat(inp.value);
+        if (!isNaN(v) && v > 0) sum += v;
+    });
+
+    totalValDisp.textContent = `${sum.toFixed(1)}%`;
+    const isValid = Math.abs(sum - 100.0) <= 0.05;
+    if (isValid) {
+        totalValDisp.style.color = '#10B981';
+        if (applyBtn) applyBtn.disabled = false;
+    } else {
+        totalValDisp.style.color = '#EF4444';
+        if (applyBtn) applyBtn.disabled = true;
+    }
+}
+
+function applyCustomWeightTargets() {
+    const sel = document.getElementById('weight-var-select');
+    const varName = sel ? sel.value : null;
+    const inputs = document.querySelectorAll('.weight-cat-input');
+    if (!varName || inputs.length === 0) return;
+
+    const targets = {};
+    let sum = 0;
+    inputs.forEach(inp => {
+        const cat = inp.dataset.category;
+        const val = parseFloat(inp.value) || 0;
+        sum += val;
+        targets[cat] = Math.round((val / 100.0) * 10000) / 10000;
+    });
+
+    if (Math.abs(sum - 100.0) > 0.05) {
+        showToast('Weight targets must sum to exactly 100.0%.', true);
+        return;
+    }
+
+    window.clearSightWeightTargets = { [varName]: targets };
+    const badge = document.getElementById('custom-weight-badge');
+    if (badge) badge.style.display = 'inline-block';
+    showToast(`Configured custom targets for ${varName} (100.0%). Computing weights...`);
+    executeWeighting();
+}
+
+function resetCustomWeightTargets() {
+    window.clearSightWeightTargets = null;
+    const sel = document.getElementById('weight-var-select');
+    if (sel) sel.value = '';
+    const container = document.getElementById('weight-targets-container');
+    if (container) container.innerHTML = '';
+    const bar = document.getElementById('weight-total-bar');
+    if (bar) bar.style.display = 'none';
+    const badge = document.getElementById('custom-weight-badge');
+    if (badge) badge.style.display = 'none';
+    showToast('Reset to population defaults.');
+}
+
 function updateTrim(val) {
     const disp = document.getElementById('trim-val');
     if (disp) disp.innerText = `${val}th Percentile`;
