@@ -29,10 +29,55 @@ LOG_DIR = Path(os.environ.get('CLEARSIGHT_DATA', Path.home() / '.clearsight'))
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 DEFAULT_LOG_FILEPATH = str(LOG_DIR / "cleaning_audit_trail.log")
 
+WEIGHT_NAME_RE = re.compile(r'(?i)^(?:weight|weights|wgt|wt|wght|rim_?weight|survey_?weight|final_?weight|weight_?final|pweight|wt_final)$')
+
 
 # ---------------------------------------------------------------------------
 # 1. Multi-Format Survey Ingestion (CSV, Excel, SPSS .sav)
 # ---------------------------------------------------------------------------
+
+def _excel_col_letter(i: int) -> str:
+    """0 -> A, 25 -> Z, 26 -> AA (P7-25: chr(65+i) produced '[', '\\' ... past Z)."""
+    out = ""
+    i += 1
+    while i > 0:
+        i, rem = divmod(i - 1, 26)
+        out = chr(65 + rem) + out
+    return out
+
+
+def _parse_count(v) -> Optional[float]:
+    """Parse a base/count cell: 1075, 1075.0, '1,075', ' 1 075 ', '(n=1,075)'. None when not a number (P7-17)."""
+    if v is None or isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v) if np.isfinite(v) else None
+    s = re.sub(r'(?i)^\(?\s*n\s*=\s*|\)$', '', str(v).strip())
+    s = s.replace(',', '').replace('\u00a0', '').replace(' ', '')
+    try:
+        f = float(s)
+    except ValueError:
+        return None
+    return f if np.isfinite(f) else None
+
+
+_SIG_TOKEN = re.compile(r'^(?:[A-Za-z]{1,12}(?:\s+[A-Za-z]{1,12})*|\+{1,2}|-{1,2}|[+\-]{1,2}\s*[A-Za-z]*)$')
+
+
+def _is_sig_row(stub_str: str, cells: list) -> bool:
+    """A significance row (letters or +/- benchmarks) has no stub (or a comparison stub) and no numeric cells.
+    P7-16: a data row whose cells contain '-' for empty used to be swallowed as a benchmark row."""
+    stub_l = stub_str.lower()
+    if stub_str and not any(k in stub_l for k in ('col comparison', 'letters', 'benchmark', 'vs. total', 'sig')):
+        return False
+    vals = [str(v).strip() for v in cells if v is not None and str(v).strip()]
+    if not vals:
+        return False
+    if any(_parse_count(v) is not None or str(v).strip().endswith('%') for v in cells if v is not None and str(v).strip()):
+        return False
+    meaningful = [v for v in vals if v not in ('-', '--')] or vals
+    return all(_SIG_TOKEN.match(v) for v in vals) and bool(meaningful)
+
 
 def detect_header_row_and_sheet(file_bytes: bytes) -> tuple[str, int, bool]:
     """
@@ -40,8 +85,12 @@ def detect_header_row_and_sheet(file_bytes: bytes) -> tuple[str, int, bool]:
     Skips cover / methodology sheets and sniffs for 'Total' alongside base summary rows.
     """
     import openpyxl
-    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    # P7-20: read_only + bounded rows; the full workbook was loaded twice (70 s / 647 MB peak on a 50k x 30 file).
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
     sheet_names = wb.sheetnames
+
+    def _rows(ws, n_rows, n_cols):
+        return [list(r) for r in ws.iter_rows(min_row=1, max_row=n_rows, max_col=n_cols, values_only=True)]
 
     cover_pattern = re.compile(r'(?i)^(?:methodology|legend|readme|cover|toc|table of contents|notes|index)$')
     non_cover_sheets = [s for s in sheet_names if not cover_pattern.match(s.strip())]
@@ -49,29 +98,33 @@ def detect_header_row_and_sheet(file_bytes: bytes) -> tuple[str, int, bool]:
         non_cover_sheets = sheet_names
 
     for s_name in non_cover_sheets:
-        ws = wb[s_name]
-        for r in range(1, min(25, ws.max_row + 1)):
-            row_vals = [ws.cell(r, c).value for c in range(1, min(40, ws.max_column + 1))]
+        grid = _rows(wb[s_name], 30, 40)
+        for r_i, row_vals in enumerate(grid[:25]):
             non_empty = [str(v).strip() for v in row_vals if v is not None]
             if any(v.lower() == 'total' for v in non_empty):
                 sub_rows_text = []
-                for r_next in range(r + 1, min(r + 6, ws.max_row + 1)):
-                    sub_vals = [str(ws.cell(r_next, c).value).strip().lower() for c in range(1, min(10, ws.max_column + 1)) if ws.cell(r_next, c).value is not None]
-                    sub_rows_text.extend(sub_vals)
-                if any(any(k in txt for k in ['sample size', 'weighted base', 'effective base', 'kish', 'column names', 'unweighted base']) for txt in sub_rows_text):
-                    return s_name, r, True
+                for nxt in grid[r_i + 1:r_i + 6]:
+                    sub_rows_text.extend(str(v).strip().lower() for v in nxt[:10] if v is not None)
+                if any(any(k in txt for k in ['sample size', 'weighted base', 'effective base', 'kish', 'column names', 'unweighted base', 'base:']) for txt in sub_rows_text):
+                    wb.close()
+                    return s_name, r_i + 1, True
 
     best_sheet = non_cover_sheets[0]
-    ws = wb[best_sheet]
+    grid = _rows(wb[best_sheet], 10, 400)
+    wb.close()
+    # P7-21: the header is the FIRST row of unique text labels covering most of the widest row,
+    # not the row with the most text cells (a text-heavy data row used to win over a header with blanks).
+    width = max((sum(v is not None and str(v).strip() != '' for v in r) for r in grid), default=0)
     best_row = 1
-    max_cols = 0
-    for r in range(1, min(10, ws.max_row + 1)):
-        row_vals = [ws.cell(r, c).value for c in range(1, ws.max_column + 1)]
-        str_cells = [v for v in row_vals if v is not None and isinstance(v, str) and len(v.strip()) > 0]
-        if len(str_cells) > max_cols:
-            max_cols = len(str_cells)
-            best_row = r
-
+    for r_i, row_vals in enumerate(grid):
+        cells = [v for v in row_vals if v is not None and str(v).strip() != '']
+        if not cells or width == 0:
+            continue
+        all_text = all(isinstance(v, str) for v in cells)
+        unique = len({str(v).strip().lower() for v in cells}) == len(cells)
+        if all_text and unique and len(cells) >= max(1, int(0.5 * width)):
+            best_row = r_i + 1
+            break
     return best_sheet, best_row, False
 
 
@@ -82,6 +135,7 @@ def parse_pretabulated_banner_sheet(file_bytes: bytes, sheet_name: str, header_r
     import openpyxl
     wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
     ws = wb[sheet_name]
+    warnings: list = []
 
     title = sheet_name
     for r in range(1, header_row):
@@ -115,10 +169,18 @@ def parse_pretabulated_banner_sheet(file_bytes: bytes, sheet_name: str, header_r
                     break
 
     num_cols = len(banner_cols)
-    col_letters = ['Total'] + [chr(65 + i) for i in range(max(0, num_cols - 1))]
-    unweighted_bases = [400] * num_cols
-    weighted_bases = [400.0] * num_cols
-    effective_bases = [400.0] * num_cols
+    col_letters = ['Total'] + [_excel_col_letter(i) for i in range(max(0, num_cols - 1))]
+    # P7-14: never invent a base. Unknown stays None and is reported, instead of a fabricated N=400.
+    unweighted_bases: list = [None] * num_cols
+    weighted_bases: list = [None] * num_cols
+    effective_bases: list = [None] * num_cols
+
+    def _bases(vals, as_int):
+        out = []
+        for v in vals:
+            f = _parse_count(v)
+            out.append(None if f is None else (int(round(f)) if as_int else round(f, 2)))
+        return out
 
     curr_r = header_row + 1
     while curr_r <= min(header_row + 8, ws.max_row):
@@ -128,22 +190,22 @@ def parse_pretabulated_banner_sheet(file_bytes: bytes, sheet_name: str, header_r
         c_vals = [ws.cell(curr_r, c).value for c in col_indices]
         letter_matches = [v for v in c_vals[1:] if v is not None and str(v).strip().isalpha() and len(str(v).strip()) <= 2]
         if len(letter_matches) >= max(1, (num_cols - 1) // 2):
-            col_letters = ['Total'] + [str(v).strip() if v is not None and str(v).strip() else chr(65 + i) for i, v in enumerate(c_vals[1:])]
+            col_letters = ['Total'] + [str(v).strip() if v is not None and str(v).strip() else _excel_col_letter(i) for i, v in enumerate(c_vals[1:])]
             curr_r += 1
             continue
 
         if any(k in first_str.lower() for k in ['sample size', 'column sample size', 'unweighted base', 'n =']):
-            unweighted_bases = [int(float(v)) if v is not None and str(v).strip().replace('.', '', 1).isdigit() else 0 for v in c_vals]
+            unweighted_bases = _bases(c_vals, True)
             curr_r += 1
             continue
 
         if any(k in first_str.lower() for k in ['weighted base', 'nw']):
-            weighted_bases = [float(v) if v is not None and str(v).strip().replace('.', '', 1).isdigit() else 0.0 for v in c_vals]
+            weighted_bases = _bases(c_vals, False)
             curr_r += 1
             continue
 
         if any(k in first_str.lower() for k in ['kish', 'effective base', 'neff']):
-            effective_bases = [float(v) if v is not None and str(v).strip().replace('.', '', 1).isdigit() else 0.0 for v in c_vals]
+            effective_bases = _bases(c_vals, False)
             curr_r += 1
             continue
 
@@ -154,21 +216,34 @@ def parse_pretabulated_banner_sheet(file_bytes: bytes, sheet_name: str, header_r
         stub_val = ws.cell(curr_r, stub_col_idx).value
         stub_str = str(stub_val).strip() if stub_val is not None else ''
 
-        c_vals = [ws.cell(curr_r, c).value for c in col_indices]
+        c_cells = [ws.cell(curr_r, c) for c in col_indices]
+        c_vals = [cell.value for cell in c_cells]
         if not stub_str and all(v is None for v in c_vals):
             curr_r += 1
             continue
 
-        if stub_str and not any(k in stub_str.lower() for k in ['col comparison', 'letters', 'benchmark', 'vs. total']):
+        is_comparison_stub = any(k in stub_str.lower() for k in ['col comparison', 'letters', 'benchmark', 'vs. total'])
+        if not stub_str and not _is_sig_row(stub_str, c_vals):
+            # P7-16: a row with values but no label used to be dropped silently. Keep it and say so.
+            stub_str = f'(unlabelled row {curr_r})'
+            warnings.append(f'Row {curr_r} has values but no label; kept as "{stub_str}".')
+        if stub_str and not is_comparison_stub:
             label = stub_str
             is_net = label.upper().startswith('NET:')
             val_strs = []
-            for v in c_vals:
+            for cell, v in zip(c_cells, c_vals):
+                fmt = str(getattr(cell, 'number_format', '') or '')
                 if v is None:
                     val_strs.append('-')
+                elif isinstance(v, bool):
+                    val_strs.append(str(v))
                 elif isinstance(v, (int, float)):
-                    if 0.0 <= v <= 1.0:
+                    # P7-18: only cells formatted as percentages are percentages. A mean of 0.85 or a count of 1
+                    # is not 85% / 100%, and a percentage stored as 45 is not "45.00".
+                    if '%' in fmt:
                         val_strs.append(f'{v * 100.0:.1f}%')
+                    elif float(v).is_integer():
+                        val_strs.append(f'{int(v)}')
                     else:
                         val_strs.append(f'{v:.2f}')
                 else:
@@ -185,6 +260,8 @@ def parse_pretabulated_banner_sheet(file_bytes: bytes, sheet_name: str, header_r
                 next_c_vals = [ws.cell(next_r, c).value for c in col_indices]
 
                 clean_letters = [str(v).strip() for v in next_c_vals if v is not None and str(v).strip()]
+                if not _is_sig_row(next_stub_str, next_c_vals):
+                    break
                 has_letters = any(re.match(r'^[A-Za-z\s]+$', s) for s in clean_letters) and not any('+' in s or '-' in s for s in clean_letters)
                 has_benchmarks = any(any(ch in s for ch in "+-") for s in clean_letters)
 
@@ -217,7 +294,11 @@ def parse_pretabulated_banner_sheet(file_bytes: bytes, sheet_name: str, header_r
         'unweighted_bases': unweighted_bases,
         'weighted_bases': weighted_bases,
         'effective_bases': effective_bases,
-        'small_base': [n < 30 for n in unweighted_bases],
+        'small_base': [n is not None and n < 30 for n in unweighted_bases],
+        'bases_known': all(n is not None for n in unweighted_bases),
+        'source': 'imported_pretabulated',
+        'warnings': warnings + ([] if all(n is not None for n in unweighted_bases) else
+                                ['No sample-size (unweighted base) row found; bases are unknown and were not invented.']),
         'anova': None,
         'chi_square': None,
         'mrcv': None,
@@ -287,7 +368,9 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
                 header_idx = max(0, header_row - 1)
                 df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=sheet_name, header=header_idx, dtype=str)
                 metadata["sheet_name"] = sheet_name
-        except Exception:
+        except (KeyError, ValueError, IndexError, TypeError) as ex:
+            # P7-20: a parser bug used to fall back silently to the raw sheet. Fall back, but say so.
+            metadata["ingestion_warning"] = f"Pre-tabulated/sheet detection failed ({type(ex).__name__}: {ex}); read the first sheet as raw data."
             df = pd.read_excel(io.BytesIO(file_bytes), dtype=str)
 
     elif ext == ".sav":
@@ -335,11 +418,9 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
 
     # CS-AUD-11: Detect pre-existing survey weight candidates
     if not metadata.get("is_data_table") and df is not None:
-        w_candidates = [
-            c for c in df.columns
-            if re.search(r'(?i)^(?:weight|wgt|rim_weight|survey_weight)$', str(c))
-            or ('weight' in str(c).lower() and not any(k in str(c).lower() for k in ['body', 'birth', 'height', 'loss', 'gain', 'scale', 'lifting']))
-        ]
+        # P7-15: exact survey-weight names only (Product_Weight_g, Sachet_weight, Weighted_volume are not weights),
+        # and only as a suggestion: the server never applies it until the user confirms.
+        w_candidates = [c for c in df.columns if WEIGHT_NAME_RE.match(str(c).strip())]
         if w_candidates:
             metadata["detected_weight_column"] = str(w_candidates[0])
 
@@ -349,6 +430,14 @@ def read_survey_file(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame, di
 # ---------------------------------------------------------------------------
 # 2. Google Forms Checkbox Resolution with Boundary Tokenization
 # ---------------------------------------------------------------------------
+
+def _natural_key(x: str):
+    """P7-24: codes sort 1, 2, 10, 11 (not 1, 10, 11, 2)."""
+    try:
+        return (0, float(str(x).replace(',', '')), '')
+    except ValueError:
+        return (1, 0.0, str(x).lower())
+
 
 def resolve_google_forms_checkboxes(series: pd.Series, known_options: list = None) -> tuple[pd.DataFrame, pd.Series]:
     """
@@ -364,9 +453,19 @@ def resolve_google_forms_checkboxes(series: pd.Series, known_options: list = Non
         for item in raw_strings:
             # CS-019: Split only on commas NOT enclosed by parentheses
             parts = [p.strip() for p in re.split(r',\s*(?![^()]*\))', item) if p.strip()]
+            # CS-019 (Pass 7): option labels start with a capital/digit; a fragment that starts in lower case
+            # ("Shade, tent or covered waiting area") continues the previous option rather than starting a new one.
+            merged = []
             for p in parts:
+                if merged and p[:1].islower() and not merged[-1].lower().startswith("other"):
+                    merged[-1] = f"{merged[-1]}, {p}"
+                else:
+                    merged.append(p)
+            for p in merged:
                 token_counts[p] = token_counts.get(p, 0) + 1
-        known_options = [k for k, v in token_counts.items() if v >= 2 or len(raw_strings) < 10]
+        # "Other: ..." is free text, not an option.
+        known_options = [k for k, v in token_counts.items()
+                         if (v >= 2 or len(raw_strings) < 10) and not re.match(r'(?i)^other\s*[:(-]', k)]
 
     clean_options = [opt.strip() for opt in known_options if opt.strip()]
     sorted_options = sorted(clean_options, key=len, reverse=True)
@@ -494,7 +593,7 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
             elif (series.astype(str).str.match(r'^0\d+$').mean() > 0.3 or re.search(r'(?i)_(?:code|stub)$', str(col))) and uniques <= 500:
                 schema[col] = {
                     "type": "single_select",
-                    "categories": sorted([str(x) for x in series.unique()])[:20],
+                    "categories": sorted([str(x) for x in series.unique()], key=_natural_key)[:20],
                     "sample": sample_vals
                 }
             else:
@@ -535,7 +634,7 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
         else:
             schema[col] = {
                 "type": "single_select",
-                "categories": sorted([str(x) for x in str_series.unique()])[:20],
+                "categories": sorted([str(x) for x in str_series.unique()], key=_natural_key)[:20],
                 "sample": sample_vals
             }
 

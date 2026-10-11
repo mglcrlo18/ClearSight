@@ -43,12 +43,15 @@ def req(port, method, path, body=None):
 
 
 def test_code_open_ends_v2_default_and_v1_flag(live):
-    st, d = req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback"})
+    # Since 8234a93 a codeframe must be chosen explicitly (no silent FMCG fallback, CS-USER-03).
+    st, d0 = req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback"})
+    assert st == 200 and d0["status"] == "needs_codeframe"
+    st, d = req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback", "codeframe": "consumer_default"})
     assert st == 200 and d["status"] == "success" and d["coder"] == server.CODER_DEFAULT
     assert d["coder_version"].startswith("2") and d["codeframe_id"] == "consumer_default"
     assert "09171234567" not in json.dumps(d)
     assert d["review_queue_count"] >= 1
-    st, d1 = req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback", "coder": "v1"})
+    st, d1 = req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback", "coder": "v1", "codeframe": "consumer_default"})
     assert st == 200 and d1["coder"] == "v1" and d1["codeframe"]
     st, _ = req(live, "POST", "/api/code-open-ends", {"coder": "v9"})
     assert st == 400
@@ -66,7 +69,7 @@ def test_governance_codeframe_by_name(live):
 
 
 def test_review_queue_and_feedback_roundtrip(live, tmp_path):
-    req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback"})
+    req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback", "codeframe": "consumer_default"})
     st, q = req(live, "GET", "/api/coder/review-queue")
     assert st == 200 and q["count"] >= 1 and q["options"]
     item = q["items"][0]
@@ -77,7 +80,7 @@ def test_review_queue_and_feedback_roundtrip(live, tmp_path):
     assert q2["count"] == q["count"] - 1
     assert (tmp_path / "coder_corrections.json").exists()
     # the correction is applied on the next run
-    st, d = req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback"})
+    st, d = req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback", "codeframe": "consumer_default"})
     rec = next(r for r in d["records"] if r["response_id"] == item["response_id"])
     assert rec["assigned_codes"] == [code_id] and rec["sentiment"] == "neg"
 
@@ -88,7 +91,7 @@ def test_review_queue_and_feedback_roundtrip(live, tmp_path):
     {"text": "ok", "code_ids": [123456]}, {"text": "x" * 6000, "sentiment": "pos"}, [1, 2],
 ])
 def test_feedback_validation(live, body):
-    req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback"})
+    req(live, "POST", "/api/code-open-ends", {"column": "Open_End_Feedback", "codeframe": "consumer_default"})
     st, d = req(live, "POST", "/api/coder/feedback", body)
     assert st in (400, 404) and d["status"] == "error"
 

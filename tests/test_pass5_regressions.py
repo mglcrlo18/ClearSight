@@ -11,10 +11,15 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+import unittest
 
 import numpy as np
 import pandas as pd
-import pytest
+try:
+    import pytest
+except ImportError:
+    import scripts.run_all_tests
+    import pytest
 
 import server
 from server import ClearSightRequestHandler, SESSION
@@ -127,7 +132,7 @@ def test_p5_04_code_open_ends_regex_fallback_runs_in_handler():
                        "Remarks": ["Medyo mahal pero sulit naman ang bigas, salamat po sa programa"] * 30})
     _load(df)
     SESSION["schema"] = {c: {"type": "single_select"} for c in df.columns}  # force the re.search fallback
-    status, j = _post("/api/code-open-ends", {})
+    status, j = _post("/api/code-open-ends", {"codeframe": "consumer_default"})
     assert status == 200 and j["status"] == "success" and j["column"] == "Remarks", j
 
 
@@ -297,3 +302,37 @@ def test_p4_11_audit_log_rotates(tmp_path):
     df = pd.DataFrame({"Respondent_ID": ["R1", "R1", "R2"], "a_1to5": [1, 1, 2], "b_1to5": [1, 1, 2], "c_1to5": [1, 1, 2]})
     run_hygiene_audit(df, log_filepath=str(log))
     assert (tmp_path / "audit.log.1").exists() and log.stat().st_size < 100_000
+
+
+def load_tests(loader, standard_tests, pattern):
+    import inspect
+    suite = unittest.TestSuite()
+    funcs = [obj for name, obj in globals().items() if name.startswith("test_") and callable(obj)]
+    test_methods = {}
+    for fn in funcs:
+        sig = inspect.signature(fn)
+        if hasattr(fn, "_pytest_parametrize"):
+            argnames, argvalues = fn._pytest_parametrize
+            if isinstance(argnames, str):
+                names = [x.strip() for x in argnames.split(",")]
+            else:
+                names = list(argnames)
+            if len(sig.parameters) == len(names):
+                for idx, val in enumerate(argvalues):
+                    if len(names) == 1:
+                        def make_m(f, v): return lambda self: f(v)
+                    else:
+                        def make_m(f, v): return lambda self: f(*v)
+                    test_methods[f"{fn.__name__}_{idx}"] = make_m(fn, val)
+        elif len(sig.parameters) == 0:
+            def make_m(f): return lambda self: f()
+            test_methods[fn.__name__] = make_m(fn)
+    if test_methods:
+        cls = type("DynamicTests_test_pass5_regressions", (unittest.TestCase,), test_methods)
+        suite.addTests(loader.loadTestsFromTestCase(cls))
+    return suite
+
+
+if __name__ == "__main__":
+    unittest.main()
+

@@ -6,15 +6,21 @@ Air-gapped local execution context. Zero remote telemetry.
 """
 from __future__ import annotations
 
+import os
 import re
 import logging
 import hashlib
+import platform
 from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 
-# Setup Engine Logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+# A library module must not configure the root logger (the import used to call logging.basicConfig).
 logger = logging.getLogger("ClearSight_Coder_v3")
+
+# P7-09: air-gap. Never contact the Hugging Face Hub; load weights only from a bundled/local directory.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 
 # Optional ML Frameworks with Graceful In-Memory Fallbacks
 try:
@@ -41,7 +47,8 @@ except ImportError:
 
 class TaglishPreProcessor:
     """Morphological normalizer and negation tree parser for Taglish survey responses."""
-    NEGATION_WORDS = {"hindi", "di", "din", "rin", "wala", "mali", "ayaw", "never"}
+    # P7-07: "din"/"rin" mean "also/too" and "mali" means "wrong"; they are not negators.
+    NEGATION_WORDS = {"hindi", "di", "wala", "walang", "ayaw", "huwag", "never", "not", "no"}
     CONTRAST_WORDS = {"pero", "kaso", "subalit", "however", "although", "kahit"}
 
     def __init__(self):
@@ -50,10 +57,16 @@ class TaglishPreProcessor:
         self.email_pattern = re.compile(r'[\w\.-]+@[\w\.-]+\.\w+')
 
     def mask_pii(self, text: str) -> str:
-        """Mask personally identifiable information to ensure RA 10173 compliance."""
-        text = self.phone_pattern.sub('[PHONE_MASKED]', text)
-        text = self.email_pattern.sub('[EMAIL_MASKED]', text)
-        return text
+        """Mask PII with ClearSight's main scrubber (names after si/ni/kay, PhilSys, SSS, TIN, cards, phones, emails).
+        P7-06: v3 used to keep its own phone/email-only copy, which missed every other RA 10173 category."""
+        if not text:
+            return ""
+        try:
+            from engine.taglish_nlp import scrub_pii
+        except Exception:  # pragma: no cover - standalone use outside the app
+            text = self.phone_pattern.sub('[PHONE_REDACTED]', text)
+            return self.email_pattern.sub('[EMAIL_REDACTED]', text)
+        return scrub_pii(text)
 
     def process_negations(self, text: str) -> str:
         """Transform negation patterns for vector embedding stability."""
@@ -74,9 +87,10 @@ class TaglishPreProcessor:
         """Run full pre-processing pipeline."""
         if not text or not isinstance(text, str):
             return ""
-        text = self.mask_pii(text)
-        text = self.process_negations(text)
-        return text
+        # P7-07: embed the (masked) text as written. NOT_ tokens split into unseen word pieces in MiniLM
+        # ('NOT_satisfied' -> NOT, _, s, atis, fi, ed) and the held-out ablation showed no gain from them.
+        # Negation is handled in analyze_sentiment instead.
+        return self.mask_pii(text)
 
 
 class _LocalNumpyPA:
@@ -143,7 +157,7 @@ class _LocalNumpyEmbedder:
                 continue
             vec = np.zeros(self.dim, dtype=np.float32)
             for w in words:
-                h = int(hashlib.md5(w.encode('utf-8')).hexdigest(), 16)
+                h = int(hashlib.md5(w.encode('utf-8'), usedforsecurity=False).hexdigest(), 16)
                 pos = h % self.dim
                 sign = 1.0 if ((h >> 8) & 1) else -1.0
                 vec[pos] += sign
@@ -162,11 +176,15 @@ class CoderV3Engine:
         self.preprocessor = TaglishPreProcessor()
 
         # Load Sentence Transformer for embedding extraction
+        # P7-09: load from CLEARSIGHT_V3_MODEL_DIR (bundled with the installer) or the local cache only.
+        model_dir = os.environ.get("CLEARSIGHT_V3_MODEL_DIR")
+        self.encoder_kind = "hash-fallback"
         if HAS_SENTENCE_TRANSFORMERS and HF_SentenceTransformer is not None:
             try:
-                self.encoder = HF_SentenceTransformer(model_name)
+                self.encoder = HF_SentenceTransformer(model_dir or model_name, local_files_only=True)
+                self.encoder_kind = "minilm"
             except Exception as e:
-                logger.warning(f"Could not load SentenceTransformer '{model_name}': {e}. Falling back to on-device dense embedder.")
+                logger.warning(f"Could not load SentenceTransformer '{model_dir or model_name}' offline: {e}. Falling back to on-device hash embedder.")
                 self.encoder = _LocalNumpyEmbedder()
         else:
             self.encoder = _LocalNumpyEmbedder()
@@ -189,6 +207,9 @@ class CoderV3Engine:
         logger.info("Applying dynamic INT8 quantization to transformer back-end...")
         if HAS_TORCH and torch is not None and hasattr(self.encoder, "eval"):
             try:
+                # Apple Silicon / ARM needs the qnnpack backend for dynamic INT8 (fbgemm/x86 are x86-only).
+                if platform.machine().lower() in ("arm64", "aarch64") and "qnnpack" in torch.backends.quantized.supported_engines:
+                    torch.backends.quantized.engine = "qnnpack"
                 self.encoder = torch.quantization.quantize_dynamic(
                     self.encoder, {torch.nn.Linear}, dtype=torch.qint8
                 )
@@ -396,12 +417,19 @@ class CoderV3Engine:
         predictions = self.predict_with_uncertainty(verbatims)
         records = []
         for idx, (raw_v, pred) in enumerate(zip(verbatims, predictions)):
-            sentiment = self.analyze_sentiment(raw_v)
+            masked_v = self.preprocessor.mask_pii(raw_v if isinstance(raw_v, str) else "")
+            sentiment = self.analyze_sentiment(masked_v)
             label = pred.get("predicted_label", "General Feedback")
-            v_clean = self.preprocessor.mask_pii(raw_v).lower()
+            v_clean = masked_v.lower()
 
             assigned_codes = []
-            assigned_themes = [label]
+            assigned_themes = []
+            if not v_clean.strip():
+                # Empty / whitespace answers get no theme (they used to receive a code).
+                records.append({"response_id": idx + 1, "raw_text": masked_v, "text": masked_v, "predicted_label": None,
+                                "assigned_themes": [], "assigned_codes": [], "confidence": 0.0, "margin": 0.0,
+                                "needs_review": True, "sentiment": "neutral", "encoder": self.encoder_kind})
+                continue
 
             # 1. Map verbatims to specific leaf codes using topic keyword and exemplar dictionaries
             if self.codeframe_topics:
@@ -412,7 +440,8 @@ class CoderV3Engine:
                     matched = False
                     for w in all_triggers:
                         w_str = str(w).strip().lower()
-                        if len(w_str) >= 3 and (re.search(r'\b' + re.escape(w_str) + r'\b', v_clean) or w_str in v_clean):
+                        # P7-10: whole words only; the substring fallback made 'kumurap' trigger 'mura'.
+                        if len(w_str) >= 3 and re.search(r'\b' + re.escape(w_str) + r'\b', v_clean):
                             matched = True
                             break
 
@@ -460,17 +489,21 @@ class CoderV3Engine:
                                 assigned_themes.append(t_lbl)
                         break
 
+            if not assigned_themes:
+                assigned_themes = [label]  # embedding nearest-label fallback only when no keyword matched
+            # P7-06: records go to the UI, the review queue and exports; they carry masked text only.
             records.append({
                 "response_id": idx + 1,
-                "raw_text": raw_v,
-                "text": raw_v,
+                "raw_text": masked_v,
+                "text": masked_v,
                 "predicted_label": label,
                 "assigned_themes": list(dict.fromkeys(assigned_themes)),
                 "assigned_codes": list(dict.fromkeys(assigned_codes)),
                 "confidence": pred.get("confidence", 0.5),
                 "margin": pred.get("margin", 0.0),
-                "needs_review": pred.get("needs_review", False),
-                "sentiment": sentiment
+                "needs_review": pred.get("needs_review", False) or not assigned_codes,
+                "sentiment": sentiment,
+                "encoder": self.encoder_kind
             })
         return records
 

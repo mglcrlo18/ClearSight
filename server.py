@@ -44,9 +44,10 @@ from engine.codeframe_loader import CodeframeError, list_codeframes, load_codefr
 
 # Coder feature flag: "v3" (default SetFit embeddings & PA-II active learning),
 # "v2" (syntax-aware negation & contrast coder), or "v1" (legacy rule coder).
-CODER_DEFAULT = os.environ.get("CLEARSIGHT_CODER", "v3").strip().lower()
+# P7-11: v3 fails the release gate (held-out sentiment 14.5% vs v2 59.1%); v2 stays the default until v3 passes.
+CODER_DEFAULT = os.environ.get("CLEARSIGHT_CODER", "v2").strip().lower()
 if CODER_DEFAULT not in ("v1", "v2", "v3"):
-    CODER_DEFAULT = "v3"
+    CODER_DEFAULT = "v2"
 _FEEDBACK_STORE = None
 
 
@@ -92,8 +93,10 @@ DEFAULT_ANALYSIS_CONFIG = {
     },
     "hygiene": {
         "rim_weighting": True,
-        "quarantine_straightliners": True,
-        "quarantine_speeders": True
+        # P7-28: quarantine is opt-in. Dropping flagged rows by default silently changed published bases
+        # (1,075 -> 1,068 on the QA file) while the straight-liner rule still over-flags (CS-064).
+        "quarantine_straightliners": False,
+        "quarantine_speeders": False
     },
     "nlp": {
         "pii_masking": True,
@@ -101,6 +104,8 @@ DEFAULT_ANALYSIS_CONFIG = {
         "review_queue_routing": True
     }
 }
+
+_UNSET = object()
 
 # In-Memory Active Survey Session State
 SESSION = {
@@ -113,9 +118,10 @@ SESSION = {
     "last_tabulation": None,
     "open_feedback_analysis": None,
     "custom_codeframe": None,
-    "quarantine_straight_liners": True,
-    "quarantine_speeders": True,
-    "analysis_config": dict(DEFAULT_ANALYSIS_CONFIG)
+    "quarantine_straight_liners": False,
+    "quarantine_speeders": False,
+    "weight_candidate": None,
+    "analysis_config": copy.deepcopy(DEFAULT_ANALYSIS_CONFIG)
 }
 
 
@@ -418,11 +424,17 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/upload":
             raw_filename = self.headers.get("X-Filename", "survey_data.csv")
-            filename = unquote(raw_filename)
+            # The client percent-encodes the name (non-Latin names, P7-33). Strip control characters and cap length;
+            # the UI renders it with textContent (P7-19).
+            filename = re.sub(r'[\x00-\x1f\x7f]', '', unquote(raw_filename))[:200] or "survey_data.csv"
             try:
                 df, meta = read_survey_file(body_bytes, filename)
                 schema = autodetect_schema(df)
-                df_audited, audit_log = run_hygiene_audit(df)
+                if meta.get("is_data_table"):
+                    # P7-22: an imported crosstab is not respondent data; hygiene checks on it are meaningless.
+                    df_audited, audit_log = df, []
+                else:
+                    df_audited, audit_log = run_hygiene_audit(df)
                 
                 with SESSION_LOCK:
                     SESSION["df"] = df_audited
@@ -434,33 +446,20 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     SESSION["last_tabulation"] = None
                     SESSION["open_feedback_analysis"] = None
                     SESSION["custom_codeframe"] = None
+                    SESSION["weight_candidate"] = None
+                    SESSION["generation"] = SESSION.get("generation", 0) + 1
 
                     if meta.get("is_data_table") and meta.get("pretabulated_table"):
                         SESSION["last_tabulation"] = [meta["pretabulated_table"]]
                     elif meta.get("detected_weight_column") and meta["detected_weight_column"] in df.columns:
-                        try:
-                            detected_w = meta["detected_weight_column"]
-                            w_series = pd.to_numeric(df[detected_w], errors='coerce').fillna(1.0)
-                            w_arr = w_series.to_numpy(dtype=float)
-                            if len(w_arr) > 0 and np.nanmin(w_arr) > 0:
-                                SESSION["weights"] = w_arr
-                                w_sum = np.sum(w_arr)
-                                w_sq_sum = np.sum(w_arr ** 2)
-                                eff = float((w_sum ** 2) / (len(w_arr) * w_sq_sum)) if w_sq_sum > 0 else 1.0
-                                SESSION["weight_diagnostics"] = {
-                                    "pre_existing": True,
-                                    "column": detected_w,
-                                    "converged": True,
-                                    "iterations": 0,
-                                    "efficiency": round(eff * 100.0, 2),
-                                    "min_weight": float(round(float(np.min(w_arr)), 3)),
-                                    "max_weight": float(round(float(np.max(w_arr)), 3)),
-                                    "mean_weight": float(round(float(np.mean(w_arr)), 3))
-                                }
-                        except Exception as ex:
-                            logging.warning(f"Failed to auto-bind pre-existing weights: {ex}")
+                        # P7-15: suggest, never apply silently. The UI asks; /api/weight/apply-column applies.
+                        SESSION["weight_candidate"] = meta["detected_weight_column"]
+                    weighted_now = SESSION["weights"] is not None
+                    diagnostics_now = SESSION["weight_diagnostics"]
 
-                total_n = meta["pretabulated_table"]["unweighted_bases"][0] if (meta.get("is_data_table") and meta.get("pretabulated_table")) else len(df)
+                pretab = meta.get("pretabulated_table") if meta.get("is_data_table") else None
+                # P7-14: an unknown base is reported as None, never as an invented number.
+                total_n = (pretab.get("unweighted_bases") or [None])[0] if pretab else len(df)
 
                 self.send_json_response({
                     "status": "success",
@@ -471,11 +470,42 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     "flagged_hygiene": len(audit_log),
                     "is_data_table": meta.get("is_data_table", False),
                     "pretabulated_table": meta.get("pretabulated_table"),
-                    "weighted": SESSION["weights"] is not None,
-                    "diagnostics": SESSION["weight_diagnostics"]
+                    "weighted": weighted_now,
+                    "diagnostics": diagnostics_now,
+                    "detected_weight_column": meta.get("detected_weight_column"),
+                    "ingestion_warnings": ([meta["ingestion_warning"]] if meta.get("ingestion_warning") else []) + (pretab.get("warnings", []) if pretab else [])
                 })
             except Exception as e:
                 self.send_json_response({"status": "error", "message": str(e)}, 400)
+
+        elif path == "/api/weight/apply-column":
+            # P7-15: explicit, user-confirmed use of an existing weight column.
+            try:
+                req_data = json.loads(body_bytes.decode("utf-8")) if body_bytes else {}
+            except Exception:
+                req_data = {}
+            col = req_data.get("column")
+            with SESSION_LOCK:
+                df = SESSION.get("df")
+                if df is None or not isinstance(col, str) or col not in df.columns:
+                    self.send_json_response({"status": "error", "message": "Weight column not found in the current dataset."}, 400)
+                    return
+                w_raw = pd.to_numeric(df[col], errors='coerce')
+                n_missing = int(w_raw.isna().sum())
+                w_arr = w_raw.to_numpy(dtype=float)
+                if len(w_arr) == 0 or n_missing > 0 or not np.all(w_arr > 0):
+                    self.send_json_response({"status": "error", "message": f"'{col}' cannot be used as weights: {n_missing} missing/non-numeric and {int(np.sum(~(np.nan_to_num(w_arr, nan=1.0) > 0)))} non-positive values. Fix the column first."}, 400)
+                    return
+                w_sum = float(np.sum(w_arr)); w_sq_sum = float(np.sum(w_arr ** 2))
+                eff = (w_sum ** 2) / (len(w_arr) * w_sq_sum) if w_sq_sum > 0 else 1.0
+                diag = {"pre_existing": True, "column": col, "converged": True, "iterations": 0,
+                        "efficiency": round(eff * 100.0, 2), "kish_n_eff": round((w_sum ** 2) / w_sq_sum, 1) if w_sq_sum > 0 else float(len(w_arr)),
+                        "min_weight": round(float(np.min(w_arr)), 3), "max_weight": round(float(np.max(w_arr)), 3),
+                        "mean_weight": round(float(np.mean(w_arr)), 3)}
+                SESSION["weights"] = w_arr
+                SESSION["weight_diagnostics"] = diag
+                SESSION["weight_candidate"] = None
+            self.send_json_response({"status": "success", "diagnostics": diag})
 
         elif path == "/api/weight":
             if SESSION["df"] is None:
@@ -491,7 +521,11 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
             if not targets:
                 # Identify if default demographic columns exist (CS-N04)
-                if SESSION.get("df") is not None and "Region" in SESSION["df"].columns:
+                # CS-N04 (Pass 7): the built-in PSA-style Region shares only apply when the file uses exactly these
+                # four Region labels (the bundled sample); any other "Region" column needs user targets.
+                _demo_regions = {"National Capital Region (NCR)", "Balance Luzon", "Visayas", "Mindanao"}
+                if (SESSION.get("df") is not None and "Region" in SESSION["df"].columns
+                        and set(SESSION["df"]["Region"].dropna().astype(str).unique()) <= _demo_regions):
                     targets = {
                         "Region": {
                             "National Capital Region (NCR)": 0.14,
@@ -503,18 +537,25 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 else:
                     self.send_json_response({
                         "status": "error",
-                        "message": "No 'Region' column found. Please provide explicit weighting targets for dataset columns."
+                        "message": "No weighting targets given. Enter population targets for at least one column (e.g. Region or Gender shares) before weighting."
                     }, 400)
                     return
 
+            with SESSION_LOCK:
+                df_used = SESSION["df"]
             try:
                 weights, diagnostics = calculate_rim_weights(
-                    SESSION["df"], 
+                    df_used,
                     targets, 
                     trim_percentile=trim_pct
                 )
-                SESSION["weights"] = weights
-                SESSION["weight_diagnostics"] = diagnostics
+                # P7-27: a new upload during raking used to leave weights of the old file on the new one.
+                with SESSION_LOCK:
+                    if SESSION["df"] is not df_used:
+                        self.send_json_response({"status": "error", "message": "The dataset changed while weights were being computed. Please run weighting again."}, 409)
+                        return
+                    SESSION["weights"] = weights
+                    SESSION["weight_diagnostics"] = diagnostics
                 self.send_json_response({
                     "status": "success",
                     "diagnostics": diagnostics
@@ -528,8 +569,9 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 req_data = {}
             with SESSION_LOCK:
-                SESSION["quarantine_straight_liners"] = bool(req_data.get("filter_straight_liners", True))
-                SESSION["quarantine_speeders"] = bool(req_data.get("filter_speeders", True))
+                # P7-34: bool("false") is True; accept only real booleans.
+                SESSION["quarantine_straight_liners"] = req_data.get("filter_straight_liners") is True
+                SESSION["quarantine_speeders"] = req_data.get("filter_speeders") is True
                 if "analysis_config" not in SESSION or SESSION["analysis_config"] is None:
                     SESSION["analysis_config"] = copy.deepcopy(DEFAULT_ANALYSIS_CONFIG)
                 if "hygiene" not in SESSION["analysis_config"]:
@@ -576,6 +618,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
 
             with SESSION_LOCK:
                 df = SESSION["df"]
+                weights_snapshot = SESSION.get("weights")  # P7-27: df and weights read together
             # CS-088: validate request types and never drop the connection on bad input.
             banner_cols = req_data.get("banner_cols", ["Total", "NCR (A)", "Balance Luzon (B)", "Visayas (C)", "Mindanao (D)"])
             stubs = req_data.get("stubs", ["Brand Preference"])
@@ -595,7 +638,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             custom_nets = req_data.get("custom_nets")
 
             try:
-                result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric, custom_nets=custom_nets)
+                result = self.execute_tabulation(df, banner_cols, stubs, confidence, fdr_enabled, metric=metric, custom_nets=custom_nets, weights=weights_snapshot)
             except Exception as e:
                 logging.exception(f"Tabulation error: {e}")
                 self.send_json_response({"status": "error", "message": f"Tabulation failed: {e}"}, 500)
@@ -681,7 +724,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                                 counts[th] += 1
                                 c = cites.setdefault(th, [])
                                 if len(c) < 5:
-                                    c.append({"response_id": r.get("response_id", 1), "quote": r.get("raw_text") or r.get("text", "")})
+                                    c.append({"response_id": r.get("response_id", 1), "quote": r.get("text", "")})
                     n_tot = len(records)
                     frame = []
                     for th, cnt in counts.most_common():
@@ -708,6 +751,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                         "codeframe_id": cf.get("id", "custom") if isinstance(cf, dict) else "custom",
                         "records": records,
                         "review_queue": [r["response_id"] if isinstance(r, dict) else r for r in records if r.get("needs_review")],
+                        # P7-35: say which encoder actually ran (hash fallback when the ML extras or weights are missing).
+                        "encoder": getattr(coder_instance, "encoder_kind", "unknown"),
                         "sentiment_counts": {
                             "positive": sum(1 for r in records if r.get("sentiment") == "positive"),
                             "negative": sum(1 for r in records if r.get("sentiment") == "negative"),
@@ -777,6 +822,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     "records": coding_results.get("records", [])[:50],
                     "review_queue_count": len(coding_results.get("review_queue", [])),
                     "sentiment_counts": coding_results.get("sentiment_counts", {}),
+                    "encoder": coding_results.get("encoder"),
                 })
             except Exception as e:
                 logging.exception(f"Error coding open ends: {e}")
@@ -984,10 +1030,14 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         elif "Snapshot" in filename:
             data = build_snapshot_data()
             generate_customer_voice_snapshot_html(target_path, data)
-        elif "Academic_Tables" in filename or "Thesis_Tables" in filename:
-            generate_thesis_excel_tables(target_path, SESSION.get("filename", "Consumer Study"))
-        elif "Thesis" in filename:
-            generate_thesis_chapter_4_package(target_path, SESSION.get("filename", "Consumer Study"), n, neff)
+        elif "Academic_Tables" in filename or "Thesis_Tables" in filename or "Thesis" in filename:
+            # P7-30: same guard as the banner book (P4-09); without tables the package fell back to a fixed 'N = 412' row.
+            if not SESSION.get("last_tabulation"):
+                raise ValueError("Build at least one table first.")
+            if "Thesis" in filename and not ("Academic_Tables" in filename or "Thesis_Tables" in filename):
+                generate_thesis_chapter_4_package(target_path, SESSION.get("filename", "Consumer Study"), n, neff)
+            else:
+                generate_thesis_excel_tables(target_path, SESSION.get("filename", "Consumer Study"))
 
     def handle_settings_analysis(self, body_bytes: bytes):
         """Update global analysis toggle configurations (Directive 01, CS-102)."""
@@ -999,20 +1049,22 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             self.send_json_response({"status": "error", "message": "Body must be a JSON object."}, 400)
             return
         with SESSION_LOCK:
-            cfg = SESSION.setdefault("analysis_config", dict(DEFAULT_ANALYSIS_CONFIG))
+            cfg = SESSION.setdefault("analysis_config", copy.deepcopy(DEFAULT_ANALYSIS_CONFIG))
             for cat in ("stats", "hygiene", "nlp"):
                 if cat in req and isinstance(req[cat], dict):
                     cfg.setdefault(cat, {})
                     for k, v in req[cat].items():
-                        cfg[cat][k] = bool(v)
+                        # P7-28 / CWE-20: only real JSON booleans; bool("false") is True.
+                        if k in DEFAULT_ANALYSIS_CONFIG.get(cat, {}) and isinstance(v, bool):
+                            cfg[cat][k] = v
             if "hygiene" in cfg:
-                SESSION["quarantine_straight_liners"] = cfg["hygiene"].get("quarantine_straightliners", True)
-                SESSION["quarantine_speeders"] = cfg["hygiene"].get("quarantine_speeders", True)
+                SESSION["quarantine_straight_liners"] = cfg["hygiene"].get("quarantine_straightliners", False)
+                SESSION["quarantine_speeders"] = cfg["hygiene"].get("quarantine_speeders", False)
         self.send_json_response({"status": "success", "config": cfg})
 
     def handle_upload_codeframe(self, body_bytes: bytes):
         """Upload and compile a custom Excel (.xlsx) or JSON codeframe into active session."""
-        filename = self.headers.get("X-Filename", "codeframe.xlsx")
+        filename = re.sub(r'[\x00-\x1f\x7f]', '', unquote(self.headers.get("X-Filename", "codeframe.xlsx")))[:200] or "codeframe.xlsx"
         try:
             if filename.lower().endswith((".xlsx", ".xls")) or (len(body_bytes) > 4 and body_bytes[:4] == b"PK\x03\x04"):
                 from engine.codeframe_excel_parser import parse_excel_codeframe
@@ -1469,15 +1521,18 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
             logging.exception(f"Advanced models error: {e}")
             self.send_json_response({"status": "error", "message": str(e)}, 500)
 
-    def execute_tabulation(self, df, banner_cols, stubs, confidence=95, fdr_enabled=True, metric="pct", custom_nets=None):
+    def execute_tabulation(self, df, banner_cols, stubs, confidence=95, fdr_enabled=True, metric="pct", custom_nets=None, weights=_UNSET):
         """Computes cross-tabulation table with rigorous dual significance testing on real microdata."""
         from engine.tabulation_engine import build_crosstab_table
 
         conf_float = 0.95 if int(confidence) == 95 else (0.90 if int(confidence) == 90 else 0.99)
-        weights = SESSION.get("weights")
 
         with SESSION_LOCK:
+            if weights is _UNSET:
+                weights = SESSION.get("weights") if SESSION.get("df") is df else None
             cfg = SESSION.get("analysis_config") or DEFAULT_ANALYSIS_CONFIG
+        if weights is not None and df is not None and len(weights) != len(df):
+            raise ValueError("Weights belong to a different dataset (the file changed during this request); please re-run weighting.")
         stats_cfg = cfg.get("stats", {})
         hygiene_cfg = cfg.get("hygiene", {})
 

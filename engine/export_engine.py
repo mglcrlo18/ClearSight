@@ -8,6 +8,7 @@ Generates:
 
 import re
 import html
+from typing import Any, Optional
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -716,7 +717,10 @@ def generate_thesis_excel_tables(filepath: str, project_title: str) -> str:
                 test_info.append(f"F({an.get('df1')}, {an.get('df2')}) = {an.get('f_stat')}, p = {an.get('p_val')}")
             if tab_table.get("mrcv"):
                 mr = tab_table["mrcv"]
-                test_info.append(f"FRSb = {mr.get('f_stat')}, df = {mr.get('df1')}, p = {mr.get('p_val')}")
+                if mr.get("skipped"):
+                    test_info.append(f"Rao-Scott MRCV not run: {mr.get('skipped')}")
+                else:
+                    test_info.append(f"Rao-Scott χ²(RS2) = {mr.get('f_stat')}, df = {mr.get('df1')}, p = {mr.get('p_val')}")
 
             if test_info:
                 c_test = ws_tab.cell(row=curr, column=2, value=sanitize_excel_cell("Omnibus Test of Association"))

@@ -459,7 +459,7 @@ def run_dynamic_kruskal_quadrant_analysis(
             item["quadrant_color"] = "#94A3B8" # Slate Blue/Grey
             item["strategic_action"] = "Minor issue with low relative importance. Deprioritize capital allocation."
 
-        item["quadrant"] = f"{item["quadrant_code"]}: {item["quadrant_label"]}"
+        item["quadrant"] = f"{item['quadrant_code']}: {item['quadrant_label']}"
         item["recommendation"] = item["strategic_action"]
 
     # Sort descending by Derived Importance

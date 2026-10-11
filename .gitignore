@@ -31,4 +31,6 @@ Sukat_Window
 snapshot_preview.html
 *.log
 *.pid
+.clearsight_port
+tests/data/fgd_governance.csv
 

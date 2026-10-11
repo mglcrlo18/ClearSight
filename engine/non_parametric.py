@@ -99,6 +99,11 @@ def survey_weighted_kruskal_wallis(
     groups_clean = np.array([str(groups_list[i]) for i in idx])
     w_clean = w_arr[idx]
     n_clean = len(y_clean)
+    # Pass 7: scale weights to the Kish effective n. H used to grow with the weight scale
+    # (weights x10 gave H x10), and with unit weights this reproduces the textbook statistic.
+    _w_sum = float(np.sum(w_clean)); _w_sq = float(np.sum(w_clean ** 2))
+    if _w_sum > 0 and _w_sq > 0:
+        w_clean = w_clean * ((_w_sum / _w_sq))  # sum(w) becomes (sum w)^2 / sum w^2 = Kish n_eff
 
     unique_groups = np.unique(groups_clean)
     k = len(unique_groups)
@@ -136,7 +141,8 @@ def survey_weighted_kruskal_wallis(
         }
 
     # Total rank variance under the design
-    total_var = float(np.sum(w_clean * ((ranks - grand_mean_rank) ** 2)) / n_hat)
+    # (n - 1) denominator: with unit weights H equals scipy.stats.kruskal (tie-corrected).
+    total_var = float(np.sum(w_clean * ((ranks - grand_mean_rank) ** 2)) / max(n_hat - 1.0, 1e-12))
     if total_var <= 0:
         h_stat = 0.0
         p_val = 1.0

@@ -28,8 +28,9 @@ class TestCoderV3(unittest.TestCase):
         cleaned = self.preprocessor.mask_pii(text)
         self.assertNotIn("09171234567", cleaned)
         self.assertNotIn("test.user@clearsight.ph", cleaned)
-        self.assertIn("[PHONE_MASKED]", cleaned)
-        self.assertIn("[EMAIL_MASKED]", cleaned)
+        # P7-06: v3 now uses ClearSight's main scrubber, so the tokens are the app-wide *_REDACTED ones.
+        self.assertIn("[PHONE_REDACTED]", cleaned)
+        self.assertIn("[EMAIL_REDACTED]", cleaned)
 
     def test_negation_processing(self):
         text = "Hindi maganda ang tela, di maayos ang tahi, wala kwenta."

@@ -1721,3 +1721,11 @@ body {
 .coded-hierarchy-table tr:hover td.col-pct {
     background-color: #FEF9C3 !important;
 }
+
+/* P7-32 / CS-103: phone widths. The 4-step stepper (493 px) made the whole page scroll sideways at 390 px. */
+@media (max-width: 640px) {
+    .workflow-stepper { flex-wrap: wrap; max-width: 100%; gap: 4px; }
+    .workflow-stepper .step-btn { flex: 1 1 45%; min-width: 0; white-space: normal; }
+    .table-container, .table-wrapper, .results-table-wrap { max-width: 100%; overflow-x: auto; }
+    html, body { max-width: 100%; }
+}

@@ -166,10 +166,18 @@ def compute_johnsons_relative_weights(
         feat_names = list(predictors)
 
         w_vec = None
-        if isinstance(weights, str) and weights in df.columns:
-            w_vec = pd.to_numeric(df[weights], errors='coerce').fillna(1.0).to_numpy()
-        elif weights is not None and not isinstance(weights, str):
+        if isinstance(weights, str):
+            # P7-23: a misspelt weight column used to run unweighted without a word.
+            if weights not in df.columns:
+                raise ValueError(f"Weight column '{weights}' not found in DataFrame.")
+            w_num = pd.to_numeric(df[weights], errors='coerce')
+            if w_num.isna().any():
+                raise ValueError(f"Weight column '{weights}' has {int(w_num.isna().sum())} missing/non-numeric values.")
+            w_vec = w_num.to_numpy(dtype=float)
+        elif weights is not None:
             w_vec = np.asarray(weights, dtype=float)
+            if len(w_vec) != len(df):
+                raise ValueError(f"weights has {len(w_vec)} values but the DataFrame has {len(df)} rows.")
     else:
         X_mat = np.asarray(data, dtype=float)
         y_vec = np.asarray(criterion, dtype=float)

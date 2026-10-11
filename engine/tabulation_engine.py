@@ -557,13 +557,25 @@ def build_crosstab_table(
                     w_c = w_all[valid_c.to_numpy()]
                     row_counts.append(float(w_c[matches].sum()))
                 obs_matrix.append(row_counts)
-        if len(obs_matrix) >= 2:
+        masks_c = np.vstack([np.asarray(all_col_masks[c], dtype=bool) for c in range(1, num_banners + 1)])
+        if (masks_c.sum(axis=0) > 1).any():
+            # CS-017 (Pass 7): with two banner variables a respondent sits in two columns, so the
+            # columns are not independent samples and a chi-square across them is invalid.
+            chi2_info = {"skipped": "Banner columns overlap; run the chi-square on one banner variable."}
+        elif len(obs_matrix) >= 2:
             contingency = np.array(obs_matrix)
+            # CS-017 (Pass 7): weighted counts scaled to the Kish effective n, so the statistic does not
+            # grow with the weight scale (weights x10 used to give chi-square x10).
+            in_tab = masks_c.any(axis=0) & df[stub_col].notna().to_numpy()
+            w_in = w_all[in_tab]
+            if contingency.sum() > 0 and len(w_in) and float(np.sum(w_in ** 2)) > 0:
+                n_eff_tab = float(np.sum(w_in)) ** 2 / float(np.sum(w_in ** 2))
+                contingency = contingency * (n_eff_tab / contingency.sum())
             c_stat, c_df, c_p = chi_square_independence(contingency)
             chi2_info = {
                 "chi2_stat": float(round(c_stat, 4)),
                 "df": int(c_df),
-                "p_val": float(round(c_p, 4))
+                "p_val": float(round(c_p, 6))
             }
 
     # If multi-select checkbox stub, compute second-order Rao-Scott MRCV test (CS-005)
@@ -581,17 +593,29 @@ def build_crosstab_table(
                     row_c.append(float(matched_cnt))
                 mention_table.append(row_c)
             mention_arr = np.array(mention_table)
-            # Pass respondent_matrix to activate the true eigenvalue design-effect adjustment (CS-005)
-            rs_f, rs_df1, rs_p = rao_scott_second_order_mrcv(
-                mention_arr,
-                n_eff=float(effective_bases[0]),
-                respondent_matrix=ind_df.to_numpy()
-            )
-            mrcv_info = {
-                "f_stat": float(round(rs_f, 4)),
-                "df1": float(round(rs_df1, 4)),
-                "p_val": float(round(rs_p, 4))
-            }
+            # CS-005 (Pass 7): Bilder-Loughin SPMI with second-order Rao-Scott correction, on respondents.
+            # It needs mutually exclusive groups, so it runs only when no respondent sits in two banner columns.
+            masks = np.vstack([np.asarray(all_col_masks[c], dtype=bool) for c in range(1, num_banners + 1)])
+            answered = df[stub_col].notna().to_numpy()
+            if (masks.sum(axis=0) <= 1).all():
+                labels = np.array([None] * len(df), dtype=object)
+                for c in range(masks.shape[0]):
+                    labels[masks[c] & answered] = c
+                rs_f, rs_df1, rs_p = rao_scott_second_order_mrcv(
+                    mention_arr,
+                    n_eff=float(effective_bases[0]),
+                    respondent_matrix=ind_df.to_numpy(),
+                    group_labels=labels,
+                )
+                mrcv_info = {
+                    "test": "Rao-Scott 2nd-order SPMI (unweighted)",
+                    "f_stat": float(round(rs_f, 4)),  # kept for the UI/export; this is the RS2 chi-square statistic
+                    "chi2_rs2": float(round(rs_f, 4)),
+                    "df1": float(round(rs_df1, 4)),
+                    "p_val": float(round(rs_p, 6))
+                }
+            else:
+                mrcv_info = {"test": "Rao-Scott 2nd-order SPMI", "skipped": "Banner columns overlap; the test needs mutually exclusive groups. Run it on one banner variable."}
 
     return {
         "title": f"Tabulation: {stub_col}",

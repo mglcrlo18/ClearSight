@@ -28,8 +28,8 @@ const ANALYSIS_CONFIG = {
     },
     hygiene: {
         rim_weighting: true,
-        quarantine_straightliners: true,
-        quarantine_speeders: true
+        quarantine_straightliners: false,  // P7-28: opt-in, matches the server default
+        quarantine_speeders: false
     },
     nlp: {
         pii_masking: true,
@@ -110,6 +110,28 @@ function handleFileDrop(event) {
     }
 }
 
+// P7-15: an existing weight column is applied only after the user confirms it.
+async function confirmDetectedWeightColumn(col) {
+    if (!window.confirm(`Column "${col}" looks like a survey weight. Apply it as the weight for all tables?`)) {
+        showToast(`Weight column "${col}" not applied. Tables are unweighted.`);
+        return;
+    }
+    try {
+        const res = await fetch('/api/weight/apply-column', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ column: col })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            showToast(`Applied weights from "${col}" (efficiency ${data.diagnostics.efficiency}%).`);
+            renderTable();
+        } else {
+            showToast(`Weights not applied: ${data.message}`, true);
+        }
+    } catch (err) {
+        showToast(`Weights not applied: ${err.message}`, true);
+    }
+}
+
 function uploadDataFile(file) {
     showToast(`Reading & sanitizing "${file.name}" locally...`);
 
@@ -120,7 +142,8 @@ function uploadDataFile(file) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/octet-stream',
-                'X-Filename': file.name
+                // P7-33: header values must be ISO-8859-1; percent-encode (the server unquotes).
+                'X-Filename': encodeURIComponent(file.name)
             },
             body: arrayBuffer
         })
@@ -130,7 +153,10 @@ function uploadDataFile(file) {
                 loadedDatasetInfo = data;
                 applyIngestedSummary(data);
                 resetTraysForDataset(data);
-                showToast(`Ingested ${data.total_respondents} records from "${data.filename}"`);
+                const nTxt = (data.total_respondents === null || data.total_respondents === undefined) ? 'an unknown number of' : data.total_respondents;
+                showToast(`Ingested ${nTxt} records from "${data.filename}"`);
+                (data.ingestion_warnings || []).forEach(w => showToast(w, true));
+                if (data.detected_weight_column) confirmDetectedWeightColumn(data.detected_weight_column);
                 renderTable();
             } else {
                 showToast(`Error: ${data.message || 'Failed to parse file'}`, true);
@@ -194,7 +220,8 @@ function applyIngestedSummary(data) {
     summaryCard.style.animation = "fadeInUp 0.35s cubic-bezier(0.34, 1.4, 0.64, 1)";
 
     const nDisp = document.getElementById('detected-respondents');
-    if (nDisp) nDisp.innerText = data.total_respondents || 412;
+    // CS-N06 / P7-14: never show the demo N for a real file; an unknown base (pre-tabulated import) says so.
+    if (nDisp) nDisp.innerText = (data.total_respondents === null || data.total_respondents === undefined) ? 'unknown' : data.total_respondents;
 
     const schema = data.schema || {};
     let multiCount = 0;
@@ -237,22 +264,21 @@ function executeWeighting() {
     const schema = (loadedDatasetInfo && loadedDatasetInfo.schema) || {};
     const payload = { trim_percentile: trimVal };
 
-    // If dataset has no 'Region', look for categorical demographics like Gender or Distribution Site (CS-N04)
-    if (!schema['Region']) {
-        const fallbackCol = Object.keys(schema).find(c => 
-            !c.startsWith('__') && 
-            schema[c].type === 'single_select' && 
-            schema[c].categories && 
-            schema[c].categories.length >= 2 && 
-            schema[c].categories.length <= 10
-        );
-        if (fallbackCol) {
-            const targets = {};
-            const cats = schema[fallbackCol].categories;
-            const equalShare = parseFloat((1.0 / cats.length).toFixed(4));
-            targets[fallbackCol] = {};
-            cats.forEach(c => targets[fallbackCol][c] = equalShare);
-            payload.targets = targets;
+    // CS-N04 (Pass 7): never invent targets. The old fallback raked the first categorical column
+    // (often Gender) to equal shares, e.g. 50/50, without telling the user. Targets must come from
+    // the user or a population source; the server answers 400 with a clear message when none are given.
+    if (window.clearSightWeightTargets && typeof window.clearSightWeightTargets === 'object') {
+        payload.targets = window.clearSightWeightTargets;
+    } else {
+        const demoRegions = ['National Capital Region (NCR)', 'Balance Luzon', 'Visayas', 'Mindanao'];
+        const reg = schema['Region'];
+        const usesDemoRegions = reg && Array.isArray(reg.categories) && reg.categories.length > 0 &&
+            reg.categories.every(c => demoRegions.includes(String(c)));
+        if (loadedDatasetInfo && !usesDemoRegions) {
+            if (effDisp) effDisp.innerText = "--";
+            if (neffDisp) neffDisp.innerText = "--";
+            showToast('No weighting targets yet. Enter population targets (e.g. Region or Gender shares) before weighting; tables stay unweighted.', true);
+            return;
         }
     }
 
@@ -270,7 +296,11 @@ function executeWeighting() {
                 effDisp.style.color = diag.converged ? "#10B981" : "#FF6B66";
             }
             if (neffDisp) neffDisp.innerText = diag.kish_n_eff;
-            showToast(`Raking converged in ${diag.iterations} iterations (Neff: ${diag.kish_n_eff})`);
+            if (diag.converged === false) {
+                showToast(`Raking did NOT converge after ${diag.iterations} iterations; weights are not reliable (max margin error ${diag.max_margin_error_pct}%).`, true);
+            } else {
+                showToast(`Raking converged in ${diag.iterations} iterations (Neff: ${diag.kish_n_eff})`);
+            }
             renderTable();
         } else {
             showToast(`Weighting error: ${data.message || 'Convergence failure'}`, true);
@@ -744,49 +774,8 @@ function hashString(str) {
     return hash;
 }
 
-function calculateColumnBases(columns) {
-    const totalN = loadedDatasetInfo ? (loadedDatasetInfo.total_respondents || 412) : 412;
-    const effRatio = 0.945;
-    const totalNeff = Math.round(totalN * effRatio * 10) / 10;
-    const numSubCols = Math.max(1, columns.length - 1);
+// CS-N06 (Pass 7): removed dead calculateColumnBases(), which invented bases (N=412, Neff ratio 0.945, NCR share 29.1%).
 
-    return columns.map((col, idx) => {
-        const clean = stripColumnLetter(col).toLowerCase();
-        if (clean === 'total' || idx === 0) {
-            return { n: totalN, neff: totalNeff };
-        }
-
-        let share = 0.25;
-        if (clean.includes('ncr') || clean.includes('manila')) share = 0.291;
-        else if (clean.includes('luzon')) share = 0.364;
-        else if (clean.includes('visayas')) share = 0.175;
-        else if (clean.includes('mindanao')) share = 0.170;
-        else if (clean.includes('gen z') || clean.includes('18–27') || clean.includes('18-27')) share = 0.374;
-        else if (clean.includes('millennial') || clean.includes('28–43') || clean.includes('28-43')) share = 0.408;
-        else if (clean.includes('gen x') || clean.includes('44–59') || clean.includes('44-59')) share = 0.218;
-        else if (clean === 'male' || clean.startsWith('male')) share = 0.490;
-        else if (clean === 'female' || clean.startsWith('female')) share = 0.510;
-        else if (clean.includes('class abc') || clean.includes('abc')) share = 0.199;
-        else if (clean.includes('class d') || clean === 'd') share = 0.597;
-        else if (clean.includes('class e') || clean === 'e') share = 0.204;
-        else if (clean.includes('brand a')) share = 0.425;
-        else if (clean.includes('brand b')) share = 0.311;
-        else if (clean.includes('brand c')) share = 0.264;
-        else if (clean.includes('brand d')) share = 0.182;
-        else if (clean.includes('5') || clean.includes('very satisfied') || clean.includes('definitely')) share = 0.485;
-        else if (clean.includes('4') || clean.includes('somewhat satisfied') || clean.includes('probably')) share = 0.357;
-        else if (clean.includes('3') || clean.includes('neutral') || clean.includes('might')) share = 0.141;
-        else if (clean.includes('1') || clean.includes('2') || clean.includes('dissatisfied') || clean.includes('unlikely')) share = 0.074;
-        else {
-            const h = Math.abs(hashString(clean)) % 100;
-            share = Math.max(0.08, Math.min(0.45, 1.0 / numSubCols + (h - 50) / 500.0));
-        }
-
-        const n = Math.max(15, Math.round(totalN * share));
-        const neff = Math.round(n * effRatio * 10) / 10;
-        return { n, neff };
-    });
-}
 
 function getColumnDelta(colName, categoryLabel, isMean) {
     const col = stripColumnLetter(colName).toLowerCase();
@@ -1260,7 +1249,7 @@ async function loadTaglishCoding() {
             grid.innerHTML = `<div style="grid-column: 1/-1; padding: 2.5rem 1.5rem; text-align: center; color: #1E293B; background: #F8FAFC; border: 1.5px dashed #CBD5E1; border-radius: 10px;">
                 <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem; color: #0F172A;">No Codeframe Assigned</div>
                 <div style="font-size: 0.875rem; color: #64748B; margin-bottom: 1.25rem;">Open-ended responses require a verified domain codeframe. Please upload an Excel (.xlsx) codeframe or select one from the codeframe manager.</div>
-                <button type="button" class="primary-btn" onclick="document.getElementById('codeframe-file-input').click()">Upload Project Codeframe (.xlsx)</button>
+                <button type="button" class="primary-btn" onclick="document.getElementById('codeframe-upload').click()">Upload Project Codeframe (.xlsx)</button>
             </div>`;
             return;
         }
@@ -1589,7 +1578,7 @@ async function handleCodeframeUpload(event) {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/octet-stream',
-                    'X-Filename': file.name
+                    'X-Filename': encodeURIComponent(file.name)
                 },
                 body: arrayBuffer
             });
@@ -1808,6 +1797,8 @@ function renderCodedHierarchyTable(data) {
             tbody.appendChild(tr);
         }
     }
+}
+
 function updateThemeFilterDropdown(options) {
     const sel = document.getElementById('oe-theme-filter');
     if (!sel) return;
@@ -1877,7 +1868,11 @@ function showToast(message, isError = false) {
     const icon = isError
         ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:8px; display:inline-block; vertical-align:middle;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`
         : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="margin-right:8px; display:inline-block; vertical-align:middle;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
-    toast.innerHTML = icon + `<span>${message}</span>`;
+    // P7-19: the message can carry file names, column names and server text; never parse it as HTML.
+    toast.innerHTML = icon;
+    const span = document.createElement('span');
+    span.textContent = String(message);
+    toast.appendChild(span);
     toast.className = 'toast-notification ' + (isError ? 'toast-error' : 'toast-success');
     toast.classList.remove('hidden');
 
@@ -2045,7 +2040,7 @@ async function runSelectedStatModel(modelType, isChecked) {
         if (data.status === 'success' && data.results) {
             const r = data.results;
             let html = `<div style="font-family: system-ui, -apple-system, sans-serif; font-size: 0.85rem; line-height: 1.6; color: #1E293B;">`;
-            html += `<div style="font-weight: 700; font-size: 1rem; margin-bottom: 8px; color: #E10600;">${r.model || r.test || 'Model Output'}</div>`;
+            html += `<div style="font-weight: 700; font-size: 1rem; margin-bottom: 8px; color: #E10600;">${escapeHtml(r.model || r.test || 'Model Output')}</div>`;
             if (r.r_squared !== undefined) html += `<div><b>R²:</b> ${r.r_squared} | <b>Adj. R²:</b> ${r.adj_r_squared}</div>`;
             if (r.f_stat !== undefined) html += `<div><b>ANOVA F:</b> ${r.f_stat} (p = ${r.f_pval})</div>`;
             if (r.t_stat !== undefined) html += `<div><b>t-statistic:</b> ${r.t_stat} | <b>df:</b> ${r.df || 'N/A'} | <b>p:</b> ${r.p_val}</div>`;
@@ -2060,7 +2055,7 @@ async function runSelectedStatModel(modelType, isChecked) {
                     </tr></thead><tbody>`;
                 r.coefficients.forEach(c => {
                     html += `<tr style="border-bottom: 1px solid #E2E8F0;">
-                        <td style="padding: 4px;"><b>${c.term}</b></td><td style="padding: 4px;">${c.coef}</td><td style="padding: 4px;">${c.se}</td><td style="padding: 4px;">${c.t_stat}</td><td style="padding: 4px;">${c.p_val}</td>
+                        <td style="padding: 4px;"><b>${escapeHtml(c.term)}</b></td><td style="padding: 4px;">${c.coef}</td><td style="padding: 4px;">${c.se}</td><td style="padding: 4px;">${c.t_stat}</td><td style="padding: 4px;">${c.p_val}</td>
                     </tr>`;
                 });
                 html += `</tbody></table>`;
@@ -2068,7 +2063,7 @@ async function runSelectedStatModel(modelType, isChecked) {
             if (r.path_coefficients) {
                 html += `<div style="margin-top: 10px;"><b>Path Estimates:</b></div>`;
                 r.path_coefficients.forEach(p => {
-                    html += `<div>• ${p.path}: β = ${p.standardized_beta}</div>`;
+                    html += `<div>• ${escapeHtml(p.path)}: β = ${escapeHtml(String(p.standardized_beta))}</div>`;
                 });
                 if (r.fit_indices) {
                     html += `<div style="margin-top: 6px; font-size: 0.78rem; color: #475569;">CFI = ${r.fit_indices.CFI}, TLI = ${r.fit_indices.TLI}, RMSEA = ${r.fit_indices.RMSEA}</div>`;

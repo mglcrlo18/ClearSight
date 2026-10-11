@@ -541,55 +541,65 @@ def chi_square_independence(contingency_table: np.ndarray) -> tuple[float, int, 
 # ---------------------------------------------------------------------------
 
 def rao_scott_second_order_mrcv(
-    mention_table: np.ndarray, 
+    mention_table: np.ndarray,
     n_eff: float,
-    respondent_matrix: np.ndarray = None
+    respondent_matrix: np.ndarray = None,
+    group_labels=None,
 ) -> tuple[float, float, float]:
     """
-    Computes Rao-Scott Second-Order F-test for Multiple-Response Categorical Variables (MRCV).
-    If respondent_matrix (0/1 indicators) is provided, computes exact design-effect covariance.
-    Otherwise uses Satterthwaite adjusted moment matching.
+    Second-order Rao-Scott test of simultaneous pairwise marginal independence (SPMI) for a
+    multiple-response variable (J yes/no items) against a single-select banner (G groups);
+    Bilder & Loughin (2004), Bilder, Loughin & Nettleton (2000).
+
+        X2_S  = sum_j Pearson chi-square of the 2 x G table of item j by group
+        lambda = eigenvalues of the J x J item correlation matrix, each repeated G-1 times
+        a2    = sum (lambda - mean)^2 / (k * mean^2),   k = J (G-1)
+        RS2   = X2_S / (mean(lambda) (1 + a2))  ~  chi-square( k / (1 + a2) )
+
+    Needs respondent-level data: ``respondent_matrix`` (n x J, 0/1) and ``group_labels``
+    (length n, one group per respondent; respondents outside every group may be None/NaN).
+    A mention table alone cannot give a valid test (mentions are not independent trials),
+    so that call raises ValueError instead of returning a number (CS-005, Pass 7).
+    Returns (RS2 statistic, adjusted df, p-value). Unweighted.
+    ``mention_table`` and ``n_eff`` are kept for call compatibility and are not used.
     """
-    r, c = mention_table.shape
-    if r < 2 or c < 2 or n_eff <= 1:
+    if respondent_matrix is None or group_labels is None:
+        raise ValueError("Rao-Scott MRCV needs the respondent-level 0/1 matrix and each respondent's group; "
+                         "a mention table alone cannot give a valid test.")
+    Y = np.asarray(respondent_matrix, dtype=float)
+    g = np.asarray(group_labels, dtype=object)
+    if Y.ndim != 2 or len(Y) != len(g):
+        raise ValueError("respondent_matrix and group_labels must have the same number of rows.")
+    keep = np.array([x is not None and not (isinstance(x, float) and np.isnan(x)) for x in g])
+    Y, g = Y[keep], g[keep]
+    groups = [k for k in dict.fromkeys(g.tolist())]
+    G = len(groups)
+    # Items that never or always occur carry no information and make R singular.
+    var_ok = Y.std(axis=0) > 0
+    Y = Y[:, var_ok]
+    J = Y.shape[1]
+    if G < 2 or J < 1 or len(Y) < 3:
         return 0.0, 1.0, 1.0
 
-    row_sums = np.sum(mention_table, axis=1, keepdims=True)
-    col_sums = np.sum(mention_table, axis=0, keepdims=True)
-    total = np.sum(mention_table)
+    x2_s = 0.0
+    for j in range(J):
+        ct = np.array([[np.sum((g == k) & (Y[:, j] == 1)) for k in groups],
+                       [np.sum((g == k) & (Y[:, j] == 0)) for k in groups]], dtype=float)
+        rs = ct.sum(axis=1, keepdims=True); cs = ct.sum(axis=0, keepdims=True); tot = ct.sum()
+        exp = rs @ cs / tot
+        ok = exp > 0
+        x2_s += float(np.sum((ct[ok] - exp[ok]) ** 2 / exp[ok]))
 
-    if total <= 0:
-        return 0.0, 1.0, 1.0
-
-    expected = (row_sums @ col_sums) / total
-    valid = expected > 0
-    chi2_raw = float(np.sum(((mention_table[valid] - expected[valid]) ** 2) / expected[valid]))
-    df_raw = float((r - 1) * (c - 1))
-
-    # Design effect estimation (CS-005: Eigenvalue-based second-order Rao-Scott)
-    if respondent_matrix is not None and len(respondent_matrix) > 0:
-        Y = respondent_matrix.astype(float)
-        p_ijk = Y / len(Y)
-        cov_hat = np.cov(Y, rowvar=False)
-        p_marg = np.mean(Y, axis=0)
-        V_0 = np.diag(p_marg) - np.outer(p_marg, p_marg)
-
-        eigvals = np.real(np.linalg.eigvals(np.linalg.pinv(V_0) @ cov_hat))
-        eigvals = eigvals[eigvals > 0]
-        if len(eigvals) > 0:
-            delta_bar = float(np.mean(eigvals))
-            a_sq = float(np.var(eigvals) / (delta_bar ** 2)) if delta_bar > 0 else 0.0
-        else:
-            delta_bar, a_sq = 1.0, 0.0
-    else:
-        delta_bar, a_sq = 1.0, 0.0
-
-    f_stat = chi2_raw / (df_raw * delta_bar * (1.0 + a_sq))
-    df1_adj = max(1.0, df_raw / (1.0 + a_sq))
-    df2_adj = max(1.0, n_eff - 1.0)
-
-    p_val = f_distribution_p_value(f_stat, df1_adj, df2_adj)
-    return float(f_stat), float(df1_adj), float(p_val)
+    R = np.atleast_2d(np.corrcoef(Y, rowvar=False))
+    lam = np.repeat(np.linalg.eigvalsh(R), G - 1)
+    k = J * (G - 1)
+    lam_bar = float(np.mean(lam))
+    a2 = float(np.sum((lam - lam_bar) ** 2) / (k * lam_bar ** 2)) if lam_bar > 0 else 0.0
+    stat = x2_s / (lam_bar * (1.0 + a2))
+    df_adj = k / (1.0 + a2)
+    from scipy import stats as _st
+    p_val = float(_st.chi2.sf(stat, df_adj))
+    return float(stat), float(df_adj), p_val
 
 
 # ---------------------------------------------------------------------------

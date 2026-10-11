@@ -18,7 +18,10 @@ from engine.ingestion import read_survey_file, autodetect_schema, run_hygiene_au
 from engine.tabulation_engine import build_crosstab_table
 from engine.taglish_nlp import analyze_taglish_verbatim
 
-from test_pass5_regressions import _FakeHandler  # noqa: E402  (same in-process handler driver)
+try:
+    from tests.test_pass5_regressions import _FakeHandler
+except ImportError:
+    from test_pass5_regressions import _FakeHandler  # noqa: E402
 
 
 @pytest.fixture(autouse=True)

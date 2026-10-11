@@ -83,14 +83,33 @@ TAGALOG_MARKERS = r'(?:ang|na|ay|ko|mo|ka|po|opo|ng|sa|para|kanina|kahapon|dahil
 NAME_HONORIFICS = re.compile(
     rf'\b(?i:{TITLES_AND_MARKERS})\s+'
     r'((?:(?:Gng|Bb|G|Dr|Atty|Engr|Mr|Mrs|Ms)\.\s*)?'
-    r'(?:'
     # Capitalized name: 1 to 3 words
     r'(?:[A-Z][a-z]+|[A-Z]{2,})(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[A-Z][a-z]+){0,2}'
-    r'|'
-    # Lowercase names: 1 to 3 words, excluding Tagalog markers and regional predicate adjectives (CS-023)
-    r'(?!' + TAGALOG_MARKERS + r'\b)[a-z]+(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[a-z]+){0,2}'
-    r'))\b'
+    r')\b'
 )
+# P7-29: lowercase names only after the personal markers si / ni / kay (never after 'ate', which is also the English
+# verb: "I ate rice" became "I ate [NAME_REDACTED]"), and never when the word is a common Tagalog/English word
+# ("Si mama", "Kay ganda", "Ni minsan", "si seller" were masked as names in fb793d3).
+LOWER_NAME_AFTER_MARKER = re.compile(
+    r'\b((?i:si|ni|kay))\s+'
+    r'((?!' + TAGALOG_MARKERS + r'\b)[a-z]+(?:\s+(?:de|del|dela|de\s+los|san)\b)?(?:\s+(?!' + TAGALOG_MARKERS + r'\b)[a-z]+){0,2})\b'
+)
+NOT_A_NAME = {
+    # kinship / roles
+    'mama', 'papa', 'nanay', 'tatay', 'inay', 'itay', 'nanang', 'tatang', 'lola', 'lolo', 'tita', 'tito', 'kuya', 'ate',
+    'ninang', 'ninong', 'bunso', 'anak', 'asawa', 'misis', 'mister', 'amo', 'boss', 'kapitbahay', 'kaibigan', 'pinsan',
+    'pamangkin', 'apo', 'biyenan', 'manugang', 'guard', 'driver', 'rider', 'seller', 'cashier', 'tindera', 'tindero',
+    'manager', 'doctor', 'doktor', 'nurse', 'teacher', 'titser', 'kapitan', 'kagawad', 'mayor', 'konsehal', 'staff',
+    'agent', 'crew', 'waiter', 'kusinero', 'delivery', 'customer', 'client', 'admin', 'sir', "ma'am", 'maam', 'madam',
+    # pronouns / quantifiers / adverbs that follow si/ni/kay
+    'ako', 'ikaw', 'siya', 'sila', 'kami', 'tayo', 'kayo', 'niya', 'nila', 'namin', 'natin', 'ninyo', 'kanila', 'akin',
+    'minsan', 'isa', 'lahat', 'kahit', 'man', 'pa', 'naman', 'talaga', 'rin', 'din', 'lang', 'nga', 'ba', 'daw', 'raw',
+    # adjective roots used in 'kay + adjective' exclamations
+    'ganda', 'bilis', 'sarap', 'galing', 'dami', 'init', 'lamig', 'bait', 'sipag', 'tagal', 'hirap', 'saya', 'lungkot',
+    'laki', 'liit', 'mura', 'lakas', 'husay', 'tamis', 'alat', 'pait', 'asim', 'bango', 'baho', 'linis', 'dumi',
+    'gulo', 'ingay', 'tahimik', 'dilim', 'liwanag', 'haba', 'ikli', 'layo', 'lapit', 'bigat', 'gaan', 'taas', 'baba',
+    'dali', 'swerte', 'malas', 'lambot', 'tigas', 'kapal', 'nipis', 'presko', 'sulit', 'arte', 'kulit', 'tamad',
+}
 
 BRAND_ALLOWLIST = {'mang inasal', 'gcash', 'paymaya', 'shopee', 'lazada', 'grab', 'angkas'}
 PUBLIC_FIGURES_ALLOWLIST = {
@@ -122,15 +141,35 @@ def scrub_pii(text: Optional[str]) -> str:
     scrubbed = PHILHEALTH_REGEX.sub("[PHILHEALTH_REDACTED]", scrubbed)
     scrubbed = UMID_REGEX.sub("[UMID_REDACTED]", scrubbed)
 
+    def _allowlisted(name_part: str) -> bool:
+        # P7-29: whole-token match. Substring matching kept 'si Sarah Lim' ('sara') and 'Kay sarap' by accident.
+        toks = re.findall(r"[a-z]+", name_part.lower())
+        joined = " ".join(toks)
+        return joined in NAME_ALLOWLIST or any(t in NAME_ALLOWLIST for t in toks) or any(
+            " ".join(toks[i:i + 2]) in NAME_ALLOWLIST for i in range(len(toks) - 1))
+
     def replace_name(match):
         full_match = match.group(0)
-        name_part = match.group(1).lower()
-        if any(b in full_match.lower() for b in NAME_ALLOWLIST) or any(b in name_part for b in NAME_ALLOWLIST):
+        if _allowlisted(match.group(1)) or _allowlisted(full_match):
             return full_match
         prefix = full_match[:match.start(1) - match.start(0)]
         return prefix + "[NAME_REDACTED]"
 
+    def replace_lower(match):
+        words = match.group(2).split()
+        if words[0] in NOT_A_NAME or _allowlisted(match.group(2)):
+            return match.group(0)
+        # stop the name at the first common word ("si juan kanina" keeps 'kanina')
+        keep = []
+        for w in words:
+            if keep and (w in NOT_A_NAME):
+                break
+            keep.append(w)
+        rest = match.group(2)[len(" ".join(keep)):]
+        return match.group(1) + " [NAME_REDACTED]" + rest
+
     scrubbed = NAME_HONORIFICS.sub(replace_name, scrubbed)
+    scrubbed = LOWER_NAME_AFTER_MARKER.sub(replace_lower, scrubbed)
 
     return scrubbed
 

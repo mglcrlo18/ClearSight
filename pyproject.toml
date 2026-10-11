@@ -25,6 +25,9 @@ spss = ["pyreadstat>=1.2.0"]
 test = ["pytest>=8.0.0", "hypothesis>=6.100"]
 # optional local-model fallback for coder v2 (offline; never installed by default)
 model = ["model2vec>=0.4"]
+# P7-35: coder v3's embedding path. Without these, v3 silently runs its hash-embedding fallback.
+# Weights are NOT downloaded at run time (HF_HUB_OFFLINE=1); ship them and point CLEARSIGHT_V3_MODEL_DIR at the folder.
+coder-v3 = ["sentence-transformers>=3.0,<6", "torch>=2.2", "scikit-learn>=1.4"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

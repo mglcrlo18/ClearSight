@@ -11,7 +11,12 @@ Tests the 5 residual audit items identified in Pass 7:
 import math
 import numpy as np
 import pandas as pd
-import pytest
+try:
+    import pytest
+except ImportError:
+    import scripts.run_all_tests
+    import pytest
+import unittest
 
 import server
 from engine.ingestion import resolve_google_forms_checkboxes, run_hygiene_audit
@@ -41,16 +46,18 @@ def test_cs005_rao_scott_rs2_with_respondent_matrix():
         [float(resp_matrix[:50, 2].sum()), float(resp_matrix[50:, 2].sum())],
     ])
 
-    # Without respondent_matrix (fallback)
-    f_fallback, df_fallback, p_fallback = rao_scott_second_order_mrcv(mention_table, n_eff=100.0)
-    
-    # With respondent_matrix (true eigenvalue adjustment)
-    f_adj, df_adj, p_adj = rao_scott_second_order_mrcv(mention_table, n_eff=100.0, respondent_matrix=resp_matrix)
+    # Pass 7 (CS-005): a mention table alone is refused; the test needs respondents and their groups.
+    with pytest.raises(ValueError):
+        rao_scott_second_order_mrcv(mention_table, n_eff=100.0)
+    with pytest.raises(ValueError):
+        rao_scott_second_order_mrcv(mention_table, n_eff=100.0, respondent_matrix=resp_matrix)
 
+    groups = np.array(["A"] * 50 + ["B"] * 50)
+    f_adj, df_adj, p_adj = rao_scott_second_order_mrcv(mention_table, n_eff=100.0, respondent_matrix=resp_matrix, group_labels=groups)
     assert f_adj > 0
     assert 0.0 <= p_adj <= 1.0
-    # Because options 0 and 1 are perfectly correlated, design effect delta_bar != 1.0
-    assert f_adj != f_fallback or p_adj != p_fallback or df_adj != df_fallback
+    # Items 0 and 1 are identical, so the item correlation eigenvalues are unequal and df < J(G-1) = 3
+    assert df_adj < 3.0
 
     # Tabulation engine integration
     df = pd.DataFrame({
@@ -222,3 +229,24 @@ def test_cs023_single_word_lowercase_names():
     assert "kay barato" in scrub_pii("Nindot kaayo ang bugas kay barato ra ug lami pa.")
     assert "kay lami" in scrub_pii("Dili nako ilisan kay lami gyud kaayo.")
     assert "kay mahal" in scrub_pii("Wala nako gipalit kay mahal ra kaayo.")
+
+
+class TestPass7Regressions(unittest.TestCase):
+    def test_cs005_rao_scott_rs2_with_respondent_matrix(self):
+        test_cs005_rao_scott_rs2_with_respondent_matrix()
+
+    def test_cs045_hygiene_quarantine_filtering(self):
+        test_cs045_hygiene_quarantine_filtering()
+
+    def test_gate01_custom_codeframe_pipeline(self):
+        test_gate01_custom_codeframe_pipeline()
+
+    def test_csn04_fallback_weighting(self):
+        test_csn04_fallback_weighting()
+
+    def test_cs023_single_word_lowercase_names(self):
+        test_cs023_single_word_lowercase_names()
+
+
+if __name__ == "__main__":
+    unittest.main()

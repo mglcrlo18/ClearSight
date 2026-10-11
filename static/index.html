@@ -118,12 +118,12 @@
                 </label>
                 <label class="toggle-row">
                     <span class="toggle-label">Quarantine Straight-Liners</span>
-                    <input type="checkbox" id="toggle-hygiene-straight" checked onchange="updateAnalysisToggle('hygiene', 'quarantine_straightliners', this.checked)">
+                    <input type="checkbox" id="toggle-hygiene-straight" onchange="updateAnalysisToggle('hygiene', 'quarantine_straightliners', this.checked)">
                     <span class="toggle-switch"></span>
                 </label>
                 <label class="toggle-row">
                     <span class="toggle-label">Quarantine Speeders (&lt; 1/3 median)</span>
-                    <input type="checkbox" id="toggle-hygiene-speeders" checked onchange="updateAnalysisToggle('hygiene', 'quarantine_speeders', this.checked)">
+                    <input type="checkbox" id="toggle-hygiene-speeders" onchange="updateAnalysisToggle('hygiene', 'quarantine_speeders', this.checked)">
                     <span class="toggle-switch"></span>
                 </label>
             </div>
@@ -342,7 +342,7 @@
                             </div>
                             <span class="tag-warn">4 flagged</span>
                             <label class="switch">
-                                <input type="checkbox" id="check-straight" checked onchange="toggleHygiene()" aria-label="Quarantine straight-liner records">
+                                <input type="checkbox" id="check-straight" onchange="toggleHygiene()" aria-label="Quarantine straight-liner records">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -353,7 +353,7 @@
                             </div>
                             <span class="tag-warn" id="speeder-count-tag">6 flagged</span>
                             <label class="switch">
-                                <input type="checkbox" id="check-speeder" checked onchange="toggleHygiene()" aria-label="Quarantine speeder records">
+                                <input type="checkbox" id="check-speeder" onchange="toggleHygiene()" aria-label="Quarantine speeder records">
                                 <span class="slider"></span>
                             </label>
                         </div>

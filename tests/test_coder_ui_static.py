@@ -17,4 +17,4 @@ def test_review_queue_never_uses_innerhtml():
 
 
 def test_review_queue_hooked_into_coding_flow():
-    assert re.search(r"data\.coder === 'v2'\)\s*\{\s*loadReviewQueue\(\)", JS)
+    assert re.search(r"data\.coder === 'v2'( \|\| data\.coder === 'v3')?\)\s*\{\s*loadReviewQueue\(\)", JS)
