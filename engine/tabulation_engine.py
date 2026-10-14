@@ -218,16 +218,18 @@ def build_crosstab_table(
     elif is_numeric and num_uniques <= 11:
         numeric_vals_all = sorted([float(x) for x in stub_series.unique()])
         non_missing = [v for v in numeric_vals_all if v not in missing_codes]
-        # P3-03: a rating-named column (same keywords as autodetect_schema) is still a scale when nobody
+        # P3-03: a rating-named column (or unnamed integer 1-5 scale with min=2) is still a scale when nobody
         # picked the bottom codes, e.g. observed 2-5 on a 1-5 scale.
         rating_named = re.search(r'(?i)(?:sat_|_sat|satisfaction|rating|nps|likert)', str(stub_col)) is not None
+        is_count_like = re.search(r'(?i)(?:age|size|count|visit|kilo|hour|duration|income|child|_no$|^id$|_id$|stub)', str(stub_col)) is not None
+        all_int_1to5 = bool(non_missing) and all(float(v).is_integer() and 1.0 <= float(v) <= 5.0 for v in non_missing) and len(non_missing) >= 2
         lo_ok = min(non_missing) in (0, 1) if non_missing else False
-        if non_missing and not lo_ok and rating_named and 0 <= min(non_missing) <= 3:
+        if non_missing and not lo_ok and (rating_named or (not is_count_like and all_int_1to5)) and 0 <= min(non_missing) <= 3:
             lo_ok = True
             non_missing = [0.0 if (min(non_missing) == 0 or "nps" in str(stub_col).lower()) else 1.0] + non_missing
         if non_missing and lo_ok and (max(non_missing) in (4, 5, 6, 7, 10)):
             scale_lo = int(min(non_missing))
-            scale_hi = int(max(non_missing))
+            scale_hi = 5 if (max(non_missing) == 4 and (rating_named or all_int_1to5)) else int(max(non_missing))
             is_rating_scale = True
 
     # Check if multi-select checkboxes (commas separating options)

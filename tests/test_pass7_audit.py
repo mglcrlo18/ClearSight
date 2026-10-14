@@ -600,6 +600,69 @@ def test_cs_n06_no_invented_bases_anywhere_in_ui():
     assert "|| 412" not in JS and "effRatio = 0.945" not in JS
 
 
+
+
+# ---------------------------------------------------------------- Pass 8 Multi-Persona Audit Fixes (CS-019, P3-03, P7-08/13, Litotes, Hygiene API)
+def test_cs019_binary_set_detected_as_multi_select():
+    df = pd.DataFrame({
+        "QA_MS_Sugg_01_Tables": [0, 1, 0, 1, 0],
+        "QA_MS_Sugg_02_Shade": [1, 0, 1, 0, 0],
+        "Single_Binary_Flag": [0, 1, 0, 0, 1],
+    })
+    sc = ing.autodetect_schema(df)
+    assert sc["QA_MS_Sugg_01_Tables"]["type"] == "multi_select"
+    assert sc["QA_MS_Sugg_01_Tables"].get("binary_set") is True
+    assert sc["Single_Binary_Flag"]["type"] == "binary"
+
+
+def test_p3_03_t2b_unnamed_scale_with_min_2_gets_t2b():
+    from engine.tabulation_engine import build_crosstab_table
+    df = pd.DataFrame({
+        "Group": ["A", "B"] * 50,
+        "Unnamed_Scale_Q1": [2, 3, 4, 5] * 25,
+    })
+    t = build_crosstab_table(df, "Unnamed_Scale_Q1", ["Total", "Group"])
+    net = [r for r in t["rows"] if "Top-2-Box" in r["label"]]
+    assert len(net) == 1 and net[0]["label"].endswith("(4-5)")
+    assert net[0]["values"][0] == "50.0%"
+
+
+def test_cs_nlp_non_adjacent_litotes_positive():
+    from engine.coder_v2 import Coder
+    c = Coder("consumer_default")
+    assert c.code("Hindi ko masasabing hindi maganda")["sentiment"] == "pos"
+
+
+def test_p7_08_p7_13_coder_v3_pa2_versioning_rollback_and_poisoning_guard():
+    from engine.coder_v3 import CoderV3Engine
+    eng = CoderV3Engine(codeframe=["Pricing & Value", "Logistics & Delivery"])
+    v_init = eng.model_version
+    upd = eng.partial_fit_online(["Sobrang mahal ng bilihin ngayon"], [0])
+    assert upd["model_version"] == v_init + 1
+    restored = eng.rollback(steps=1)
+    assert restored == v_init
+    with pytest.raises(ValueError):
+        eng.partial_fit_online([""], [0])
+    with pytest.raises(ValueError):
+        eng.partial_fit_online(["Valid text"], [99])
+
+
+def test_api_exposes_row_level_hygiene_flags():
+    df = pd.DataFrame({
+        "Respondent_ID": ["R1", "R1", "R2", "R3"],
+        "A_1to5": [5, 4, 3, 2],
+        "B_1to5": [5, 3, 4, 1],
+        "C_1to5": [5, 2, 3, 4],
+    })
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    h = _FakeHandler("POST", "/api/upload", csv_bytes, {"X-Filename": "hyg.csv"}); h.do_POST()
+    st_, body = h.status, json.loads(h.wfile.getvalue().decode("utf-8"))
+    assert st_ == 200
+    assert "hygiene_audit" in body and "flagged_rows" in body
+    assert 0 in body["straight_liner_rows"]
+    assert 0 in body["duplicate_rows"] and 1 in body["duplicate_rows"]
+
+
 def load_tests(loader, standard_tests, pattern):
     import inspect
     suite = unittest.TestSuite()

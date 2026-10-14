@@ -521,6 +521,32 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
     - 'numeric': Continuous numeric (counts, wait hours, age)
     """
     schema = {}
+    # CS-019: Pre-detect multi-response binary indicator sets (2+ 0/1 columns sharing a stem before _NN_ or matching _ms_/_mr_/_mrcv_)
+    binary_candidates = set()
+    stem_groups = {}
+    for c in df.columns:
+        c_str = str(c)
+        if c_str.startswith("__"):
+            continue
+        s_clean = df[c].dropna()
+        if len(s_clean) == 0:
+            continue
+        num_s = pd.to_numeric(s_clean, errors='coerce')
+        if num_s.notna().mean() > 0.85 and set(num_s.dropna().unique()) <= {0, 1, 0.0, 1.0}:
+            binary_candidates.add(c)
+            m_stem = re.match(r'^(.+?)(?:_\d{1,2}(?:_.*|$)|_other$)', c_str, re.IGNORECASE)
+            if m_stem:
+                stem_key = m_stem.group(1).lower()
+                stem_groups.setdefault(stem_key, []).append(c)
+
+    binary_set_cols = set()
+    for stem_key, cols_in_group in stem_groups.items():
+        if len(cols_in_group) >= 2:
+            binary_set_cols.update(cols_in_group)
+    for c in binary_candidates:
+        if re.search(r'(?i)(?:^|_)(?:ms|mr|mrcv)_', str(c)):
+            binary_set_cols.add(c)
+
     for col in df.columns:
         if str(col).startswith("__"):
             continue
@@ -556,10 +582,13 @@ def autodetect_schema(df: pd.DataFrame) -> dict:
         valid_numeric_ratio = numeric_series.notna().mean()
 
         if valid_numeric_ratio > 0.85:
-            # Check for binary 0/1
+            # Check for binary 0/1 or multi-response binary indicator set (CS-019)
             num_set = set(numeric_series.dropna().unique())
             if num_set <= {0, 1} or num_set <= {0.0, 1.0}:
-                schema[col] = {"type": "binary", "sample": sample_vals}
+                if col in binary_set_cols:
+                    schema[col] = {"type": "multi_select", "format": "binary_set", "binary_set": True, "sample": sample_vals}
+                else:
+                    schema[col] = {"type": "binary", "sample": sample_vals}
                 continue
 
             min_val = float(numeric_series.min())

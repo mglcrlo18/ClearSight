@@ -99,8 +99,7 @@ def test_property_tokenize_stable(words):
     ("Walang kapantay ang linis", "pos"),
     ("Hindi lang mabango kundi matagal pa", "pos"),
     ("Di ba ang ganda", "pos"),
-    pytest.param("Hindi ko masasabing hindi maganda", "pos",
-                 marks=pytest.mark.xfail(strict=True, reason="known gap: non-adjacent litotes is read as negative")),
+    ("Hindi ko masasabing hindi maganda", "pos"),
     ("Not bad at all", "pos"),
     ("Dili nindot", "neg"),
 ])

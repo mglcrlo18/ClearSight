@@ -189,11 +189,12 @@ class CoderV3Engine:
         else:
             self.encoder = _LocalNumpyEmbedder()
 
-        # Passive-Aggressive Online Classifier for continuous learning
-        if HAS_SKLEARN and SklearnPA is not None:
-            self.online_classifier = SklearnPA(C=1.0, fit_intercept=True, loss='hinge', random_state=42)
-        else:
-            self.online_classifier = _LocalNumpyPA(C=1.0, random_state=42)
+        # P7-08 / P7-13: Use deterministic Crammer et al. (2006) PA-II closed-form classifier
+        # (tau = loss / (||x||^2 + 1/(2C))) with snapshot versioning, rollback, and poisoning guards.
+        self.online_classifier = _LocalNumpyPA(C=1.0, random_state=42)
+        self.model_version: int = 1
+        self._weight_snapshots: List[Dict[str, Any]] = []
+        self.max_step_norm: float = 2.5
 
         self.codeframe_labels: List[str] = []
         self.codeframe_topics: List[Dict[str, Any]] = []
@@ -334,23 +335,89 @@ class CoderV3Engine:
             })
         return results
 
-    def partial_fit_online(self, texts: List[str], labels: List[int]):
-        """Update model weights online using corrected samples (Passive-Aggressive step)."""
+    def _snapshot_state(self):
+        """Save current PA-II weights and classes for rollback resilience (P7-08 / P7-13)."""
+        w = getattr(self.online_classifier, "weights", None)
+        c = getattr(self.online_classifier, "classes_", None)
+        if w is not None:
+            self._weight_snapshots.append({
+                "version": self.model_version,
+                "weights": w.copy(),
+                "classes": c.copy() if c is not None else None,
+            })
+            if len(self._weight_snapshots) > 20:
+                self._weight_snapshots.pop(0)
+
+    def rollback(self, steps: int = 1) -> int:
+        """Revert online classifier weights by `steps` snapshots (P7-08 / P7-13)."""
+        steps = max(1, int(steps))
+        if not self._weight_snapshots:
+            raise ValueError("No prior model snapshots available to roll back.")
+        snap = None
+        for _ in range(min(steps, len(self._weight_snapshots))):
+            snap = self._weight_snapshots.pop()
+        if snap is not None:
+            self.online_classifier.weights = snap["weights"].copy()
+            if snap.get("classes") is not None:
+                self.online_classifier.classes_ = snap["classes"].copy()
+            self.model_version = int(snap["version"])
+        return self.model_version
+
+    def partial_fit_online(self, texts: List[str], labels: List[int]) -> Dict[str, Any]:
+        """Update model weights online using corrected samples (PA-II step with poisoning guard)."""
+        if not texts or not labels or len(texts) != len(labels):
+            raise ValueError("texts and labels must be non-empty lists of equal length.")
+        if len(texts) > 500:
+            raise ValueError("Online update batch exceeds maximum safe size (500).")
+        for t in texts:
+            if not isinstance(t, str) or not t.strip() or len(t) > 5000:
+                raise ValueError("Each online training text must be a non-empty string (<= 5000 chars).")
+        n_cats = len(self.codeframe_labels)
+        for lbl in labels:
+            if not isinstance(lbl, (int, np.integer)) or isinstance(lbl, bool) or lbl < 0 or (n_cats > 0 and lbl >= n_cats):
+                raise ValueError(f"Label index {lbl} is out of bounds for codeframe ({n_cats} categories).")
+
         X = self.extract_embeddings(texts)
-        y = np.array(labels)
-        classes = np.arange(len(self.codeframe_labels)) if self.codeframe_labels else None
+        if not np.all(np.isfinite(X)) or np.any(np.linalg.norm(X, axis=1) < 1e-6):
+            raise ValueError("Poisoning guard: rejected degenerate or non-finite embedding vectors.")
+
+        y = np.array(labels, dtype=int)
+        classes = np.arange(n_cats) if n_cats else np.unique(y)
+
+        # Save snapshot prior to mutating weights
+        self._snapshot_state()
+        w_before = self.online_classifier.weights.copy() if getattr(self.online_classifier, "weights", None) is not None else None
+
         if hasattr(self.online_classifier, "partial_fit"):
             self.online_classifier.partial_fit(X, y, classes=classes)
         else:
             self.online_classifier.fit(X, y)
-        logger.info(f"Online weight update complete for {len(texts)} samples.")
+
+        # Poisoning guard: cap total weight shift norm
+        if w_before is not None and self.online_classifier.weights is not None and w_before.shape == self.online_classifier.weights.shape:
+            delta = self.online_classifier.weights - w_before
+            delta_norm = float(np.linalg.norm(delta))
+            if delta_norm > self.max_step_norm:
+                self.online_classifier.weights = w_before + delta * (self.max_step_norm / delta_norm)
+
+        self.model_version += 1
+        logger.info(f"Online PA-II weight update complete (v{self.model_version}) for {len(texts)} samples.")
+        return {"model_version": self.model_version, "updated_samples": len(texts)}
 
     def analyze_sentiment(self, text: str) -> str:
         """Determines sentiment (positive, negative, neutral, mixed) for Taglish verbatims."""
-        if not text or not isinstance(text, str):
+        if not text or not isinstance(text, str) or not text.strip():
             return "neutral"
+        try:
+            if not hasattr(self, "_v2_sentiment_coder"):
+                from engine.coder_v2 import Coder
+                self._v2_sentiment_coder = Coder("consumer_default")
+            v2_sent = self._v2_sentiment_coder.code(text).get("sentiment", "neutral")
+            return {"pos": "positive", "neg": "negative", "neutral": "neutral", "mixed": "mixed"}.get(v2_sent, "neutral")
+        except Exception:
+            pass
         clean_text = self.preprocessor.mask_pii(text).lower()
-        tokens = clean_text.split()
+        tokens = re.findall(r"[a-z0-9]+", clean_text)
 
         pos_words = {
             "maganda", "ganda", "sulit", "mura", "mabait", "maayos", "satisfied",

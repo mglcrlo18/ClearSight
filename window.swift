@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import UniformTypeIdentifiers
 
 class CustomWebView: WKWebView {
     override var acceptsFirstResponder: Bool {
@@ -10,6 +11,7 @@ class CustomWebView: WKWebView {
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKDownloadDelegate, WKUIDelegate {
     var window: NSWindow!
     var webView: CustomWebView!
+    var lastDownloadURL: URL?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -86,7 +88,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
 
     // MARK: - Native WebKit Download Handling
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        if let mimeType = navigationResponse.response.mimeType, mimeType.contains("spreadsheetml") || mimeType.contains("octet-stream") || mimeType.contains("pdf") {
+        let httpResp = navigationResponse.response as? HTTPURLResponse
+        let disp = (httpResp?.allHeaderFields["Content-Disposition"] as? String) ?? ""
+        let isAttachment = disp.lowercased().contains("attachment")
+        if let mimeType = navigationResponse.response.mimeType,
+           isAttachment || mimeType.contains("spreadsheetml") || mimeType.contains("wordprocessingml") || mimeType.contains("octet-stream") || mimeType.contains("pdf") || mimeType.contains("csv") {
             if #available(macOS 11.3, *) {
                 decisionHandler(.download)
                 return
@@ -114,10 +120,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
             destinationURL = downloadsDirectory.appendingPathComponent(newName)
             counter += 1
         }
+        self.lastDownloadURL = destinationURL
         completionHandler(destinationURL)
     }
 
     func downloadDidFinish(_ download: WKDownload) {
+        if let targetURL = self.lastDownloadURL, FileManager.default.fileExists(atPath: targetURL.path) {
+            NSWorkspace.shared.activateFileViewerSelecting([targetURL])
+            return
+        }
         let downloadsDirectory = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
         let fileURL = downloadsDirectory.appendingPathComponent("ClearSight_Agency_Banner_Book.xlsx")
         if FileManager.default.fileExists(atPath: fileURL.path) {
@@ -131,7 +142,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         openPanel.canChooseFiles = true
         openPanel.canChooseDirectories = false
         openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        openPanel.allowedFileTypes = ["json", "xlsx", "xls", "csv"]
+        if #available(macOS 11.0, *) {
+            openPanel.allowedContentTypes = ["json", "xlsx", "xls", "csv", "sav"].compactMap { ext in UTType(filenameExtension: ext) }
+        }
         openPanel.beginSheetModal(for: self.window) { response in
             if response == .OK {
                 completionHandler(openPanel.urls)

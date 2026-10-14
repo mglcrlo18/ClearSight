@@ -121,8 +121,33 @@ SESSION = {
     "quarantine_straight_liners": False,
     "quarantine_speeders": False,
     "weight_candidate": None,
+    "coder_v3_engine": None,
+    "coder_v3_cf_id": None,
     "analysis_config": copy.deepcopy(DEFAULT_ANALYSIS_CONFIG)
 }
+
+
+def _summarize_hygiene_flags(df: pd.DataFrame, audit_log: list) -> dict:
+    """Extracts row-level hygiene flag arrays for API consumers."""
+    if df is None:
+        return {"flagged_rows": [], "straight_liner_rows": [], "speeder_rows": [], "duplicate_rows": []}
+    flagged_rows = []
+    sl_rows = []
+    sp_rows = []
+    dup_rows = []
+    if "__is_flagged" in df.columns:
+        flagged_rows = [int(i) for i in df.index[df["__is_flagged"].astype(bool)]]
+    if "__flag_reasons" in df.columns:
+        reasons = df["__flag_reasons"].fillna("").astype(str)
+        sl_rows = [int(i) for i in df.index[reasons.str.contains("Straight-liner", na=False)]]
+        sp_rows = [int(i) for i in df.index[reasons.str.contains("Speeder", na=False)]]
+        dup_rows = [int(i) for i in df.index[reasons.str.contains("Duplicate", na=False)]]
+    return {
+        "flagged_rows": flagged_rows,
+        "straight_liner_rows": sl_rows,
+        "speeder_rows": sp_rows,
+        "duplicate_rows": dup_rows,
+    }
 
 
 def get_downloads_dir() -> str:
@@ -348,15 +373,22 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                 logging.exception("Failed to generate preview snapshot")
                 self.send_error(500, f"Snapshot preview error: {e}")
         elif path == "/api/dataset-status":
-            has_data = SESSION["df"] is not None
-            resp = {
-                "loaded": has_data,
-                "filename": SESSION["filename"],
-                "total_rows": len(SESSION["df"]) if has_data else 0,
-                "columns": list(SESSION["df"].columns) if has_data else [],
-                "weighted": SESSION["weights"] is not None,
-                "diagnostics": SESSION["weight_diagnostics"]
-            }
+            with SESSION_LOCK:
+                df_cur = SESSION.get("df")
+                audit_cur = SESSION.get("hygiene_audit", [])
+                has_data = df_cur is not None
+                hyg_summary = _summarize_hygiene_flags(df_cur, audit_cur)
+                resp = {
+                    "loaded": has_data,
+                    "filename": SESSION["filename"],
+                    "total_rows": len(df_cur) if has_data else 0,
+                    "columns": list(df_cur.columns) if has_data else [],
+                    "weighted": SESSION["weights"] is not None,
+                    "diagnostics": SESSION["weight_diagnostics"],
+                    "flagged_hygiene": len(audit_cur),
+                    "hygiene_audit": audit_cur,
+                    **hyg_summary,
+                }
             self.send_json_response(resp)
         elif path == "/api/coder/review-queue":
             self.coder_review_queue()
@@ -447,6 +479,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     SESSION["open_feedback_analysis"] = None
                     SESSION["custom_codeframe"] = None
                     SESSION["weight_candidate"] = None
+                    SESSION["coder_v3_engine"] = None
+                    SESSION["coder_v3_cf_id"] = None
                     SESSION["generation"] = SESSION.get("generation", 0) + 1
 
                     if meta.get("is_data_table") and meta.get("pretabulated_table"):
@@ -468,6 +502,8 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                     "columns": list(df.columns),
                     "schema": schema,
                     "flagged_hygiene": len(audit_log),
+                    "hygiene_audit": audit_log,
+                    **_summarize_hygiene_flags(df_audited, audit_log),
                     "is_data_table": meta.get("is_data_table", False),
                     "pretabulated_table": meta.get("pretabulated_table"),
                     "weighted": weighted_now,
@@ -714,7 +750,17 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                         return
 
                     topics_list = cf.get("topics", []) if isinstance(cf, dict) else (cf if isinstance(cf, list) else [])
-                    coder_instance = CoderV3Engine(codeframe=topics_list)
+                    cf_id_resolved = cf.get("id", "custom") if isinstance(cf, dict) else "custom"
+                    with SESSION_LOCK:
+                        cached_v3 = SESSION.get("coder_v3_engine")
+                        cached_cf_id = SESSION.get("coder_v3_cf_id")
+                    if cached_v3 is not None and cached_cf_id == cf_id_resolved:
+                        coder_instance = cached_v3
+                    else:
+                        coder_instance = CoderV3Engine(codeframe=topics_list)
+                        with SESSION_LOCK:
+                            SESSION["coder_v3_engine"] = coder_instance
+                            SESSION["coder_v3_cf_id"] = cf_id_resolved
                     records = coder_instance.batch_code(verbatims)
                     counts = Counter()
                     cites = {}
@@ -753,6 +799,7 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                         "review_queue": [r["response_id"] if isinstance(r, dict) else r for r in records if r.get("needs_review")],
                         # P7-35: say which encoder actually ran (hash fallback when the ML extras or weights are missing).
                         "encoder": getattr(coder_instance, "encoder_kind", "unknown"),
+                        "model_version": getattr(coder_instance, "model_version", 1),
                         "sentiment_counts": {
                             "positive": sum(1 for r in records if r.get("sentiment") == "positive"),
                             "negative": sum(1 for r in records if r.get("sentiment") == "negative"),
@@ -860,6 +907,19 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
         if not isinstance(req, dict):
             self.send_json_response({"status": "error", "message": "Body must be a JSON object."}, 400)
             return
+        if req.get("action") == "rollback":
+            steps = req.get("steps", 1)
+            with SESSION_LOCK:
+                v3_eng = SESSION.get("coder_v3_engine")
+            if v3_eng is None:
+                self.send_json_response({"status": "error", "message": "No active Coder v3 model in session to roll back."}, 400)
+                return
+            try:
+                ver = v3_eng.rollback(steps=int(steps))
+                self.send_json_response({"status": "success", "model_version": ver})
+            except Exception as e:
+                self.send_json_response({"status": "error", "message": str(e)}, 400)
+            return
         analysis = SESSION.get("open_feedback_analysis") or {}
         rec = None
         text = req.get("text")
@@ -912,7 +972,38 @@ class ClearSightRequestHandler(BaseHTTPRequestHandler):
                        sentiment=sentiment or rec.get("sentiment"), needs_review=False, corrected=True)
             if rid in analysis.get("review_queue", []):
                 analysis["review_queue"].remove(rid)
-        self.send_json_response({"status": "success", "saved": saved, "corrections": len(get_feedback_store())})
+
+        # P7-08 / P7-13: Update session-persisted Coder v3 online classifier when active
+        v3_ver = None
+        with SESSION_LOCK:
+            v3_eng = SESSION.get("coder_v3_engine")
+        if v3_eng is not None and getattr(v3_eng, "codeframe_labels", None):
+            target_idx = None
+            if code_ids and 'cf' in locals() and isinstance(cf, dict):
+                for t in cf.get("topics", []):
+                    t_sub = t.get("subnet") or t.get("net") or t.get("name") or t.get("id")
+                    t_codes = {str(c.get("code_id")) for c in (t.get("codes") or {}).values() if isinstance(c, dict)}
+                    if any(str(cid) in t_codes for cid in code_ids) and t_sub in v3_eng.codeframe_labels:
+                        target_idx = v3_eng.codeframe_labels.index(t_sub)
+                        break
+            if target_idx is None and themes:
+                for th in themes:
+                    if th in v3_eng.codeframe_labels:
+                        target_idx = v3_eng.codeframe_labels.index(th)
+                        break
+            if target_idx is None and v3_eng.codeframe_labels:
+                target_idx = 0
+            if target_idx is not None:
+                try:
+                    upd = v3_eng.partial_fit_online([text], [target_idx])
+                    v3_ver = upd.get("model_version")
+                except Exception as ex:
+                    logging.warning(f"Coder v3 online update skipped: {ex}")
+
+        resp_payload = {"status": "success", "saved": saved, "corrections": len(get_feedback_store())}
+        if v3_ver is not None:
+            resp_payload["model_version"] = v3_ver
+        self.send_json_response(resp_payload)
 
     def coder_review_queue(self):
         analysis = SESSION.get("open_feedback_analysis") or {}

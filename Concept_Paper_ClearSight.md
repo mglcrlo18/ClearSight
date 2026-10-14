@@ -27,25 +27,25 @@ Built as a lightweight native desktop application for **macOS and Windows**, Cle
 
 ## 2. Platform Architecture: The Zero-Cloud Desktop Model
 
-ClearSight rejects the centralized SaaS multi-tenant cloud model in favor of a **secure, native desktop runtime** powered by **Tauri v2 (Rust)** and an **embedded, hermetic Python 3.12+ analytical core**.
+ClearSight rejects the centralized SaaS multi-tenant cloud model in favor of a **secure, native desktop runtime** powered by a **native macOS AppKit/WebKit shell (`window.swift`) and Windows WebView2 launcher** paired with a **local Python 3.10–3.14 analytical core**.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ PRESENTATION LAYER (Tauri v2 Shell / WebKit on macOS / WebView2 on Windows)                      │
+│ PRESENTATION LAYER (Native AppKit WKWebView on macOS / Edge WebView2 on Windows)                      │
 │ • Professional English UI: High-density Table Canvas, Variable Drawer, Verbatim Studio           │
 │ • Kinetic & Tactile: 120Hz ProMotion spring physics, magnetic drag-and-drop, glassmorphic depth │
 │ • Lightweight footprint (~25 MB bundle; ~40 MB RAM idle; zero Chromium bloat)                    │
 └────────────────────────────────────────────────┬─────────────────────────────────────────────────┘
-                                                 │ (Asynchronous MessagePack local IPC)
+                                                 │ (Local Loopback HTTP/JSON REST IPC on 127.0.0.1:8540)
                                                  ▼
 ┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│ PLATFORM ABSTRACTION LAYER (Rust Core)                                                           │
+│ PLATFORM ABSTRACTION LAYER (Native Swift AppKit & Python ThreadingHTTPServer)                                                           │
 │ ┌───────────────────────────────────────────────┐ ┌────────────────────────────────────────────┐ │
 │ │ macOS Subsystems                              │ │ Windows Subsystems                         │ │
 │ │ • IPC: Unix Domain Sockets (UDS)              │ │ • IPC: Win32 Named Pipes                   │ │
 │ │ • Secrets: macOS Keychain Services            │ │ • Secrets: Windows Credential Manager      │ │
 │ │ • Hardware Acceleration: Apple Accelerate     │ │ • Hardware Acceleration: OpenBLAS/oneMKL   │ │
-│ │ • Air-Gapped AI: Apple Silicon MLX (UMA)      │ │ • Air-Gapped AI: DirectML / ONNX Runtime   │ │
+│ │ • Air-Gapped AI: PyTorch INT8 (qnnpack ARM64)      │ │ • Air-Gapped AI: DirectML / ONNX Runtime   │ │
 │ └───────────────────────────────────────────────┘ └────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────┬─────────────────────────────────────────────────┘
                                                  │
@@ -62,7 +62,7 @@ ClearSight rejects the centralized SaaS multi-tenant cloud model in favor of a *
 
 ### Architectural Highlights
 * **Zero Backend Hosting Costs:** Computations execute entirely on the user's CPU and RAM. ClearSight incurs zero cloud-compute server costs, enabling sustainable high-margin local pricing.
-* **Complete Data Sovereignty:** Survey microdata never leaves the local machine. SQLite running in Write-Ahead Logging (`WAL`) mode manages project caching locally.
+* **Complete Data Sovereignty:** Survey microdata never leaves the local machine. Thread-safe in-memory session state (`SESSION_LOCK`) and JSON feedback stores manage project state locally.
 * **Hardware Acceleration:** Vectorized matrix factorizations utilize Apple Accelerate (AMX co-processor) on macOS and OpenBLAS/AVX2 on Windows.
 
 ---
@@ -158,8 +158,8 @@ Supports the official 3-tier agency reporting layout seen in premier research ag
 │                                  │ • Multiple testing adjustments (Benjamini-Hochberg/Yekutieli) │
 │                                  │ • Johnson's Relative Weights & MaxDiff Hierarchical Bayes     │
 ├──────────────────────────────────┼───────────────────────────────────────────────────────────────┤
-│ 2. Native Systems Engineering    │ • Tauri v2 host development & asynchronous Tokio IPC          │
-│    (Rust & Desktop Architecture) │ • Hermetic standalone Python runtime bundling via `uv`        │
+│ 2. Native Systems Engineering    │ • Native macOS AppKit/WKWebView (`window.swift`) & loopback HTTP IPC          │
+│    (Swift & Desktop Architecture) │ • Hermetic standalone Python runtime bundling via `uv`        │
 │                                  │ • Unix Domain Sockets (macOS) & Win32 Named Pipes (Windows)   │
 │                                  │ • Apple Accelerate & OpenBLAS/MKL linear algebra compilation  │
 │                                  │ • Apple Hardened Runtime, Gatekeeper notarytool, Authenticode │
@@ -167,7 +167,7 @@ Supports the official 3-tier agency reporting layout seen in premier research ag
 │ 3. Computational Linguistics     │ • Taglish morphosyntactic tokenization & affix normalization  │
 │    & Localized NLP Engineering   │ • Contextual polysemy disambiguation algorithms               │
 │                                  │ • Client-side regex PII sanitization pipelines                │
-│                                  │ • On-device small model acceleration (Apple MLX & DirectML)   │
+│                                  │ • On-device small model acceleration (INT8 CPU Quantization & QNNPACK)   │
 │                                  │ • Inter-coder agreement metrics (Observed Agreement / Kappa)  │
 ├──────────────────────────────────┼───────────────────────────────────────────────────────────────┤
 │ 4. High-Density MR UI/UX         │ • React / TypeScript high-throughput canvas design            │
@@ -201,9 +201,9 @@ Because all core statistics and Excel compiles occur on the user's desktop hardw
 
 ```
 PHASE 1: Core Desktop Ingestion & Tabulation Engine (Weeks 1–3)
-├── Setup: Tauri v2 + embedded Python (uv) monorepo for macOS and Windows
+├── Setup: Native Swift WebKit (`window.swift`) + Python (`uv`) monorepo for macOS and Windows
 ├── Ingestion: Google Forms comma resolver, CSV, Excel, and SPSS .sav parsers
-├── Hygiene: Speeders, straight-liners, and audit trail logging to local SQLite
+├── Hygiene: Speeders, straight-liners, and audit trail logging to local rotating audit log (`~/.clearsight/cleaning_audit_trail.log`)
 └── UI: Drag-and-drop Stub & Banner Studio with real-time base counts
 
 PHASE 2: Advanced Statistical Core & Excel Banner Books (Weeks 4–6)

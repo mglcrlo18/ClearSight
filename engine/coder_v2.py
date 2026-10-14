@@ -369,8 +369,15 @@ class Coder:
                     polar_hits.append((idx[j], 0.8))
                     j = k2 + 2
                     continue
-                if scope_left > 0 and last_neg_end == j and scope_flip and neg in (("hindi",), ("di",), ("not",)) and scope_neg in (("hindi",), ("di",), ("not",)):
-                    scope_flip = False               # adjacent double negation ("hindi hindi") toggles back
+                _LITOTES_BRIDGE = {"ko", "mo", "niya", "namin", "natin", "nila", "ako", "ka", "sya", "siya", "masasabing", "masasabi", "masabi", "sabi", "maikakaila", "maikakailang", "makakaila", "maitatanggi", "matatanggi", "kaila", "tanggi", "can", "cannot", "could", "say", "that"}
+                _between_toks = r[last_neg_end:j] if last_neg_end >= 0 else []
+                _between_stems = s[last_neg_end:j] if last_neg_end >= 0 else []
+                _is_litotes_bridge = (last_neg_end == j) or (
+                    last_neg_end >= 0 and (j - last_neg_end) <= 3
+                    and all((t in _LITOTES_BRIDGE or st_t in _LITOTES_BRIDGE) for t, st_t in zip(_between_toks, _between_stems))
+                )
+                if scope_left > 0 and _is_litotes_bridge and scope_flip and neg in (("hindi",), ("di",), ("not",)) and scope_neg in (("hindi",), ("di",), ("not",)):
+                    scope_flip = False               # adjacent or epistemic-bridged litotes ("hindi hindi", "hindi ko masasabing hindi") toggles back
                     scope_left = cfg.neg_window
                 else:
                     if scope_left > 0 and scope_flip and scope_kind == "neg":

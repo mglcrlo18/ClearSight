@@ -60,6 +60,13 @@ if ! "$PYTHON_BIN" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) els
     exit 1
 fi
 
+# CS-035 / CS-038: Validate required core scientific packages before booting server
+if ! "$PYTHON_BIN" -c 'import numpy, pandas, scipy, openpyxl' 2>/dev/null; then
+    echo "[-] Error: Required Python dependencies (numpy, pandas, scipy, openpyxl) are missing."
+    echo "    Install with: uv pip install -r requirements.txt  OR  $PYTHON_BIN -m pip install -r requirements.txt"
+    exit 1
+fi
+
 # 3. Ensure native window binary is compiled
 if [ ! -f "$DIR/ClearSight_Window" ]; then
     echo "[*] Compiling native Swift desktop window..."
