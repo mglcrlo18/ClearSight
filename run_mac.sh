@@ -73,7 +73,8 @@ if [ ! -f "$DIR/ClearSight_Window" ]; then
     bash "$DIR/build_native.sh"
 fi
 
-# 4. Start local analytical server in background
+# 4. Start local analytical server in background (remove stale port file first)
+rm -f "$DIR/.clearsight_port" 2>/dev/null || true
 echo "[*] Starting ClearSight zero-cloud analytical core..."
 "$PYTHON_BIN" "$DIR/server.py" > /tmp/clearsight_server.log 2>&1 &
 SERVER_PID=$!

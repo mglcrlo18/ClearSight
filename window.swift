@@ -60,14 +60,47 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigati
         webView.autoresizingMask = [.width, .height]
         window.contentView?.addSubview(webView)
 
+        // Ensure working directory is the executable directory when launched from Finder
+        let execURL = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
+        let appDir = execURL.deletingLastPathComponent().path
+        FileManager.default.changeCurrentDirectoryPath(appDir)
+
+        // If launched standalone (outside run_mac.sh), auto-start server.py if not already running
+        if ProcessInfo.processInfo.environment["CLEARSIGHT_SERVER_PID"] == nil {
+            let serverScript = (appDir as NSString).appendingPathComponent("server.py")
+            if FileManager.default.fileExists(atPath: serverScript) {
+                try? FileManager.default.removeItem(atPath: (appDir as NSString).appendingPathComponent(".clearsight_port"))
+                let pyCandidates = [
+                    "/usr/local/bin/python3.14",
+                    "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
+                    "/usr/local/bin/python3",
+                    "/opt/homebrew/bin/python3",
+                    "/usr/bin/python3"
+                ]
+                if let pyBin = pyCandidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) {
+                    let proc = Process()
+                    proc.executableURL = URL(fileURLWithPath: pyBin)
+                    proc.arguments = [serverScript]
+                    proc.currentDirectoryURL = URL(fileURLWithPath: appDir)
+                    try? proc.run()
+                    // Wait briefly for .clearsight_port to be written by server.py
+                    let portFilePath = (appDir as NSString).appendingPathComponent(".clearsight_port")
+                    for _ in 0..<25 {
+                        if FileManager.default.fileExists(atPath: portFilePath) {
+                            break
+                        }
+                        Thread.sleep(forTimeInterval: 0.15)
+                    }
+                }
+            }
+        }
+
         // Read dynamic port if configured or discover via .clearsight_port
         let envPort = ProcessInfo.processInfo.environment["CLEARSIGHT_PORT"]
         let filePort: String? = {
-            if let dir = Bundle.main.resourcePath {
-                let candidate = (dir as NSString).appendingPathComponent(".clearsight_port")
-                if let str = try? String(contentsOfFile: candidate, encoding: .utf8) {
-                    return str.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
+            let candidate = (appDir as NSString).appendingPathComponent(".clearsight_port")
+            if let str = try? String(contentsOfFile: candidate, encoding: .utf8) {
+                return str.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             if let str = try? String(contentsOfFile: ".clearsight_port", encoding: .utf8) {
                 return str.trimmingCharacters(in: .whitespacesAndNewlines)
